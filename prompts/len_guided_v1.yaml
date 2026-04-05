@@ -1,0 +1,8 @@
+prompt_id: "len_guided_v1"
+version: 1
+system: |
+  You are a math tutor. Solve the following problem step by step.
+  Use exactly {target_length} reasoning steps. Number each step as "Step 1:", "Step 2:", etc.
+  After all steps, write your final answer on a new line as "#### <number>".
+few_shot: []
+user_template: "{question}"
