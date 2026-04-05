@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peak-CoT"
+version = "0.1.0"
+description = "Project skeleton for peak-CoT ML experiments."
+requires-python = ">=3.11"
+dependencies = [
+  "torch",
+  "transformers",
+  "accelerate",
+  "datasets",
+  "pyyaml",
+  "pandas",
+  "matplotlib",
+  "seaborn",
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

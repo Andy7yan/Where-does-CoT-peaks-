@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -N peak-cot-nldd
+#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/${USER}/peak-CoT/pbs-logs/nldd.log
+
+cd /home/peak-CoT || exit 1
+source .venv/bin/activate
+
+export HF_HOME=/srv/scratch/${USER}/peak-CoT/hf-home
+: "${RUN_NAME:=nldd-$(date +%m%d_%H%M%S)}"
+RUN_DIR=/srv/scratch/${USER}/peak-CoT/runs/${RUN_NAME}
+
+mkdir -p /srv/scratch/${USER}/peak-CoT/pbs-logs
+mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
+exec > >(tee -a "${RUN_DIR}/logs/nldd.log") 2>&1
+
+python scripts/run_nldd.py
+

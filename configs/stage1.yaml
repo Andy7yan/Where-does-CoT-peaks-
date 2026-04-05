@@ -1,0 +1,41 @@
+experiment:
+  name: "peak-cot-stage1-gsm8k-llama31"
+  seed: 42
+
+dataset:
+  name: "gsm8k"
+  split: "test"
+  subset_size: 200
+  subset_hash_seed: 42
+
+model:
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+  dtype: "float16"
+  hf_cache: "${SCRATCH}/hf-home/hub"
+
+generation:
+  length_grid: [3, 5, 7, 9, 11, 13]
+  samples_per_length: 5
+  temperature: 0.7
+  max_new_tokens: 512
+
+step_segmentation:
+  method: "newline"
+  strip_whitespace: true
+  drop_empty: true
+  answer_markers: ["####", "The answer is"]
+
+answer_extraction:
+  method: "marker_then_regex"
+  numeric_tolerance: 1e-3
+
+nldd:
+  corruption_type: "arithmetic_perturbation"
+  perturbation_range: [0.5, 1.5]
+  confidence_metric: "logit_margin"
+  normalization: "abs_clean_margin"
+  horizon_definition: "peak"
+
+output:
+  base_dir: "${SCRATCH}/runs/${RUN_NAME}"
+
