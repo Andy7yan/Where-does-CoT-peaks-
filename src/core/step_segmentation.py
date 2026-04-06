@@ -1,7 +1,5 @@
 """Utilities for segmenting completions into reasoning steps."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import re
 

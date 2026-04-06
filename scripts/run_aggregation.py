@@ -1,7 +1,5 @@
 """Placeholder CLI for aggregation."""
 
-from __future__ import annotations
-
 
 def main() -> None:
     """Run output aggregation."""
@@ -11,4 +9,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

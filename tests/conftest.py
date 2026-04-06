@@ -1,7 +1,5 @@
 """Shared pytest fixtures for peak-CoT."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 
@@ -21,4 +19,3 @@ def sample_question(sample_gsm8k: list[dict]) -> dict:
     """Return the first bundled GSM8K sample question."""
 
     return sample_gsm8k[0]
-

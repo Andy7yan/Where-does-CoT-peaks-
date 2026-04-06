@@ -1,7 +1,5 @@
 """Answer extraction helpers for GSM8K-style completions."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import re
 

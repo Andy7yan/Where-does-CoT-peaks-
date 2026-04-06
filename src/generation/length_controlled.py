@@ -1,10 +1,441 @@
-"""Length-controlled generation placeholders."""
+"""Length-controlled generation utilities for Stage 1."""
 
-from __future__ import annotations
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from collections.abc import Mapping
+import json
+import os
+from pathlib import Path
+import time
+from typing import Any
+
+from src.core.answer_extraction import extract_answer, judge
+from src.core.step_segmentation import segment_steps
+from src.prompts import build_generation_messages
+
+
+@dataclass(frozen=True)
+class GenerationOutput:
+    """A decoded completion and its generated token count."""
+
+    raw_completion: str
+    token_count: int
+
+
+def ensure_model_available(
+    model_name: str,
+    cache_dir: str,
+    hf_token: str | None = None,
+) -> tuple[str, bool]:
+    """Ensure that a Hugging Face model snapshot exists locally."""
+
+    from huggingface_hub import snapshot_download
+
+    resolved_token = hf_token if hf_token is not None else os.getenv("HF_TOKEN")
+    cache_path = Path(cache_dir)
+    cache_path.mkdir(parents=True, exist_ok=True)
+    needs_refresh = False
+
+    try:
+        local_model_path = snapshot_download(
+            repo_id=model_name,
+            cache_dir=str(cache_path),
+            local_files_only=True,
+            token=resolved_token,
+        )
+        if _snapshot_has_required_files(local_model_path):
+            return local_model_path, False
+        print(
+            "warning: cached model snapshot looks incomplete; forcing a fresh download",
+            local_model_path,
+        )
+        needs_refresh = True
+    except Exception as local_exc:
+        if not resolved_token:
+            raise RuntimeError(
+                f"Model '{model_name}' is not present in cache '{cache_dir}', and HF_TOKEN is not set. "
+                "Set HF_TOKEN and ensure you have accepted the model license before retrying."
+            ) from local_exc
+
+    try:
+        local_model_path = snapshot_download(
+            repo_id=model_name,
+            cache_dir=str(cache_path),
+            token=resolved_token,
+            force_download=needs_refresh,
+        )
+        if not _snapshot_has_required_files(local_model_path):
+            raise RuntimeError(
+                f"Downloaded snapshot for '{model_name}' is still incomplete at '{local_model_path}'. "
+                "Clear the model cache directory and retry the download."
+            )
+        return local_model_path, True
+    except Exception as download_exc:
+        raise RuntimeError(
+            f"Failed to download model '{model_name}' into cache '{cache_dir}'. "
+            "Check HF_TOKEN, network access, and gated-model permissions."
+        ) from download_exc
+
+
+class LLMGenerator:
+    """Manage the tokenizer and model lifecycle for length-controlled generation."""
+
+    def __init__(self, model_name: str, dtype: str = "float16", cache_dir: str | None = None):
+        """Load the tokenizer and model, logging key runtime diagnostics."""
+
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.model_name = model_name
+        self.dtype_name = dtype
+        self.cache_dir = cache_dir or os.getenv(
+            "HF_HUB_CACHE",
+            str(Path.home() / ".cache" / "huggingface" / "hub"),
+        )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._input_diagnostics_logged = False
+
+        load_start = time.perf_counter()
+        local_model_path, downloaded = ensure_model_available(
+            model_name=model_name,
+            cache_dir=self.cache_dir,
+        )
+
+        torch_dtype = _resolve_torch_dtype(dtype, torch)
+        self.tokenizer = _load_tokenizer_with_fallback(
+            tokenizer_path=local_model_path,
+            cache_dir=self.cache_dir,
+        )
+        if self.tokenizer.pad_token_id is None and self.tokenizer.eos_token_id is not None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            local_model_path,
+            dtype=torch_dtype,
+            cache_dir=self.cache_dir,
+            local_files_only=True,
+        )
+        self.model.to(self.device)
+        self.model.eval()
+
+        load_elapsed = time.perf_counter() - load_start
+        model_device = next(self.model.parameters()).device
+        parameter_count = sum(parameter.numel() for parameter in self.model.parameters())
+
+        print("cuda_available=", torch.cuda.is_available())
+        print("device_count=", torch.cuda.device_count())
+        print("model_device=", model_device)
+        print("parameter_count=", parameter_count)
+        print("load_seconds=", round(load_elapsed, 3))
+        print("cache_hit=", not downloaded)
+        print("downloaded_model=", downloaded)
+        print("local_model_path=", local_model_path)
+        print("tokenizer_class=", self.tokenizer.__class__.__name__)
+
+    def generate(
+        self,
+        messages: list[dict],
+        temperature: float = 0.7,
+        max_new_tokens: int = 512,
+    ) -> GenerationOutput:
+        """Run a single autoregressive generation from chat messages."""
+
+        import torch
+
+        model_inputs = self._prepare_model_inputs(messages)
+        if "input_ids" not in model_inputs:
+            raise RuntimeError("Tokenizer chat template did not return input_ids.")
+        if "attention_mask" not in model_inputs:
+            model_inputs["attention_mask"] = torch.ones_like(
+                model_inputs["input_ids"],
+                device=self.device,
+            )
+
+        input_ids = model_inputs["input_ids"]
+        _debug_log(f"prepared_input_keys={list(model_inputs.keys())}")
+        _debug_log(f"prepared_input_ids_type={type(input_ids).__name__}")
+        _debug_log(f"prepared_input_ids_shape={getattr(input_ids, 'shape', None)}")
+
+        if not self._input_diagnostics_logged:
+            print("input_device=", input_ids.device)
+            print("batch_shape=", tuple(input_ids.shape))
+            self._input_diagnostics_logged = True
+
+        generation_kwargs: dict[str, Any] = {
+            **model_inputs,
+            "max_new_tokens": max_new_tokens,
+            "pad_token_id": self.tokenizer.eos_token_id,
+        }
+        if temperature > 0:
+            generation_kwargs["do_sample"] = True
+            generation_kwargs["temperature"] = temperature
+        else:
+            generation_kwargs["do_sample"] = False
+
+        with torch.no_grad():
+            outputs = self.model.generate(**generation_kwargs)
+
+        generated_tokens = outputs[0, input_ids.shape[-1] :]
+        raw_completion = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        return GenerationOutput(
+            raw_completion=raw_completion,
+            token_count=int(generated_tokens.shape[-1]),
+        )
+
+    def _prepare_model_inputs(self, messages: list[dict]) -> dict[str, Any]:
+        """Prepare model inputs from chat messages with a robust backend fallback."""
+
+        try:
+            model_inputs = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+            _debug_log(f"chat_template_tokenize_true_type={type(model_inputs).__name__}")
+            _debug_log(f"chat_template_tokenize_true_repr={_short_repr(model_inputs)}")
+            return _move_model_inputs_to_device(model_inputs, self.device)
+        except Exception as exc:
+            print(
+                "warning: tokenizer.apply_chat_template(tokenize=True) returned an unsupported format; "
+                "falling back to string template + tokenizer(...)",
+            )
+            print("chat_template_error_type=", type(exc).__name__)
+            _debug_log(f"chat_template_error_repr={exc!r}")
+
+            rendered_prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            _debug_log(f"chat_template_tokenize_false_type={type(rendered_prompt).__name__}")
+            _debug_log(f"chat_template_tokenize_false_preview={_short_repr(rendered_prompt)}")
+            if not isinstance(rendered_prompt, str):
+                raise RuntimeError(
+                    "Tokenizer chat template fallback failed to produce a string prompt."
+                ) from exc
+
+            tokenized = self.tokenizer(
+                rendered_prompt,
+                return_tensors="pt",
+                add_special_tokens=False,
+            )
+            _debug_log(f"fallback_tokenizer_call_type={type(tokenized).__name__}")
+            _debug_log(f"fallback_tokenizer_call_repr={_short_repr(tokenized)}")
+            return _move_model_inputs_to_device(tokenized, self.device)
+
+
+def generate_traces_for_question(
+    generator: LLMGenerator,
+    question_id: str,
+    question_text: str,
+    gold_answer: float,
+    length_grid: list[int],
+    samples_per_length: int,
+    temperature: float,
+    max_new_tokens: int,
+    prompt_template: dict,
+    model_name: str,
+) -> list[dict]:
+    """Generate all Stage 1 traces for a single question across the length grid."""
+
+    prompt_id = prompt_template.get("prompt_id")
+    if not isinstance(prompt_id, str):
+        raise TypeError("prompt_template['prompt_id'] must be a string.")
+
+    traces: list[dict[str, Any]] = []
+    for target_length in length_grid:
+        print(f"  target_length={target_length}")
+        messages = build_generation_messages(
+            question=question_text,
+            target_length=target_length,
+            prompt_template=prompt_template,
+        )
+        for sample_idx in range(1, samples_per_length + 1):
+            generation_start = time.perf_counter()
+            print(f"    sample={sample_idx}/{samples_per_length} generating...")
+            generation = generator.generate(
+                messages=messages,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+            )
+            print(
+                f"    sample={sample_idx}/{samples_per_length} done "
+                f"seconds={time.perf_counter() - generation_start:.2f} "
+                f"tokens={generation.token_count}"
+            )
+            segmentation = segment_steps(generation.raw_completion)
+            extraction = extract_answer(generation.raw_completion)
+
+            traces.append(
+                {
+                    "trace_id": f"{question_id}_L{target_length}_{sample_idx}",
+                    "question_id": question_id,
+                    "question_text": question_text,
+                    "gold_answer": gold_answer,
+                    "model_name": model_name,
+                    "target_length": target_length,
+                    "prompt_id": prompt_id,
+                    "temperature": temperature,
+                    "raw_completion": generation.raw_completion,
+                    "steps": segmentation.steps,
+                    "actual_num_steps": segmentation.num_steps,
+                    "final_answer_line": segmentation.final_answer_line,
+                    "extracted_answer": extraction.value,
+                    "is_correct": judge(extraction.value, gold_answer),
+                    "extraction_failed": extraction.extraction_failed,
+                    "token_count": generation.token_count,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+
+    return traces
+
+
+def append_traces_to_jsonl(traces: list[dict], output_path: str) -> None:
+    """Append trace dictionaries to a JSONL file."""
+
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("a", encoding="utf-8") as handle:
+        for trace in traces:
+            handle.write(json.dumps(trace, ensure_ascii=False) + "\n")
+        handle.flush()
+
+
+def load_existing_trace_ids(output_path: str) -> set[str]:
+    """Load the set of existing trace ids from a JSONL file."""
+
+    output_file = Path(output_path)
+    if not output_file.exists():
+        return set()
+
+    trace_ids: set[str] = set()
+    with output_file.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            payload = json.loads(stripped)
+            trace_id = payload.get("trace_id")
+            if isinstance(trace_id, str):
+                trace_ids.add(trace_id)
+    return trace_ids
 
 
 def generate_length_controlled(prompt: str, target_steps: int) -> str:
-    """Generate a response guided toward a target number of steps."""
+    """Backward-compatible placeholder for older imports."""
 
-    pass
+    raise NotImplementedError(
+        "Use LLMGenerator.generate() with build_generation_messages() for Stage 1 generation."
+    )
 
+
+def _resolve_torch_dtype(dtype_name: str, torch_module: Any) -> Any:
+    normalized = dtype_name.lower()
+    dtype_map = {
+        "float16": torch_module.float16,
+        "fp16": torch_module.float16,
+        "bfloat16": torch_module.bfloat16,
+        "bf16": torch_module.bfloat16,
+        "float32": torch_module.float32,
+        "fp32": torch_module.float32,
+    }
+    try:
+        return dtype_map[normalized]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported torch dtype: {dtype_name}") from exc
+
+
+def _move_model_inputs_to_device(model_inputs: Any, device: Any) -> dict[str, Any]:
+    """Move chat-template outputs to the target device and normalize to a dict."""
+
+    _debug_log(f"_move_model_inputs_to_device_input_type={type(model_inputs).__name__}")
+    if _looks_like_tensor(model_inputs):
+        _debug_log("_move_model_inputs_to_device_branch=tensor_like")
+        return {"input_ids": model_inputs.to(device)}
+
+    if isinstance(model_inputs, (list, tuple)):
+        import torch
+
+        _debug_log("_move_model_inputs_to_device_branch=list_or_tuple")
+        return {"input_ids": torch.tensor([model_inputs], device=device)}
+
+    if hasattr(model_inputs, "to"):
+        _debug_log("_move_model_inputs_to_device_calling_to()")
+        model_inputs = model_inputs.to(device)
+
+    if isinstance(model_inputs, Mapping) or hasattr(model_inputs, "items"):
+        _debug_log("_move_model_inputs_to_device_branch=mapping_like")
+        moved: dict[str, Any] = {}
+        for key, value in model_inputs.items():
+            moved[key] = value.to(device) if _looks_like_tensor(value) else value
+        return moved
+
+    raise TypeError(
+        "Tokenizer apply_chat_template returned an unsupported input type. "
+        "Expected a BatchEncoding or dict-like object."
+    )
+
+
+def _looks_like_tensor(value: Any) -> bool:
+    """Return whether a value behaves like a torch tensor for our purposes."""
+
+    return hasattr(value, "shape") and hasattr(value, "to")
+
+
+def _debug_log(message: str) -> None:
+    """Print debug logs only when explicitly enabled."""
+
+    if os.getenv("PEAK_COT_DEBUG") == "1":
+        print(f"[debug] {message}")
+
+
+def _short_repr(value: Any, limit: int = 400) -> str:
+    """Return a truncated repr for debug logging."""
+
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...<truncated>"
+
+
+def _snapshot_has_required_files(snapshot_path: str | os.PathLike[str]) -> bool:
+    """Return whether a local Hugging Face snapshot looks usable."""
+
+    path = Path(snapshot_path)
+    required_any = [
+        ("config.json",),
+        ("tokenizer.json", "tokenizer.model", "tokenizer_config.json"),
+        ("model.safetensors", "model.safetensors.index.json", "pytorch_model.bin"),
+    ]
+    return all(any((path / candidate).exists() for candidate in candidates) for candidates in required_any)
+
+
+def _load_tokenizer_with_fallback(tokenizer_path: str, cache_dir: str):
+    """Load a tokenizer, retrying with the slow backend when needed."""
+
+    from transformers import AutoTokenizer
+
+    try:
+        return AutoTokenizer.from_pretrained(
+            tokenizer_path,
+            cache_dir=cache_dir,
+            local_files_only=True,
+        )
+    except Exception as fast_exc:
+        try:
+            return AutoTokenizer.from_pretrained(
+                tokenizer_path,
+                cache_dir=cache_dir,
+                local_files_only=True,
+                use_fast=False,
+            )
+        except Exception as slow_exc:
+            raise RuntimeError(
+                "Failed to load the tokenizer. "
+                "This usually means the environment is missing tokenizer dependencies "
+                "such as protobuf, sentencepiece, or tiktoken. "
+                "Install them in the current environment and retry."
+            ) from slow_exc

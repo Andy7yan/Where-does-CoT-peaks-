@@ -1,7 +1,5 @@
 """CLI for preparing a deterministic GSM8K evaluation subset."""
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 import statistics

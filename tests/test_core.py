@@ -1,7 +1,5 @@
 """Tests for the project skeleton and Stage 1 core utilities."""
 
-from __future__ import annotations
-
 import random
 import re
 

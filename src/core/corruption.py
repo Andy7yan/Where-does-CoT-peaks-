@@ -1,7 +1,5 @@
 """Arithmetic corruption helpers for NLDD measurements."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import random
 import re

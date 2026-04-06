@@ -1,7 +1,5 @@
 """Configuration loading utilities for peak-CoT experiments."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import os
 from pathlib import Path
