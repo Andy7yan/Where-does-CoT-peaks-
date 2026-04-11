@@ -1,17 +1,16 @@
-"""Length-controlled generation utilities for Stage 1."""
+"""ICL-driven trace generation utilities for Stage 1."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from collections.abc import Mapping
 import json
 import os
 from pathlib import Path
 import time
 from typing import Any
 
-from src.core.answer_extraction import extract_answer, judge
-from src.core.step_segmentation import segment_steps
-from src.prompts import build_generation_messages
+from src.prompting import build_generation_messages
+from src.reasoning import extract_answer, judge, segment_steps
 
 
 @dataclass(frozen=True)
@@ -20,6 +19,9 @@ class GenerationOutput:
 
     raw_completion: str
     token_count: int
+
+
+TRACE_SCHEMA_VERSION = "stage1_trace_v2"
 
 
 def ensure_model_available(
@@ -84,7 +86,7 @@ class LLMGenerator:
         """Load the tokenizer and model, logging key runtime diagnostics."""
 
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoModelForCausalLM
 
         self.model_name = model_name
         self.dtype_name = dtype
@@ -231,37 +233,33 @@ def generate_traces_for_question(
     question_id: str,
     question_text: str,
     gold_answer: float,
-    length_grid: list[int],
-    samples_per_length: int,
+    prompt_templates: list[dict[str, Any]],
+    samples_per_group: int,
     temperature: float,
     max_new_tokens: int,
-    prompt_template: dict,
-    model_name: str,
 ) -> list[dict]:
-    """Generate all Stage 1 traces for a single question across the length grid."""
-
-    prompt_id = prompt_template.get("prompt_id")
-    if not isinstance(prompt_id, str):
-        raise TypeError("prompt_template['prompt_id'] must be a string.")
+    """Generate all Stage 1 traces for a single question across ICL prompt groups."""
 
     traces: list[dict[str, Any]] = []
-    for target_length in length_grid:
-        print(f"  target_length={target_length}")
+    for prompt_template in prompt_templates:
+        prompt_id = prompt_template.get("prompt_id")
+        if not isinstance(prompt_id, str):
+            raise TypeError("prompt_template['prompt_id'] must be a string.")
+        print(f"  prompt_id={prompt_id}")
         messages = build_generation_messages(
             question=question_text,
-            target_length=target_length,
             prompt_template=prompt_template,
         )
-        for sample_idx in range(1, samples_per_length + 1):
+        for sample_idx in range(1, samples_per_group + 1):
             generation_start = time.perf_counter()
-            print(f"    sample={sample_idx}/{samples_per_length} generating...")
+            print(f"    sample={sample_idx}/{samples_per_group} generating...")
             generation = generator.generate(
                 messages=messages,
                 temperature=temperature,
                 max_new_tokens=max_new_tokens,
             )
             print(
-                f"    sample={sample_idx}/{samples_per_length} done "
+                f"    sample={sample_idx}/{samples_per_group} done "
                 f"seconds={time.perf_counter() - generation_start:.2f} "
                 f"tokens={generation.token_count}"
             )
@@ -270,14 +268,11 @@ def generate_traces_for_question(
 
             traces.append(
                 {
-                    "trace_id": f"{question_id}_L{target_length}_{sample_idx}",
+                    "trace_id": f"{question_id}_{prompt_id}_{sample_idx}",
                     "question_id": question_id,
                     "question_text": question_text,
                     "gold_answer": gold_answer,
-                    "model_name": model_name,
-                    "target_length": target_length,
                     "prompt_id": prompt_id,
-                    "temperature": temperature,
                     "raw_completion": generation.raw_completion,
                     "steps": segmentation.steps,
                     "actual_num_steps": segmentation.num_steps,
@@ -291,6 +286,44 @@ def generate_traces_for_question(
             )
 
     return traces
+
+
+def write_run_metadata(output_dir: str, run_metadata: dict[str, Any]) -> str:
+    """Write run-level metadata into run_meta.json."""
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    meta_path = output_path / "run_meta.json"
+    with meta_path.open("w", encoding="utf-8") as handle:
+        json.dump(run_metadata, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    return str(meta_path)
+
+
+def validate_output_dir_schema(output_dir: str, expected_schema_version: str) -> None:
+    """Abort when an output directory mixes incompatible trace schemas."""
+
+    output_path = Path(output_dir)
+    traces_path = output_path / "traces.jsonl"
+    meta_path = output_path / "run_meta.json"
+
+    if traces_path.exists() and not meta_path.exists():
+        raise RuntimeError(
+            "Output directory contains traces.jsonl but is missing run_meta.json. "
+            "Use a fresh output directory for Stage 1 trace schema v2."
+        )
+
+    if not meta_path.exists():
+        return
+
+    with meta_path.open("r", encoding="utf-8") as handle:
+        run_metadata = json.load(handle)
+
+    if run_metadata.get("schema_version") != expected_schema_version:
+        raise RuntimeError(
+            "Output directory contains an incompatible run_meta.json schema_version. "
+            "Use a fresh output directory for Stage 1 trace schema v2."
+        )
 
 
 def append_traces_to_jsonl(traces: list[dict], output_path: str) -> None:
@@ -410,7 +443,10 @@ def _snapshot_has_required_files(snapshot_path: str | os.PathLike[str]) -> bool:
         ("tokenizer.json", "tokenizer.model", "tokenizer_config.json"),
         ("model.safetensors", "model.safetensors.index.json", "pytorch_model.bin"),
     ]
-    return all(any((path / candidate).exists() for candidate in candidates) for candidates in required_any)
+    return all(
+        any((path / candidate).exists() for candidate in candidates)
+        for candidates in required_any
+    )
 
 
 def _load_tokenizer_with_fallback(tokenizer_path: str, cache_dir: str):
@@ -424,7 +460,7 @@ def _load_tokenizer_with_fallback(tokenizer_path: str, cache_dir: str):
             cache_dir=cache_dir,
             local_files_only=True,
         )
-    except Exception as fast_exc:
+    except Exception:
         try:
             return AutoTokenizer.from_pretrained(
                 tokenizer_path,

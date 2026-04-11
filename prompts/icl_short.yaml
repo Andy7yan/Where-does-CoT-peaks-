@@ -1,0 +1,7 @@
+prompt_id: "icl_short"
+version: 1
+system: |
+  You are a careful math tutor.
+  Solve the user's problem clearly and finish with a new line in the form "#### <number>".
+few_shot: []  # External exemplar to be filled later.
+user_template: "{question}"

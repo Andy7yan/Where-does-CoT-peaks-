@@ -3,10 +3,14 @@
 import random
 import re
 
-from src.core.answer_extraction import extract_answer, judge, normalize_numeric
-from src.core.corruption import corrupt_arithmetic
-from src.core.step_segmentation import segment_steps
-from src.config import ExperimentConfig
+from src.reasoning import (
+    corrupt_arithmetic,
+    extract_answer,
+    judge,
+    normalize_numeric,
+    segment_steps,
+)
+from src.settings import ExperimentConfig, load_settings, require_config_value
 
 
 def test_sample_question_fixture(sample_question: dict) -> None:
@@ -24,10 +28,55 @@ def test_config_can_be_loaded(monkeypatch) -> None:
 
     config = ExperimentConfig.from_yaml("configs/stage1.yaml")
 
-    assert config.experiment.name == "peak-cot-stage1-gsm8k-llama31"
+    assert config.experiment.run_id == "peak-cot-stage1-gsm8k-llama31"
     assert config.model.hf_cache == "/tmp/hf-home/hub"
     assert config.answer_extraction.numeric_tolerance == 1e-3
     assert config.output.base_dir == "/tmp/runs/test"
+    assert config.dataset.subset_size is None
+    assert config.generation.num_icl_groups is None
+    assert config.generation.samples_per_group is None
+    assert config.generation.temperature is None
+    assert config.generation.max_new_tokens is None
+    assert config.pilot.num_questions == 50
+    assert config.tas.layer == "middle"
+    assert config.tas.plateau_threshold is None
+    assert config.analysis.min_bin_size is None
+    assert config.analysis.num_full_analysis_questions is None
+    assert config.analysis.num_spot_checks is None
+    assert config.analysis.max_extraction_fail_rate is None
+
+
+def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
+    monkeypatch.setenv("SCRATCH", "/tmp")
+    monkeypatch.setenv("RUN_NAME", "stage-a")
+
+    settings = load_settings("configs/stage1.yaml")
+
+    assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-llama31"
+    assert settings["dataset"]["subset_size"] is None
+    assert settings["generation"]["num_icl_groups"] is None
+    assert settings["generation"]["samples_per_group"] is None
+    assert settings["generation"]["temperature"] is None
+    assert settings["generation"]["max_new_tokens"] is None
+    assert settings["tas"]["plateau_threshold"] is None
+    assert settings["analysis"]["min_bin_size"] is None
+    assert settings["analysis"]["num_full_analysis_questions"] is None
+    assert settings["analysis"]["num_spot_checks"] is None
+    assert settings["analysis"]["max_extraction_fail_rate"] is None
+    assert settings["output"]["base_dir"] == "/tmp/runs/stage-a"
+
+
+def test_require_config_value_returns_value() -> None:
+    assert require_config_value("generation.temperature", 0.7) == 0.7
+
+
+def test_require_config_value_raises_for_none() -> None:
+    try:
+        require_config_value("generation.temperature", None)
+    except ValueError as exc:
+        assert str(exc) == "generation.temperature 需由 Pilot Run 确认后填写"
+    else:
+        raise AssertionError("require_config_value should raise when the value is None")
 
 
 def test_segment_steps_with_answer_line() -> None:

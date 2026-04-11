@@ -21,10 +21,9 @@ def load_prompt_template(prompt_id: str, prompts_dir: str = "prompts/") -> dict:
 
 def build_generation_messages(
     question: str,
-    target_length: int,
     prompt_template: dict,
 ) -> list[dict]:
-    """Build chat messages for length-guided generation."""
+    """Build chat messages for ICL-driven generation."""
 
     system_template = _require_string(prompt_template, "system")
     user_template = _require_string(prompt_template, "user_template")
@@ -35,28 +34,22 @@ def build_generation_messages(
     messages: list[dict[str, str]] = [
         {
             "role": "system",
-            "content": system_template.format(target_length=target_length),
+            "content": system_template,
         }
     ]
 
     for exemplar in few_shot:
         if not isinstance(exemplar, dict):
             raise TypeError("Each few-shot exemplar must be a mapping.")
-        user_content = _require_string(exemplar, "user").format(
-            question=question,
-            target_length=target_length,
-        )
-        assistant_content = _require_string(exemplar, "assistant").format(
-            question=question,
-            target_length=target_length,
-        )
+        user_content = _require_string(exemplar, "user")
+        assistant_content = _require_string(exemplar, "assistant")
         messages.append({"role": "user", "content": user_content})
         messages.append({"role": "assistant", "content": assistant_content})
 
     messages.append(
         {
             "role": "user",
-            "content": user_template.format(question=question, target_length=target_length),
+            "content": user_template.format(question=question),
         }
     )
     return messages

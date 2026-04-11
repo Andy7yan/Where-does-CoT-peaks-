@@ -1,11 +1,11 @@
 experiment:
-  name: "peak-cot-stage1-gsm8k-llama31"
+  run_id: "peak-cot-stage1-gsm8k-llama31"
   seed: 42
 
 dataset:
   name: "gsm8k"
   split: "test"
-  subset_size: 200
+  subset_size: null  # Pilot 确认后填写
   subset_hash_seed: 42
 
 model:
@@ -14,10 +14,10 @@ model:
   hf_cache: "${SCRATCH}/hf-home/hub"
 
 generation:
-  length_grid: [3, 5, 7, 9, 11, 13]
-  samples_per_length: 5
-  temperature: 0.7
-  max_new_tokens: 512
+  num_icl_groups: null  # Pilot 确认后填写
+  samples_per_group: null  # Pilot 确认后填写
+  temperature: null  # Pilot 确认后填写
+  max_new_tokens: null  # Pilot 确认后填写
 
 step_segmentation:
   method: "newline"
@@ -31,11 +31,30 @@ answer_extraction:
 
 nldd:
   corruption_type: "arithmetic_perturbation"
-  perturbation_range: [0.5, 1.5]
-  confidence_metric: "logit_margin"
-  normalization: "abs_clean_margin"
+  integer_perturbation: "+/-1"
+  float_perturbation_range: [0.5, 0.9, 1.1, 1.5]
+  corruption_token_delta_max: 2
+  corruption_retry_limit: 3
+  ld_epsilon: 1.0e-6
   horizon_definition: "peak"
+
+pilot:
+  num_questions: 50
+  num_icl_groups: 3
+  samples_per_group: 2
+  temperature: 0.0
+  max_new_tokens: 128
+  max_extraction_fail_rate: 0.05
+
+tas:
+  layer: "middle"
+  plateau_threshold: null  # Pilot 确认后填写
+
+analysis:
+  min_bin_size: null  # Pilot 确认后填写
+  num_full_analysis_questions: null  # Pilot 确认后填写
+  num_spot_checks: null  # Pilot 确认后填写
+  max_extraction_fail_rate: null  # Pilot 确认后填写
 
 output:
   base_dir: "${SCRATCH}/runs/${RUN_NAME}"
-

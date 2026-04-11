@@ -1,0 +1,62 @@
+#!/bin/bash
+#PBS -N peak-cot-pilot
+#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/pilot.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${RUN_NAME:=pilot-$(date +%m%d_%H%M%S)}"
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${SOURCE:=huggingface}"
+: "${DEBUG:=0}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HOME:?HF_HOME must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HUB_CACHE:?HF_HUB_CACHE must be set by ${PROJECT_HOME}/.env}"
+: "${HF_DATASETS_CACHE:?HF_DATASETS_CACHE must be set by ${PROJECT_HOME}/.env}"
+
+export RUN_NAME
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${RUN_DIR}/logs/pilot.log") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+echo "source=${SOURCE}"
+echo "cache_dir=${HF_DATASETS_CACHE}"
+
+cmd=(
+  python scripts/run_pilot.py
+  --config "${CONFIG_PATH}"
+  --output-dir "${RUN_DIR}"
+  --source "${SOURCE}"
+  --cache-dir "${HF_DATASETS_CACHE}"
+)
+
+if [[ "${DEBUG}" == "1" ]]; then
+  cmd+=(--debug)
+fi
+
+printf 'command='
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+"${cmd[@]}"

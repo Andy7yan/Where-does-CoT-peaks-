@@ -1,13 +1,32 @@
-"""Arithmetic corruption helpers for NLDD measurements."""
+"""Reasoning-text utilities for segmentation, extraction, and corruption."""
 
 from dataclasses import dataclass
 import random
 import re
 
-from src.core.answer_extraction import normalize_numeric
+
+NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*\.\d+|\d[\d,]*\.?|\.\d+)")
+ARITHMETIC_NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)")
+DEFAULT_ANSWER_MARKERS = ["####", "The answer is"]
+PUNCTUATION_ONLY_RE = re.compile(r"^\W+$")
 
 
-NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)")
+@dataclass(frozen=True)
+class SegmentationResult:
+    """Structured result of completion step segmentation."""
+
+    steps: list[str]
+    final_answer_line: str | None
+    num_steps: int
+
+
+@dataclass(frozen=True)
+class ExtractionResult:
+    """Structured output for numeric answer extraction."""
+
+    value: float | None
+    raw_match: str | None
+    extraction_failed: bool
 
 
 @dataclass(frozen=True)
@@ -28,6 +47,79 @@ class _NumberMatch:
     end: int
     raw: str
     value: float
+
+
+def segment_steps(
+    completion: str,
+    answer_markers: list[str] | None = None,
+) -> SegmentationResult:
+    """Split a completion into reasoning steps using the Stage 1 rules."""
+
+    markers = DEFAULT_ANSWER_MARKERS if answer_markers is None else answer_markers
+    steps: list[str] = []
+    final_answer_line: str | None = None
+
+    for raw_segment in completion.split("\n"):
+        segment = raw_segment.strip()
+        if not segment:
+            continue
+        if PUNCTUATION_ONLY_RE.fullmatch(segment):
+            continue
+
+        if any(marker in segment for marker in markers):
+            if final_answer_line is None:
+                final_answer_line = segment
+            continue
+
+        steps.append(segment)
+
+    return SegmentationResult(
+        steps=steps,
+        final_answer_line=final_answer_line,
+        num_steps=len(steps),
+    )
+
+
+def extract_answer(completion: str) -> ExtractionResult:
+    """Extract a numeric answer following Stage 1 marker rules."""
+
+    raw_match = _extract_after_marker(completion, "####")
+    if raw_match is None:
+        raw_match = _extract_after_marker(completion, "The answer is")
+
+    if raw_match is None:
+        return ExtractionResult(value=None, raw_match=None, extraction_failed=True)
+
+    value = normalize_numeric(raw_match)
+    return ExtractionResult(
+        value=value,
+        raw_match=raw_match,
+        extraction_failed=value is None,
+    )
+
+
+def normalize_numeric(raw: str) -> float | None:
+    """Normalize a numeric string by dropping formatting symbols."""
+
+    cleaned = (
+        raw.replace(",", "")
+        .replace("$", "")
+        .replace("%", "")
+        .replace(" ", "")
+        .strip()
+    )
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def judge(extracted: float | None, gold: float, tolerance: float = 1e-3) -> bool:
+    """Check whether an extracted numeric answer matches the gold value."""
+
+    if extracted is None:
+        return False
+    return abs(extracted - gold) < tolerance
 
 
 def corrupt_arithmetic(
@@ -74,9 +166,34 @@ def corrupt_arithmetic(
     )
 
 
+def corrupt_step_text(step_text: str) -> str | None:
+    """Backward-compatible wrapper around arithmetic corruption."""
+
+    result = corrupt_arithmetic(step_text)
+    if result.corruption_failed:
+        return None
+    return result.corrupt_text
+
+
+def _extract_after_marker(completion: str, marker: str) -> str | None:
+    marker_len = len(marker)
+    start = 0
+    while True:
+        marker_index = completion.find(marker, start)
+        if marker_index == -1:
+            return None
+
+        tail = completion[marker_index + marker_len :]
+        match = NUMBER_RE.search(tail)
+        if match is not None:
+            return match.group(0)
+
+        start = marker_index + marker_len
+
+
 def _find_numeric_matches(text: str) -> list[_NumberMatch]:
     matches: list[_NumberMatch] = []
-    for match in NUMBER_RE.finditer(text):
+    for match in ARITHMETIC_NUMBER_RE.finditer(text):
         raw = match.group(0)
         value = normalize_numeric(raw)
         if value is None:
@@ -112,7 +229,10 @@ def _sample_multiplier(
     if not valid_intervals:
         raise ValueError("No valid multiplier interval remains after exclusion.")
 
-    total_width = sum(interval_high - interval_low for interval_low, interval_high in valid_intervals)
+    total_width = sum(
+        interval_high - interval_low
+        for interval_low, interval_high in valid_intervals
+    )
     draw = rng.uniform(0.0, total_width)
     cursor = 0.0
     for interval_low, interval_high in valid_intervals:
@@ -141,11 +261,3 @@ def _decimal_places(raw: str) -> int:
     if "." not in normalized:
         return 0
     return len(normalized.split(".", maxsplit=1)[1])
-
-def corrupt_step_text(step_text: str) -> str | None:
-    """Backward-compatible wrapper around arithmetic corruption."""
-
-    result = corrupt_arithmetic(step_text)
-    if result.corruption_failed:
-        return None
-    return result.corrupt_text

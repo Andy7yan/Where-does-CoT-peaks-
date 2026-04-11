@@ -3,17 +3,22 @@
 import json
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 import uuid
 
-from src.generation.length_controlled import (
+from scripts.run_generation import build_run_metadata, discover_prompt_templates
+from src.generation import (
+    TRACE_SCHEMA_VERSION,
     GenerationOutput,
     LLMGenerator,
+    _looks_like_tensor,
     _move_model_inputs_to_device,
     _snapshot_has_required_files,
-    _looks_like_tensor,
     append_traces_to_jsonl,
     generate_traces_for_question,
     load_existing_trace_ids,
+    validate_output_dir_schema,
+    write_run_metadata,
 )
 
 
@@ -30,16 +35,9 @@ class FakeGenerator:
         max_new_tokens: int = 512,
     ) -> GenerationOutput:
         self.calls += 1
-        target_length = "unknown"
-        system_message = messages[0]["content"]
-        if "exactly " in system_message and " reasoning steps" in system_message:
-            target_length = system_message.split("exactly ", maxsplit=1)[1].split(
-                " reasoning steps",
-                maxsplit=1,
-            )[0]
         return GenerationOutput(
             raw_completion=(
-                f"Step 1: Work toward target {target_length}.\n"
+                "Step 1: Break the arithmetic into parts.\n"
                 "Step 2: Finish the arithmetic.\n"
                 "#### 4"
             ),
@@ -49,36 +47,58 @@ class FakeGenerator:
 
 def test_generate_traces_for_question_builds_trace_schema() -> None:
     generator = FakeGenerator()
-    prompt_template = {
-        "prompt_id": "len_guided_v1",
-        "system": "Use exactly {target_length} reasoning steps.",
-        "few_shot": [],
-        "user_template": "{question}",
-    }
+    prompt_templates = [
+        {
+            "prompt_id": "icl_short",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+        {
+            "prompt_id": "icl_medium",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+    ]
 
     traces = generate_traces_for_question(
         generator=generator,
         question_id="gsm8k_0001",
         question_text="What is 2 + 2?",
         gold_answer=4.0,
-        length_grid=[3, 5],
-        samples_per_length=2,
+        prompt_templates=prompt_templates,
+        samples_per_group=2,
         temperature=0.7,
         max_new_tokens=64,
-        prompt_template=prompt_template,
-        model_name="meta-llama/Llama-3.1-8B-Instruct",
     )
 
     assert len(traces) == 4
-    assert traces[0]["trace_id"] == "gsm8k_0001_L3_1"
-    assert traces[-1]["trace_id"] == "gsm8k_0001_L5_2"
-    assert traces[0]["prompt_id"] == "len_guided_v1"
+    assert traces[0]["trace_id"] == "gsm8k_0001_icl_short_1"
+    assert traces[-1]["trace_id"] == "gsm8k_0001_icl_medium_2"
+    assert traces[0]["prompt_id"] == "icl_short"
     assert traces[0]["actual_num_steps"] == 2
     assert traces[0]["final_answer_line"] == "#### 4"
     assert traces[0]["extracted_answer"] == 4.0
     assert traces[0]["is_correct"] is True
     assert traces[0]["token_count"] == 7
     assert "timestamp" in traces[0]
+    assert set(traces[0]) == {
+        "trace_id",
+        "question_id",
+        "question_text",
+        "gold_answer",
+        "prompt_id",
+        "raw_completion",
+        "steps",
+        "actual_num_steps",
+        "final_answer_line",
+        "extracted_answer",
+        "is_correct",
+        "extraction_failed",
+        "token_count",
+        "timestamp",
+    }
     assert generator.calls == 4
 
 
@@ -102,6 +122,67 @@ def test_append_traces_to_jsonl_and_reload_ids() -> None:
 
         assert loaded == traces
         assert existing_ids == {"trace_1", "trace_2"}
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_write_run_metadata_writes_required_fields() -> None:
+    run_metadata = {
+        "run_id": "stage-c-run",
+        "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+        "dataset": "gsm8k:test",
+        "temperature": 0.3,
+        "max_new_tokens": 128,
+        "num_icl_groups": 3,
+        "samples_per_group": 4,
+        "seed": 42,
+        "prompt_ids": ["icl_short", "icl_medium", "icl_detailed"],
+        "schema_version": TRACE_SCHEMA_VERSION,
+        "timestamp": "2026-04-11T00:00:00Z",
+    }
+
+    temp_dir = Path("tests") / f"_tmp_run_metadata_{uuid.uuid4().hex}"
+    try:
+        meta_path = write_run_metadata(str(temp_dir), run_metadata)
+        loaded = json.loads(Path(meta_path).read_text(encoding="utf-8"))
+
+        assert loaded == run_metadata
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_validate_output_dir_schema_rejects_missing_meta() -> None:
+    temp_dir = Path("tests") / f"_tmp_schema_missing_meta_{uuid.uuid4().hex}"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        (temp_dir / "traces.jsonl").write_text('{"trace_id": "x"}\n', encoding="utf-8")
+
+        try:
+            validate_output_dir_schema(str(temp_dir), expected_schema_version=TRACE_SCHEMA_VERSION)
+        except RuntimeError as exc:
+            assert "missing run_meta.json" in str(exc)
+        else:
+            raise AssertionError("validate_output_dir_schema should reject traces without metadata")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_validate_output_dir_schema_rejects_incompatible_schema() -> None:
+    temp_dir = Path("tests") / f"_tmp_schema_bad_version_{uuid.uuid4().hex}"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        (temp_dir / "traces.jsonl").write_text('{"trace_id": "x"}\n', encoding="utf-8")
+        (temp_dir / "run_meta.json").write_text(
+            json.dumps({"schema_version": "stage1_trace_v1"}),
+            encoding="utf-8",
+        )
+
+        try:
+            validate_output_dir_schema(str(temp_dir), expected_schema_version=TRACE_SCHEMA_VERSION)
+        except RuntimeError as exc:
+            assert "schema_version" in str(exc)
+        else:
+            raise AssertionError("validate_output_dir_schema should reject incompatible metadata")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -245,3 +326,59 @@ def test_prepare_model_inputs_falls_back_to_string_tokenization() -> None:
     assert generator.tokenizer.calls == ["template:True", "template:False", "tokenizer_call"]
     assert "input_ids" in result
     assert result["input_ids"].seen_device == "cpu"
+
+
+def test_discover_prompt_templates_sorts_and_validates_count() -> None:
+    temp_dir = Path("tests") / f"_tmp_prompt_discovery_{uuid.uuid4().hex}"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        (temp_dir / "icl_z.yaml").write_text(
+            'prompt_id: "icl_z"\nversion: 1\nsystem: "z"\nfew_shot: []\nuser_template: "{question}"\n',
+            encoding="utf-8",
+        )
+        (temp_dir / "icl_a.yaml").write_text(
+            'prompt_id: "icl_a"\nversion: 1\nsystem: "a"\nfew_shot: []\nuser_template: "{question}"\n',
+            encoding="utf-8",
+        )
+
+        templates = discover_prompt_templates(str(temp_dir), expected_count=2)
+
+        assert [template["prompt_id"] for template in templates] == ["icl_a", "icl_z"]
+
+        try:
+            discover_prompt_templates(str(temp_dir), expected_count=3)
+        except ValueError as exc:
+            assert "Expected 3 ICL prompt groups" in str(exc)
+        else:
+            raise AssertionError("discover_prompt_templates should validate prompt counts")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_build_run_metadata_contains_required_stage_c_fields() -> None:
+    config = SimpleNamespace(
+        experiment=SimpleNamespace(run_id="stage-c-run", seed=42),
+        model=SimpleNamespace(name="meta-llama/Llama-3.1-8B-Instruct"),
+        dataset=SimpleNamespace(name="gsm8k", split="test"),
+    )
+
+    metadata = build_run_metadata(
+        config=config,
+        prompt_ids=["icl_short", "icl_medium"],
+        temperature=0.2,
+        max_new_tokens=96,
+        num_icl_groups=2,
+        samples_per_group=3,
+    )
+
+    assert metadata["run_id"] == "stage-c-run"
+    assert metadata["model_name"] == "meta-llama/Llama-3.1-8B-Instruct"
+    assert metadata["dataset"] == "gsm8k:test"
+    assert metadata["temperature"] == 0.2
+    assert metadata["max_new_tokens"] == 96
+    assert metadata["num_icl_groups"] == 2
+    assert metadata["samples_per_group"] == 3
+    assert metadata["seed"] == 42
+    assert metadata["prompt_ids"] == ["icl_short", "icl_medium"]
+    assert metadata["schema_version"] == TRACE_SCHEMA_VERSION
+    assert "timestamp" in metadata

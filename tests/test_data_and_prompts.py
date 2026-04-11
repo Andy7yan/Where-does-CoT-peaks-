@@ -5,13 +5,14 @@ from pathlib import Path
 import shutil
 import uuid
 
-from src.data.gsm8k import (
+from src.gsm8k import (
     load_gsm8k_test,
     parse_gold_answer,
     save_eval_subset,
+    save_gsm8k_corpus,
     select_eval_subset,
 )
-from src.prompts import (
+from src.prompting import (
     build_generation_messages,
     build_nldd_clean_prompt,
     build_nldd_corrupt_prompt,
@@ -68,19 +69,61 @@ def test_save_eval_subset_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> No
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_build_generation_messages_includes_target_length(sample_question: dict) -> None:
-    template = load_prompt_template("len_guided_v1")
+def test_save_gsm8k_corpus_writes_raw_jsonl(sample_gsm8k: list[dict]) -> None:
+    temp_dir = Path("tests") / f"_tmp_save_gsm8k_corpus_{uuid.uuid4().hex}"
+    try:
+        corpus_path = save_gsm8k_corpus(sample_gsm8k[:3], str(temp_dir))
+        lines = Path(corpus_path).read_text(encoding="utf-8").splitlines()
+        parsed = [json.loads(line) for line in lines]
+
+        assert len(parsed) == 3
+        assert parsed[0]["question"] == sample_gsm8k[0]["question"]
+        assert parsed[0]["answer"] == sample_gsm8k[0]["answer"]
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_load_icl_prompt_templates_have_expected_schema() -> None:
+    for prompt_id in ("icl_short", "icl_medium", "icl_detailed"):
+        template = load_prompt_template(prompt_id)
+
+        assert template["prompt_id"] == prompt_id
+        assert template["version"] == 1
+        assert isinstance(template["system"], str)
+        assert isinstance(template["few_shot"], list)
+        assert template["few_shot"] == []
+        assert template["user_template"] == "{question}"
+
+
+def test_build_generation_messages_uses_new_signature(sample_question: dict) -> None:
+    template = load_prompt_template("icl_short")
 
     messages = build_generation_messages(
         question=sample_question["question"],
-        target_length=5,
         prompt_template=template,
     )
 
+    assert len(messages) == 2
     assert messages[0]["role"] == "system"
-    assert "exactly 5 reasoning steps" in messages[0]["content"]
+    assert "exactly" not in messages[0]["content"].lower()
+    assert "target_length" not in messages[0]["content"]
     assert messages[-1]["role"] == "user"
-    assert sample_question["question"] in messages[-1]["content"]
+    assert messages[-1]["content"] == sample_question["question"]
+
+
+def test_build_generation_messages_rejects_target_length_kwarg(sample_question: dict) -> None:
+    template = load_prompt_template("icl_short")
+
+    try:
+        build_generation_messages(
+            question=sample_question["question"],
+            target_length=5,
+            prompt_template=template,
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("build_generation_messages should reject target_length")
 
 
 def test_build_nldd_clean_prompt_has_answer_suffix_space() -> None:

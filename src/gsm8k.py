@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.core.answer_extraction import extract_answer
+from src.reasoning import extract_answer
 
 
 class EvalSubset(list[dict[str, Any]]):
@@ -111,6 +111,25 @@ def save_eval_subset(subset: list[dict], output_dir: str) -> tuple[str, str]:
     )
 
     return str(jsonl_path), str(meta_path)
+
+
+def save_gsm8k_corpus(
+    records: list[dict],
+    output_dir: str,
+    filename: str = "gsm8k_test.jsonl",
+) -> str:
+    """Write the raw GSM8K question/answer corpus as JSONL."""
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    corpus_path = output_path / filename
+
+    with corpus_path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            normalized = _normalize_record(record)
+            handle.write(json.dumps(normalized, ensure_ascii=False) + "\n")
+
+    return str(corpus_path)
 
 
 def _load_local_records(local_path: str) -> list[dict[str, str]]:

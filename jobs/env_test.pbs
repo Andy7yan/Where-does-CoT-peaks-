@@ -1,0 +1,60 @@
+#!/bin/bash
+#PBS -N peak-cot-env-test
+#PBS -l walltime=00:05:00
+#PBS -j oe
+#PBS -V
+
+set -euo pipefail
+
+cd "$PBS_O_WORKDIR" || exit 1
+
+if [[ ! -f ".env" ]]; then
+  echo "missing .env at $(pwd)/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source ".env"
+set +a
+set -u
+
+# 创建日志目录
+RUN_DATE=$(date +%m%d)
+JOB_ID_SHORT=${PBS_JOBID%%.*}
+JOB_ID_SHORT=${JOB_ID_SHORT: -4}
+LOG_DIR="${SCRATCH}/runs/smoke-${RUN_DATE}_${JOB_ID_SHORT}"
+mkdir -p "${LOG_DIR}" || exit 1
+
+# 重定向输出到日志文件
+exec 1>"${LOG_DIR}/env-test.log" 2>&1
+
+echo "=== Log file location: ${LOG_DIR}/env-test.log ==="
+
+echo "project_home=${PROJECT_HOME}"
+echo "pwd=$(pwd)"
+echo "scratch=${SCRATCH:-<unset>}"
+echo "hf_home=${HF_HOME:-<unset>}"
+echo "hf_hub_cache=${HF_HUB_CACHE:-<unset>}"
+echo "hf_datasets_cache=${HF_DATASETS_CACHE:-<unset>}"
+echo "pythonpath=${PYTHONPATH:-<unset>}"
+echo "tokenizers_parallelism=${TOKENIZERS_PARALLELISM:-<unset>}"
+echo "transformers_no_advisory_warnings=${TRANSFORMERS_NO_ADVISORY_WARNINGS:-<unset>}"
+
+if [[ -z "${SCRATCH:-}" ]]; then
+  echo "SCRATCH is not set"
+  exit 1
+fi
+
+if [[ "${SCRATCH}" == *'${SCRATCH}'* ]]; then
+  echo "SCRATCH did not expand correctly: ${SCRATCH}"
+  exit 1
+fi
+
+echo "scratch_exists=$( [[ -d "${SCRATCH}" ]] && echo yes || echo no )"
+echo "venv_exists=$( [[ -d "${SCRATCH}/.venv" ]] && echo yes || echo no )"
+echo "hf_home_exists=$( [[ -d "${HF_HOME:-/nonexistent}" ]] && echo yes || echo no )"
+echo "hf_hub_cache_exists=$( [[ -d "${HF_HUB_CACHE:-/nonexistent}" ]] && echo yes || echo no )"
+echo "hf_datasets_cache_exists=$( [[ -d "${HF_DATASETS_CACHE:-/nonexistent}" ]] && echo yes || echo no )"
+
+echo "env_test_ok=yes"

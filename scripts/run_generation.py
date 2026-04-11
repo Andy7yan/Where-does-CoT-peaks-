@@ -6,19 +6,23 @@ import os
 from pathlib import Path
 import sys
 import time
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import ExperimentConfig
-from src.generation.length_controlled import (
+from src.generation import (
+    TRACE_SCHEMA_VERSION,
     LLMGenerator,
     append_traces_to_jsonl,
     generate_traces_for_question,
     load_existing_trace_ids,
+    validate_output_dir_schema,
+    write_run_metadata,
 )
-from src.prompts import load_prompt_template
+from src.prompting import load_prompt_template
+from src.settings import ExperimentConfig, require_config_value
 
 
 def main() -> None:
@@ -34,6 +38,7 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "traces.jsonl"
+    validate_output_dir_schema(str(output_dir), expected_schema_version=TRACE_SCHEMA_VERSION)
 
     run_start = time.perf_counter()
     generator = LLMGenerator(
@@ -41,27 +46,45 @@ def main() -> None:
         dtype=config.model.dtype,
         cache_dir=config.model.hf_cache,
     )
-    prompt_template = load_prompt_template(args.prompt_id)
+    num_icl_groups = require_config_value(
+        "generation.num_icl_groups",
+        config.generation.num_icl_groups,
+    )
+    prompt_templates = discover_prompt_templates(
+        prompts_dir="prompts",
+        expected_count=num_icl_groups,
+    )
+    samples_per_group = require_config_value(
+        "generation.samples_per_group",
+        config.generation.samples_per_group,
+    )
+    temperature = require_config_value(
+        "generation.temperature",
+        config.generation.temperature,
+    )
+    max_new_tokens = require_config_value(
+        "generation.max_new_tokens",
+        config.generation.max_new_tokens,
+    )
+    prompt_ids = [template["prompt_id"] for template in prompt_templates]
+    run_metadata = build_run_metadata(
+        config=config,
+        prompt_ids=prompt_ids,
+        temperature=temperature,
+        max_new_tokens=max_new_tokens,
+        num_icl_groups=num_icl_groups,
+        samples_per_group=samples_per_group,
+    )
+    write_run_metadata(str(output_dir), run_metadata)
     existing_trace_ids = load_existing_trace_ids(str(output_path))
 
     written_traces = 0
     skipped_traces = 0
     extraction_failed_count = 0
 
-    length_grid = args.length_grid if args.length_grid is not None else config.generation.length_grid
-    samples_per_length = (
-        args.samples_per_length
-        if args.samples_per_length is not None
-        else config.generation.samples_per_length
-    )
-    temperature = args.temperature if args.temperature is not None else config.generation.temperature
-    max_new_tokens = (
-        args.max_new_tokens if args.max_new_tokens is not None else config.generation.max_new_tokens
-    )
-
     print(f"selected_questions: {len(selected_subset)}")
-    print(f"length_grid: {length_grid}")
-    print(f"samples_per_length: {samples_per_length}")
+    print(f"prompt_ids: {prompt_ids}")
+    print(f"samples_per_group: {samples_per_group}")
     print(f"temperature: {temperature}")
     print(f"max_new_tokens: {max_new_tokens}")
 
@@ -77,12 +100,10 @@ def main() -> None:
             question_id=record["question_id"],
             question_text=record["question_text"],
             gold_answer=float(record["gold_answer"]),
-            length_grid=length_grid,
-            samples_per_length=samples_per_length,
+            prompt_templates=prompt_templates,
+            samples_per_group=samples_per_group,
             temperature=temperature,
             max_new_tokens=max_new_tokens,
-            prompt_template=prompt_template,
-            model_name=config.model.name,
         )
 
         new_traces = [trace for trace in traces if trace["trace_id"] not in existing_trace_ids]
@@ -123,41 +144,52 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-idx", type=int, default=0, help="Inclusive question start index.")
     parser.add_argument("--end-idx", type=int, default=None, help="Exclusive question end index.")
     parser.add_argument(
-        "--prompt-id",
-        default="len_guided_v1",
-        help="Prompt template id to load from prompts/.",
-    )
-    parser.add_argument(
-        "--length-grid",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Optional override for the configured target length grid.",
-    )
-    parser.add_argument(
-        "--samples-per-length",
-        type=int,
-        default=None,
-        help="Optional override for samples generated at each target length.",
-    )
-    parser.add_argument(
-        "--temperature",
-        type=float,
-        default=None,
-        help="Optional override for generation temperature.",
-    )
-    parser.add_argument(
-        "--max-new-tokens",
-        type=int,
-        default=None,
-        help="Optional override for maximum generated tokens.",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable verbose tokenizer/input preparation debug logs.",
     )
     return parser.parse_args()
+
+
+def discover_prompt_templates(
+    prompts_dir: str,
+    expected_count: int,
+) -> list[dict[str, Any]]:
+    """Load all Stage C ICL prompt groups in filename order."""
+
+    prompt_dir = Path(prompts_dir)
+    prompt_paths = sorted(prompt_dir.glob("icl_*.yaml"))
+    templates = [load_prompt_template(path.stem, prompts_dir=prompts_dir) for path in prompt_paths]
+    if len(templates) != expected_count:
+        raise ValueError(
+            f"Expected {expected_count} ICL prompt groups in '{prompt_dir}', found {len(templates)}."
+        )
+    return templates
+
+
+def build_run_metadata(
+    config: ExperimentConfig,
+    prompt_ids: list[str],
+    temperature: float,
+    max_new_tokens: int,
+    num_icl_groups: int,
+    samples_per_group: int,
+) -> dict[str, Any]:
+    """Construct run-level metadata for Stage 1 trace generation."""
+
+    return {
+        "run_id": config.experiment.run_id,
+        "model_name": config.model.name,
+        "dataset": f"{config.dataset.name}:{config.dataset.split}",
+        "temperature": temperature,
+        "max_new_tokens": max_new_tokens,
+        "num_icl_groups": num_icl_groups,
+        "samples_per_group": samples_per_group,
+        "seed": config.experiment.seed,
+        "prompt_ids": prompt_ids,
+        "schema_version": TRACE_SCHEMA_VERSION,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
 
 def load_subset(subset_path: str) -> list[dict]:

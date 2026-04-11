@@ -1,0 +1,7 @@
+prompt_id: "_deprecated_len_guided_v1"
+version: 1
+system: |
+  Deprecated prompt placeholder.
+  Do not use this template for Stage 1 runs.
+few_shot: []
+user_template: "{question}"

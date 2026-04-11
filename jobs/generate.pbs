@@ -1,20 +1,95 @@
 #!/bin/bash
 #PBS -N peak-cot-generate
 #PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
-#PBS -l walltime=04:00:00
+#PBS -l walltime=11:50:00
 #PBS -j oe
-#PBS -o /srv/scratch/${USER}/peak-CoT/pbs-logs/generate.log
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/generate.pbs.log
 
-cd /home/peak-CoT || exit 1
-source .venv/bin/activate
+set -euo pipefail
 
-export HF_HOME=/srv/scratch/${USER}/peak-CoT/hf-home
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
 : "${RUN_NAME:=generate-$(date +%m%d_%H%M%S)}"
-RUN_DIR=/srv/scratch/${USER}/peak-CoT/runs/${RUN_NAME}
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${START_IDX:=0}"
+: "${END_IDX:=200}"
+: "${PROMPT_ID:=len_guided_v1}"
+: "${DEBUG:=0}"
+: "${LENGTH_GRID:=}"
+: "${SAMPLES_PER_LENGTH:=}"
+: "${TEMPERATURE:=}"
+: "${MAX_NEW_TOKENS:=}"
 
-mkdir -p /srv/scratch/${USER}/peak-CoT/pbs-logs
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HOME:?HF_HOME must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HUB_CACHE:?HF_HUB_CACHE must be set by ${PROJECT_HOME}/.env}"
+: "${HF_DATASETS_CACHE:?HF_DATASETS_CACHE must be set by ${PROJECT_HOME}/.env}"
+
+: "${SUBSET_PATH:=${SCRATCH}/data/eval_subset.jsonl}"
+export RUN_NAME
+SCRATCH_ROOT="${SCRATCH}"
+RUN_DIR="${SCRATCH_ROOT}/runs/${RUN_NAME}"
+VENV_DIR="${SCRATCH_ROOT}/.venv"
+
 mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
 exec > >(tee -a "${RUN_DIR}/logs/generation.log") 2>&1
 
-python scripts/run_generation.py
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH_ROOT}"
+echo "venv_dir=${VENV_DIR}"
+echo "subset_path=${SUBSET_PATH}"
+echo "run_dir=${RUN_DIR}"
+echo "start_idx=${START_IDX}"
+echo "end_idx=${END_IDX}"
 
+cmd=(
+  python scripts/run_generation.py
+  --config "${CONFIG_PATH}"
+  --subset-path "${SUBSET_PATH}"
+  --output-dir "${RUN_DIR}"
+  --start-idx "${START_IDX}"
+  --end-idx "${END_IDX}"
+  --prompt-id "${PROMPT_ID}"
+)
+
+if [[ -n "${LENGTH_GRID}" ]]; then
+  cmd+=(--length-grid)
+  for value in ${LENGTH_GRID}; do
+    cmd+=("${value}")
+  done
+fi
+
+if [[ -n "${SAMPLES_PER_LENGTH}" ]]; then
+  cmd+=(--samples-per-length "${SAMPLES_PER_LENGTH}")
+fi
+
+if [[ -n "${TEMPERATURE}" ]]; then
+  cmd+=(--temperature "${TEMPERATURE}")
+fi
+
+if [[ -n "${MAX_NEW_TOKENS}" ]]; then
+  cmd+=(--max-new-tokens "${MAX_NEW_TOKENS}")
+fi
+
+if [[ "${DEBUG}" == "1" ]]; then
+  cmd+=(--debug)
+fi
+
+printf 'command='
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+"${cmd[@]}"
