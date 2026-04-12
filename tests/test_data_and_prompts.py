@@ -84,14 +84,23 @@ def test_save_gsm8k_corpus_writes_raw_jsonl(sample_gsm8k: list[dict]) -> None:
 
 
 def test_load_icl_prompt_templates_have_expected_schema() -> None:
-    for prompt_id in ("icl_short", "icl_medium", "icl_detailed"):
+    for prompt_id in (
+        "icl_minimal",
+        "icl_short",
+        "icl_medium",
+        "icl_detailed",
+        "icl_verbose",
+    ):
         template = load_prompt_template(prompt_id)
 
         assert template["prompt_id"] == prompt_id
         assert template["version"] == 1
         assert isinstance(template["system"], str)
         assert isinstance(template["few_shot"], list)
-        assert template["few_shot"] == []
+        assert len(template["few_shot"]) > 0
+        for exemplar in template["few_shot"]:
+            assert isinstance(exemplar["user"], str)
+            assert isinstance(exemplar["assistant"], str)
         assert template["user_template"] == "{question}"
 
 
@@ -103,10 +112,14 @@ def test_build_generation_messages_uses_new_signature(sample_question: dict) -> 
         prompt_template=template,
     )
 
-    assert len(messages) == 2
+    assert len(messages) == 1 + 2 * len(template["few_shot"]) + 1
     assert messages[0]["role"] == "system"
     assert "exactly" not in messages[0]["content"].lower()
     assert "target_length" not in messages[0]["content"]
+    assert messages[1]["role"] == "user"
+    assert messages[2]["role"] == "assistant"
+    assert messages[1]["content"] == template["few_shot"][0]["user"]
+    assert messages[2]["content"] == template["few_shot"][0]["assistant"]
     assert messages[-1]["role"] == "user"
     assert messages[-1]["content"] == sample_question["question"]
 

@@ -1,16 +1,17 @@
 #!/bin/bash
 #PBS -N peak-cot-pilot
-#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb:gpu_model=A100
 #PBS -l walltime=02:00:00
 #PBS -j oe
 #PBS -V
-#PBS -o /srv/scratch/${USER}/peak-CoT/pilot.pbs.log
+#
+# Pin Pilot runs to A100 on Katana.
+# This matches the current PyTorch build and avoids V100 incompatibility.
 
 set -euo pipefail
 
 PROJECT_NAME="peak-CoT"
 : "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
-: "${RUN_NAME:=pilot-$(date +%m%d_%H%M%S)}"
 : "${CONFIG_PATH:=configs/stage1.yaml}"
 : "${SOURCE:=huggingface}"
 : "${DEBUG:=0}"
@@ -32,13 +33,74 @@ set -u
 : "${HF_HUB_CACHE:?HF_HUB_CACHE must be set by ${PROJECT_HOME}/.env}"
 : "${HF_DATASETS_CACHE:?HF_DATASETS_CACHE must be set by ${PROJECT_HOME}/.env}"
 
+RUN_DATE=$(date +%m%d)
+JOB_ID_SHORT=${PBS_JOBID%%.*}
+JOB_ID_SHORT=${JOB_ID_SHORT: -4}
+: "${RUN_NAME:=pilot-${RUN_DATE}_${JOB_ID_SHORT}}"
+
 export RUN_NAME
 RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
 mkdir -p "${RUN_DIR}/logs"
+GPU_USAGE_LOG="${RUN_DIR}/logs/gpu_usage.csv"
+PROCESS_USAGE_LOG="${RUN_DIR}/logs/process_usage.log"
+
 exec > >(tee -a "${RUN_DIR}/logs/pilot.log") 2>&1
+
+GPU_MONITOR_PID=""
+PROCESS_MONITOR_PID=""
+
+cleanup_monitors() {
+  if [[ -n "${GPU_MONITOR_PID}" ]] && kill -0 "${GPU_MONITOR_PID}" 2>/dev/null; then
+    kill "${GPU_MONITOR_PID}" 2>/dev/null || true
+    wait "${GPU_MONITOR_PID}" 2>/dev/null || true
+  fi
+  if [[ -n "${PROCESS_MONITOR_PID}" ]] && kill -0 "${PROCESS_MONITOR_PID}" 2>/dev/null; then
+    kill "${PROCESS_MONITOR_PID}" 2>/dev/null || true
+    wait "${PROCESS_MONITOR_PID}" 2>/dev/null || true
+  fi
+}
+
+start_gpu_monitor() {
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "gpu_monitor=skipped nvidia-smi not found"
+    return
+  fi
+
+  nvidia-smi \
+    --query-gpu=timestamp,index,name,utilization.gpu,utilization.memory,memory.used,memory.total \
+    --format=csv \
+    -l 5 > "${GPU_USAGE_LOG}" &
+  GPU_MONITOR_PID=$!
+  echo "gpu_monitor_pid=${GPU_MONITOR_PID}"
+}
+
+start_process_monitor() {
+  local target_pid="$1"
+  (
+    while kill -0 "${target_pid}" 2>/dev/null; do
+      printf 'timestamp=%s\n' "$(date --iso-8601=seconds)"
+      ps -p "${target_pid}" -o pid=,ppid=,%cpu=,%mem=,rss=,vsz=,etime=,cmd=
+      free -m
+      printf -- '---\n'
+      sleep 5
+    done
+  ) > "${PROCESS_USAGE_LOG}" 2>&1 &
+  PROCESS_MONITOR_PID=$!
+  echo "process_monitor_pid=${PROCESS_MONITOR_PID}"
+}
+
+run_runtime_preflight() {
+  echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
+  echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK:-0}"
+  python scripts/check_runtime_device.py
+}
+
+trap cleanup_monitors EXIT
 
 echo "project_home=${PROJECT_HOME}"
 echo "run_dir=${RUN_DIR}"
+echo "pbs_job_id=${PBS_JOBID}"
+echo "job_id_short=${JOB_ID_SHORT}"
 echo "config_path=${CONFIG_PATH}"
 echo "source=${SOURCE}"
 echo "cache_dir=${HF_DATASETS_CACHE}"
@@ -59,4 +121,16 @@ printf 'command='
 printf ' %q' "${cmd[@]}"
 printf '\n'
 
-"${cmd[@]}"
+run_runtime_preflight
+start_gpu_monitor
+"${cmd[@]}" &
+PYTHON_PID=$!
+echo "python_pid=${PYTHON_PID}"
+start_process_monitor "${PYTHON_PID}"
+
+set +e
+wait "${PYTHON_PID}"
+STATUS=$?
+set -e
+echo "python_exit_status=${STATUS}"
+exit "${STATUS}"

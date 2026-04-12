@@ -1,0 +1,114 @@
+timestamp=2026-04-11T23:50:15+10:00
+ 436751  436724  0.0  0.0   252   6144       00:00 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024        9429      157919           4       24676      181280
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:20+10:00
+ 436751  436724 17.0  0.0 90564 752672       00:05 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024        9497      157831           4       24696      181212
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:25+10:00
+ 436751  436724 14.3  0.0 130364 1886388     00:10 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024        9524      157804           4       24695      181184
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:30+10:00
+ 436751  436724 10.3  0.1 206172 2656944     00:15 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024        9567      157726           4       24730      181141
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:35+10:00
+ 436751  436724  9.7  0.2 464808 5051592     00:20 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10261      156910          21       24851      180430
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:40+10:00
+ 436751  436724 10.3  0.2 510640 5103944     00:25 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10303      156981          21       24739      180388
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:45+10:00
+ 436751  436724 11.2  0.2 557904 5149256     00:30 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10352      167793          21       13878      180339
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:50+10:00
+ 436751  436724 10.4  0.2 568412 5171876     00:35 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10373      167787          21       13863      180318
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:50:55+10:00
+ 436751  436724  9.8  0.2 568852 5172900     00:40 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10366      171592          21       10065      180325
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:00+10:00
+ 436751  436724 10.5  0.3 595244 5333980     00:45 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       10381      171564          21       10078      180310
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:05+10:00
+ 436751  436724 13.4  0.8 1761920 16405056   00:50 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       11026      170399          21       10599      179665
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:10+10:00
+ 436751  436724 19.6  3.2 6344468 18223764   00:55 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       13270      165918          21       12835      177421
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:16+10:00
+ 436751  436724 24.1  5.2 10356032 20214516  01:00 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       15243      161981          21       14799      175448
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:21+10:00
+ 436751  436724 28.0  4.8 9532404 22260592   01:05 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       17201      158060          21       16762      173490
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:26+10:00
+ 436751  436724 31.4  6.9 13692104 24267728  01:10 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       19236      153991          21       18796      171455
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:31+10:00
+ 436751  436724 34.4  6.6 13031080 26283064  01:15 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       21297      149867          21       20859      169394
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:36+10:00
+ 436751  436724 38.0  8.7 17166560 28339356  01:20 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       23358      147615          21       21050      167333
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:41+10:00
+ 436751  436724 42.0  8.3 16480520 26999876  01:25 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       25443      147543          21       19037      165247
+Swap:          2047         459        1588
+---
+timestamp=2026-04-11T23:51:46+10:00
+ 436751  436724 44.8  0.6 1282324 29143740   01:30 python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
+              total        used        free      shared  buff/cache   available
+Mem:         192024       11210      162265          31       18548      179471
+Swap:          2047         459        1588
+---

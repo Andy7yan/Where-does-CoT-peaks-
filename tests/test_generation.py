@@ -6,7 +6,11 @@ import shutil
 from types import SimpleNamespace
 import uuid
 
-from scripts.run_generation import build_run_metadata, discover_prompt_templates
+from scripts.run_generation import (
+    build_run_metadata,
+    discover_prompt_templates,
+    resolve_prompt_temperatures,
+)
 from src.generation import (
     TRACE_SCHEMA_VERSION,
     GenerationOutput,
@@ -43,6 +47,33 @@ class FakeGenerator:
             ),
             token_count=7,
         )
+
+
+class BatchFakeGenerator:
+    """Batch-capable stand-in generator that records the temperatures it sees."""
+
+    def __init__(self) -> None:
+        self.batch_calls: list[tuple[int, float]] = []
+
+    def generate_batch(
+        self,
+        messages_batch: list[list[dict]],
+        temperature: float = 0.7,
+        max_new_tokens: int = 512,
+    ) -> list[GenerationOutput]:
+        assert max_new_tokens == 64
+        self.batch_calls.append((len(messages_batch), temperature))
+        return [
+            GenerationOutput(
+                raw_completion=(
+                    "Step 1: Break the arithmetic into parts.\n"
+                    "Step 2: Finish the arithmetic.\n"
+                    "#### 4"
+                ),
+                token_count=7,
+            )
+            for _ in messages_batch
+        ]
 
 
 def test_generate_traces_for_question_builds_trace_schema() -> None:
@@ -131,7 +162,8 @@ def test_write_run_metadata_writes_required_fields() -> None:
         "run_id": "stage-c-run",
         "model_name": "meta-llama/Llama-3.1-8B-Instruct",
         "dataset": "gsm8k:test",
-        "temperature": 0.3,
+        "temperature": None,
+        "icl_group_temperatures": {"icl_short": 0.3, "icl_medium": 0.5},
         "max_new_tokens": 128,
         "num_icl_groups": 3,
         "samples_per_group": 4,
@@ -355,6 +387,31 @@ def test_discover_prompt_templates_sorts_and_validates_count() -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_discover_prompt_templates_uses_preferred_prompt_order() -> None:
+    temp_dir = Path("tests") / f"_tmp_prompt_preferred_order_{uuid.uuid4().hex}"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        for prompt_id in ("icl_verbose", "icl_short", "icl_minimal"):
+            (temp_dir / f"{prompt_id}.yaml").write_text(
+                f'prompt_id: "{prompt_id}"\nversion: 1\nsystem: "s"\nfew_shot: []\nuser_template: "{{question}}"\n',
+                encoding="utf-8",
+            )
+
+        templates = discover_prompt_templates(
+            str(temp_dir),
+            expected_count=3,
+            preferred_prompt_ids=["icl_minimal", "icl_short", "icl_verbose"],
+        )
+
+        assert [template["prompt_id"] for template in templates] == [
+            "icl_minimal",
+            "icl_short",
+            "icl_verbose",
+        ]
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     config = SimpleNamespace(
         experiment=SimpleNamespace(run_id="stage-c-run", seed=42),
@@ -365,7 +422,8 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     metadata = build_run_metadata(
         config=config,
         prompt_ids=["icl_short", "icl_medium"],
-        temperature=0.2,
+        temperature=None,
+        icl_group_temperatures={"icl_short": 0.3, "icl_medium": 0.5},
         max_new_tokens=96,
         num_icl_groups=2,
         samples_per_group=3,
@@ -374,7 +432,11 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     assert metadata["run_id"] == "stage-c-run"
     assert metadata["model_name"] == "meta-llama/Llama-3.1-8B-Instruct"
     assert metadata["dataset"] == "gsm8k:test"
-    assert metadata["temperature"] == 0.2
+    assert metadata["temperature"] is None
+    assert metadata["icl_group_temperatures"] == {
+        "icl_short": 0.3,
+        "icl_medium": 0.5,
+    }
     assert metadata["max_new_tokens"] == 96
     assert metadata["num_icl_groups"] == 2
     assert metadata["samples_per_group"] == 3
@@ -382,3 +444,87 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     assert metadata["prompt_ids"] == ["icl_short", "icl_medium"]
     assert metadata["schema_version"] == TRACE_SCHEMA_VERSION
     assert "timestamp" in metadata
+
+
+def test_generate_traces_for_question_batches_samples_with_generate_batch() -> None:
+    generator = BatchFakeGenerator()
+    prompt_templates = [
+        {
+            "prompt_id": "icl_short",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        }
+    ]
+
+    traces = generate_traces_for_question(
+        generator=generator,
+        question_id="gsm8k_0001",
+        question_text="What is 2 + 2?",
+        gold_answer=4.0,
+        prompt_templates=prompt_templates,
+        samples_per_group=5,
+        max_new_tokens=64,
+        temperature=0.7,
+        batch_size=4,
+    )
+
+    assert len(traces) == 5
+    assert generator.batch_calls == [(4, 0.7), (1, 0.7)]
+
+
+def test_generate_traces_for_question_uses_prompt_specific_temperatures() -> None:
+    generator = BatchFakeGenerator()
+    prompt_templates = [
+        {
+            "prompt_id": "icl_short",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+        {
+            "prompt_id": "icl_medium",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+    ]
+
+    traces = generate_traces_for_question(
+        generator=generator,
+        question_id="gsm8k_0001",
+        question_text="What is 2 + 2?",
+        gold_answer=4.0,
+        prompt_templates=prompt_templates,
+        samples_per_group=2,
+        max_new_tokens=64,
+        temperature=None,
+        prompt_temperatures={"icl_short": 0.3, "icl_medium": 0.5},
+        batch_size=4,
+    )
+
+    assert len(traces) == 4
+    assert generator.batch_calls == [(2, 0.3), (2, 0.5)]
+
+
+def test_resolve_prompt_temperatures_uses_group_values_and_default_fallback() -> None:
+    resolved = resolve_prompt_temperatures(
+        prompt_ids=["icl_short", "icl_medium"],
+        default_temperature=0.7,
+        configured_group_temperatures={"icl_short": 0.3},
+    )
+
+    assert resolved == {"icl_short": 0.3, "icl_medium": 0.7}
+
+
+def test_resolve_prompt_temperatures_requires_complete_coverage_without_default() -> None:
+    try:
+        resolve_prompt_temperatures(
+            prompt_ids=["icl_short", "icl_medium"],
+            default_temperature=None,
+            configured_group_temperatures={"icl_short": 0.3},
+        )
+    except ValueError as exc:
+        assert "icl_medium" in str(exc)
+    else:
+        raise AssertionError("resolve_prompt_temperatures should reject uncovered prompts")

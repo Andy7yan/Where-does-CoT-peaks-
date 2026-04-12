@@ -22,7 +22,7 @@ from src.generation import (
     write_run_metadata,
 )
 from src.prompting import load_prompt_template
-from src.settings import ExperimentConfig, require_config_value
+from src.settings import ExperimentConfig
 
 
 def main() -> None:
@@ -53,15 +53,18 @@ def main() -> None:
     prompt_templates = discover_prompt_templates(
         prompts_dir="prompts",
         expected_count=num_icl_groups,
+        preferred_prompt_ids=list(config.generation.icl_group_temperatures),
     )
     samples_per_group = require_config_value(
         "generation.samples_per_group",
         config.generation.samples_per_group,
     )
-    temperature = require_config_value(
-        "generation.temperature",
-        config.generation.temperature,
+    prompt_temperatures = resolve_prompt_temperatures(
+        prompt_ids=[template["prompt_id"] for template in prompt_templates],
+        default_temperature=config.generation.temperature,
+        configured_group_temperatures=config.generation.icl_group_temperatures,
     )
+    temperature = config.generation.temperature
     max_new_tokens = require_config_value(
         "generation.max_new_tokens",
         config.generation.max_new_tokens,
@@ -71,6 +74,7 @@ def main() -> None:
         config=config,
         prompt_ids=prompt_ids,
         temperature=temperature,
+        icl_group_temperatures=prompt_temperatures,
         max_new_tokens=max_new_tokens,
         num_icl_groups=num_icl_groups,
         samples_per_group=samples_per_group,
@@ -85,7 +89,8 @@ def main() -> None:
     print(f"selected_questions: {len(selected_subset)}")
     print(f"prompt_ids: {prompt_ids}")
     print(f"samples_per_group: {samples_per_group}")
-    print(f"temperature: {temperature}")
+    print(f"default_temperature: {temperature}")
+    print(f"icl_group_temperatures: {prompt_temperatures}")
     print(f"max_new_tokens: {max_new_tokens}")
 
     total_questions = len(selected_subset)
@@ -102,8 +107,9 @@ def main() -> None:
             gold_answer=float(record["gold_answer"]),
             prompt_templates=prompt_templates,
             samples_per_group=samples_per_group,
-            temperature=temperature,
             max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            prompt_temperatures=prompt_temperatures,
         )
 
         new_traces = [trace for trace in traces if trace["trace_id"] not in existing_trace_ids]
@@ -154,12 +160,30 @@ def parse_args() -> argparse.Namespace:
 def discover_prompt_templates(
     prompts_dir: str,
     expected_count: int,
+    preferred_prompt_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Load all Stage C ICL prompt groups in filename order."""
 
     prompt_dir = Path(prompts_dir)
-    prompt_paths = sorted(prompt_dir.glob("icl_*.yaml"))
-    templates = [load_prompt_template(path.stem, prompts_dir=prompts_dir) for path in prompt_paths]
+    prompt_paths = list(prompt_dir.glob("icl_*.yaml"))
+    templates_by_id = {
+        path.stem: load_prompt_template(path.stem, prompts_dir=prompts_dir)
+        for path in prompt_paths
+    }
+    if preferred_prompt_ids:
+        missing_prompt_ids = [
+            prompt_id for prompt_id in preferred_prompt_ids if prompt_id not in templates_by_id
+        ]
+        if missing_prompt_ids:
+            missing = ", ".join(missing_prompt_ids)
+            raise ValueError(
+                f"Preferred prompt ids are missing in '{prompt_dir}': {missing}."
+            )
+        extra_prompt_ids = sorted(set(templates_by_id) - set(preferred_prompt_ids))
+        ordered_prompt_ids = [*preferred_prompt_ids, *extra_prompt_ids]
+    else:
+        ordered_prompt_ids = sorted(templates_by_id)
+    templates = [templates_by_id[prompt_id] for prompt_id in ordered_prompt_ids]
     if len(templates) != expected_count:
         raise ValueError(
             f"Expected {expected_count} ICL prompt groups in '{prompt_dir}', found {len(templates)}."
@@ -170,7 +194,8 @@ def discover_prompt_templates(
 def build_run_metadata(
     config: ExperimentConfig,
     prompt_ids: list[str],
-    temperature: float,
+    temperature: float | None,
+    icl_group_temperatures: dict[str, float],
     max_new_tokens: int,
     num_icl_groups: int,
     samples_per_group: int,
@@ -182,6 +207,7 @@ def build_run_metadata(
         "model_name": config.model.name,
         "dataset": f"{config.dataset.name}:{config.dataset.split}",
         "temperature": temperature,
+        "icl_group_temperatures": icl_group_temperatures,
         "max_new_tokens": max_new_tokens,
         "num_icl_groups": num_icl_groups,
         "samples_per_group": samples_per_group,
@@ -202,6 +228,42 @@ def load_subset(subset_path: str) -> list[dict]:
             if stripped:
                 records.append(json.loads(stripped))
     return records
+
+
+def require_config_value(field_path: str, value: Any) -> Any:
+    """Require a config value to be present after Pilot backfill."""
+
+    if value is None:
+        raise ValueError(f"{field_path} is required before Stage 1 generation can run.")
+    return value
+
+
+def resolve_prompt_temperatures(
+    *,
+    prompt_ids: list[str],
+    default_temperature: float | None,
+    configured_group_temperatures: dict[str, float],
+) -> dict[str, float]:
+    """Resolve the effective temperature for each discovered prompt group."""
+
+    resolved: dict[str, float] = {}
+    missing_prompt_ids: list[str] = []
+    for prompt_id in prompt_ids:
+        if prompt_id in configured_group_temperatures:
+            resolved[prompt_id] = configured_group_temperatures[prompt_id]
+        elif default_temperature is not None:
+            resolved[prompt_id] = default_temperature
+        else:
+            missing_prompt_ids.append(prompt_id)
+
+    if missing_prompt_ids:
+        missing = ", ".join(sorted(missing_prompt_ids))
+        raise ValueError(
+            "Missing temperatures for prompt groups with no default fallback: "
+            f"{missing}"
+        )
+
+    return resolved
 
 
 if __name__ == "__main__":

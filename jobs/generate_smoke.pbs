@@ -4,6 +4,9 @@
 #PBS -l walltime=00:20:00
 #PBS -j oe
 #PBS -V
+#
+# For clusters with typed GPU resources, request a compatible accelerator at submit time,
+# for example by adding the site-specific GPU selector to `qsub -l ...`.
 
 set -euo pipefail
 
@@ -51,6 +54,8 @@ echo "subset_path=${SUBSET_PATH}"
 echo "run_dir=${RUN_DIR}"
 echo "start_idx=${START_IDX}"
 echo "end_idx=${END_IDX}"
+echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
+echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK:-0}"
 
 cmd=(
   python scripts/run_generation.py
@@ -74,4 +79,5 @@ printf 'command='
 printf ' %q' "${cmd[@]}"
 printf '\n'
 
+python scripts/check_runtime_device.py
 "${cmd[@]}"

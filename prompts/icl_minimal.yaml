@@ -1,56 +1,49 @@
-﻿prompt_id: "icl_short"
+prompt_id: "icl_minimal"
 version: 1
 system: |
   You are a careful math tutor.
-  Solve the user's problem clearly and finish with a new line in the form "#### <number>".
+  Solve the user's problem as briefly as possible.
+  Prefer giving the answer directly; at most use one short calculation line before the final answer.
+  Finish with a new line in the form "#### <number>".
 few_shot:
   - user: "Caleb bought 10 cartons of ice cream and 4 cartons of frozen yoghurt. Each carton of ice cream cost $4 and each carton of frozen yoghurt cost $1. How much more did Caleb spend on ice cream than on frozen yoghurt?"
     assistant: |
-      Ice cream cost 10 * 4 = <<10*4=40>>40, and frozen yoghurt cost 4 * 1 = <<4*1=4>>4.
-      The difference is 40 - 4 = <<40-4=36>>36.
+      Caleb spent 10 * 4 - 4 * 1 = <<10*4-4*1=36>>36 more on ice cream.
       #### 36
 
   - user: "Jack has a stack of books that is 12 inches thick. He knows from experience that 80 pages is one inch thick. If he has 6 books, how many pages is each one on average?"
     assistant: |
-      The stack has 80 * 12 = <<80*12=960>>960 pages in total.
-      Each book has 960 / 6 = <<960/6=160>>160 pages on average.
+      The average is 12 * 80 / 6 = <<12*80/6=160>>160 pages per book.
       #### 160
 
   - user: "Jimmy bought 3 pens for school for $1 each, 4 notebooks for $3 each and 2 folders for $5 each. If he paid with a $50 bill, how much change will he get back?"
     assistant: |
-      Jimmy spent 3 * 1 + 4 * 3 + 2 * 5 = <<3*1+4*3+2*5=25>>25 dollars.
-      His change is 50 - 25 = <<50-25=25>>25.
+      His change is 50 - (3 * 1 + 4 * 3 + 2 * 5) = <<50-(3*1+4*3+2*5)=25>>25.
       #### 25
 
   - user: "Sarah's age is equal to three times Mark's age minus 4. Mark is four years older than Billy. Billy is half Ana's age. If Ana will be 15 in 3 years, how old is Sarah?"
     assistant: |
-      Ana is now 15 - 3 = <<15-3=12>>12, so Billy is 12 / 2 = <<12/2=6>>6 and Mark is 6 + 4 = <<6+4=10>>10.
-      Sarah is 3 * 10 - 4 = <<3*10-4=26>>26.
+      Sarah is 3 * ((15 - 3) / 2 + 4) - 4 = <<3*((15-3)/2+4)-4=26>>26 years old.
       #### 26
 
   - user: "Johnny is a dog walker. He can walk 3 dogs at once. He gets paid $15 for a 30-minute walk and $20 for a 60-minute walk. Johnny works for 4 hours per day. If he always walks the maximum number of dogs possible and 6 dogs have 60-minute walks per day, how much money does he make in a week where he works 5 days?"
     assistant: |
-      The 6 dogs with 60-minute walks take 6 / 3 = <<6/3=2>>2 hours and earn 6 * 20 = <<6*20=120>>120 dollars.
-      He has 2 hours left, which means 2 * 60 / 30 * 3 = <<2*60/30*3=12>>12 dogs on 30-minute walks, earning 12 * 15 = <<12*15=180>>180 dollars.
-      So he makes 120 + 180 = <<120+180=300>>300 dollars per day and 300 * 5 = <<300*5=1500>>1500 dollars per week.
+      He makes 5 * (6 * 20 + ((4 - 2) * 60 / 30) * 3 * 15) = <<5*(6*20+((4-2)*60/30)*3*15)=1500>>1500.
       #### 1500
 
   - user: "There are 360 balls in the ball pit. If a quarter of the balls in the ball pit are red and a fifth of the remaining balls are blue. How many of the balls are neither red nor blue?"
     assistant: |
-      Red balls: 360 * 1/4 = <<360*(1/4)=90>>90, leaving 360 - 90 = <<360-90=270>>270.
-      Blue balls: 270 * 1/5 = <<270*(1/5)=54>>54, so neither red nor blue: 360 - 90 - 54 = <<360-90-54=216>>216.
+      The number that are neither red nor blue is 360 - 360 / 4 - (360 - 360 / 4) / 5 = <<360-360/4-(360-360/4)/5=216>>216.
       #### 216
 
   - user: "Mason is mixing up some salad dressing. He takes a bowl that holds 150 ml and fills it 2/3rds with oil and 1/3rd with vinegar. The oil weighs 5 g/ml and the vinegar weighs 4 g/ml. How many grams does the salad dressing weigh?"
     assistant: |
-      Oil is 150 * 2/3 = <<150*2/3=100>>100 ml and vinegar is 150 * 1/3 = <<150*1/3=50>>50 ml.
-      The dressing weighs 100 * 5 + 50 * 4 = <<100*5+50*4=700>>700 grams.
+      The dressing weighs 150 * 2 / 3 * 5 + 150 * 1 / 3 * 4 = <<150*2/3*5+150*1/3*4=700>>700 grams.
       #### 700
 
   - user: "Aryan owes Fernanda $1200, which is twice what Kyro owes Fernanda. Aryan decides to pay 60% of her debt to Fernanda, and Kyro pays Fernanda 80% of her dept. If Fernanda had $300 in her savings account and adds the money she's been paid by her debtors to the savings account, calculate the total amount of money in her savings account now."
     assistant: |
-      Kyro owes 1200 / 2 = <<1200/2=600>>600 dollars.
-      Fernanda receives 1200 * 60/100 = <<1200*60/100=720>>720 and 600 * 80/100 = <<600*80/100=480>>480, so she now has 300 + 720 + 480 = <<300+720+480=1500>>1500.
+      Fernanda now has 300 + 1200 * 0.6 + (1200 / 2) * 0.8 = <<300+1200*0.6+(1200/2)*0.8=1500>>1500.
       #### 1500
 
 user_template: "{question}"

@@ -1,11 +1,11 @@
-experiment:
+﻿experiment:
   run_id: "peak-cot-stage1-gsm8k-llama31"
   seed: 42
 
 dataset:
   name: "gsm8k"
   split: "test"
-  subset_size: null  # Pilot 确认后填写
+  subset_size: null  # Backfill after pilot review.
   subset_hash_seed: 42
 
 model:
@@ -14,10 +14,15 @@ model:
   hf_cache: "${SCRATCH}/hf-home/hub"
 
 generation:
-  num_icl_groups: null  # Pilot 确认后填写
-  samples_per_group: null  # Pilot 确认后填写
-  temperature: null  # Pilot 确认后填写
-  max_new_tokens: null  # Pilot 确认后填写
+  num_icl_groups: 5
+  samples_per_group: 3
+  icl_groups:
+    icl_minimal: { temperature: 0.0 }
+    icl_short: { temperature: 0.3 }
+    icl_medium: { temperature: 0.5 }
+    icl_detailed: { temperature: 0.7 }
+    icl_verbose: { temperature: 0.7 }
+  max_new_tokens: 512
 
 step_segmentation:
   method: "newline"
@@ -40,21 +45,21 @@ nldd:
 
 pilot:
   num_questions: 50
-  num_icl_groups: 3
-  samples_per_group: 2
-  temperature: 0.0
-  max_new_tokens: 128
+  num_icl_groups: 5
+  samples_per_group: 15
+  temperature: 0.7
+  max_new_tokens: 512
   max_extraction_fail_rate: 0.05
 
 tas:
   layer: "middle"
-  plateau_threshold: null  # Pilot 确认后填写
+  plateau_threshold: null  # Backfill after pilot review.
 
 analysis:
-  min_bin_size: null  # Pilot 确认后填写
-  num_full_analysis_questions: null  # Pilot 确认后填写
-  num_spot_checks: null  # Pilot 确认后填写
-  max_extraction_fail_rate: null  # Pilot 确认后填写
+  min_bin_size: null  # Backfill after pilot review.
+  num_full_analysis_questions: null  # Backfill after pilot review.
+  num_spot_checks: null  # Backfill after pilot review.
+  max_extraction_fail_rate: 0.05
 
 output:
   base_dir: "${SCRATCH}/runs/${RUN_NAME}"

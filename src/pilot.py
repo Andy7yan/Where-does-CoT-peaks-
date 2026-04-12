@@ -94,12 +94,30 @@ def parse_pilot_overrides(settings: dict[str, Any]) -> PilotOverrides:
 def discover_prompt_templates(
     prompts_dir: str,
     expected_count: int,
+    preferred_prompt_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Load Pilot prompt groups in filename order."""
 
     prompt_root = Path(prompts_dir)
-    prompt_paths = sorted(prompt_root.glob("icl_*.yaml"))
-    templates = [load_prompt_template(path.stem, prompts_dir=prompts_dir) for path in prompt_paths]
+    prompt_paths = list(prompt_root.glob("icl_*.yaml"))
+    templates_by_id = {
+        path.stem: load_prompt_template(path.stem, prompts_dir=prompts_dir)
+        for path in prompt_paths
+    }
+    if preferred_prompt_ids:
+        missing_prompt_ids = [
+            prompt_id for prompt_id in preferred_prompt_ids if prompt_id not in templates_by_id
+        ]
+        if missing_prompt_ids:
+            missing = ", ".join(missing_prompt_ids)
+            raise ValueError(
+                f"Preferred prompt ids are missing in '{prompt_root}': {missing}."
+            )
+        extra_prompt_ids = sorted(set(templates_by_id) - set(preferred_prompt_ids))
+        ordered_prompt_ids = [*preferred_prompt_ids, *extra_prompt_ids]
+    else:
+        ordered_prompt_ids = sorted(templates_by_id)
+    templates = [templates_by_id[prompt_id] for prompt_id in ordered_prompt_ids]
     if len(templates) != expected_count:
         raise ValueError(
             f"Expected {expected_count} ICL prompt groups in '{prompt_root}', found {len(templates)}."
@@ -122,9 +140,15 @@ def run_pilot(
 
     settings = load_settings(config_path)
     pilot = parse_pilot_overrides(settings)
+    generation_settings = _require_mapping(settings, "generation")
     prompt_templates = discover_prompt_templates(
         prompts_dir=prompts_dir,
         expected_count=pilot.num_icl_groups,
+        preferred_prompt_ids=(
+            list(_require_mapping(generation_settings, "icl_groups"))
+            if "icl_groups" in generation_settings
+            else None
+        ),
     )
 
     resolved_local_path = data_path if mock and data_path is not None else local_path
@@ -357,14 +381,17 @@ def evaluate_check_b(traces: list[dict[str, Any]]) -> PilotCheckResult:
     for trace in traces:
         by_length[int(trace["actual_num_steps"])].append(trace)
 
+    all_bins = list(range(0, max(by_length, default=-1) + 1))
     occupied_bins = sorted(by_length)
     total_correct = sum(1 for trace in traces if trace["is_correct"])
     bin_rows = {
         length: {
-            "trace_count": len(length_traces),
-            "correct_count": sum(1 for trace in length_traces if trace["is_correct"]),
+            "trace_count": len(by_length.get(length, [])),
+            "correct_count": sum(
+                1 for trace in by_length.get(length, []) if trace["is_correct"]
+            ),
         }
-        for length, length_traces in by_length.items()
+        for length in all_bins
     }
 
     if (
@@ -450,22 +477,17 @@ def evaluate_check_d(
     """Evaluate single-step corruption feasibility over correct traces."""
 
     correct_traces = [trace for trace in traces if trace["is_correct"]]
-    step_attempts = 0
-    corruption_failed = 0
-    token_delta_violations = 0
-
-    for trace in correct_traces:
-        for step in trace["steps"]:
-            step_attempts += 1
-            result = corrupt_arithmetic(step)
-            if result.corruption_failed:
-                corruption_failed += 1
-                continue
-
-            clean_tokens = token_counter(step)
-            corrupt_tokens = token_counter(result.corrupt_text)
-            if abs(clean_tokens - corrupt_tokens) > corruption_token_delta_max:
-                token_delta_violations += 1
+    step_attempts = sum(len(trace["steps"]) for trace in correct_traces)
+    failure_records = diagnose_corruption_failures(
+        traces=correct_traces,
+        token_counter=token_counter,
+        corruption_token_delta_max=corruption_token_delta_max,
+    )
+    failure_counts: dict[str, int] = defaultdict(int)
+    for record in failure_records:
+        failure_counts[str(record["failure_reason"])] += 1
+    corruption_failed = failure_counts["no_numeric"] + failure_counts["other"]
+    token_delta_violations = failure_counts["token_delta_exceeded"]
 
     if step_attempts == 0:
         status = "FAIL"
@@ -505,6 +527,72 @@ def evaluate_check_d(
             "token_counter": token_counter_label,
         },
     )
+
+
+def diagnose_corruption_failures(
+    *,
+    traces: list[dict[str, Any]],
+    token_counter: Callable[[str], int],
+    corruption_token_delta_max: int,
+) -> list[dict[str, Any]]:
+    """Collect failed corruption attempts over the steps of correct traces."""
+
+    failures: list[dict[str, Any]] = []
+    for trace in traces:
+        if not trace.get("is_correct"):
+            continue
+        steps = trace.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+        actual_num_steps = int(trace.get("actual_num_steps", len(steps)))
+        for step_index, step_text in enumerate(steps, start=1):
+            if not isinstance(step_text, str):
+                continue
+            failure_reason = classify_corruption_failure(
+                step_text=step_text,
+                token_counter=token_counter,
+                corruption_token_delta_max=corruption_token_delta_max,
+            )
+            if failure_reason is None:
+                continue
+            failures.append(
+                {
+                    "trace_id": trace.get("trace_id", ""),
+                    "question_id": trace.get("question_id", ""),
+                    "step_index": step_index,
+                    "step_text": step_text,
+                    "actual_num_steps": actual_num_steps,
+                    "failure_reason": failure_reason,
+                }
+            )
+    return failures
+
+
+def classify_corruption_failure(
+    *,
+    step_text: str,
+    token_counter: Callable[[str], int],
+    corruption_token_delta_max: int,
+) -> str | None:
+    """Classify a corruption failure reason for a single reasoning step."""
+
+    try:
+        result = corrupt_arithmetic(step_text)
+    except Exception:
+        return "other"
+
+    if result.corruption_failed:
+        return "no_numeric"
+
+    try:
+        clean_tokens = token_counter(step_text)
+        corrupt_tokens = token_counter(result.corrupt_text)
+    except Exception:
+        return "other"
+
+    if abs(clean_tokens - corrupt_tokens) > corruption_token_delta_max:
+        return "token_delta_exceeded"
+    return None
 
 
 def evaluate_check_e() -> PilotCheckResult:

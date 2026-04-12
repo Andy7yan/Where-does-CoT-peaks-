@@ -1,0 +1,135 @@
+prompt_id: "icl_verbose"
+version: 1
+system: |
+  You are a careful math tutor.
+  Solve the user's problem with a very detailed step-by-step explanation.
+  Use 8 to 12 short steps when possible.
+  Break arithmetic into tiny operations, and explicitly show intermediate results.
+  Finish with a new line in the form "#### <number>".
+few_shot:
+  - user: "Caleb bought 10 cartons of ice cream and 4 cartons of frozen yoghurt. Each carton of ice cream cost $4 and each carton of frozen yoghurt cost $1. How much more did Caleb spend on ice cream than on frozen yoghurt?"
+    assistant: |
+      Step 1: Caleb bought 10 cartons of ice cream.
+      Step 2: Each ice cream carton cost 4 dollars.
+      Step 3: Multiply 10 by 4.
+      Step 4: 10 * 4 = <<10*4=40>>40.
+      Step 5: So Caleb spent 40 dollars on ice cream.
+      Step 6: Caleb also bought 4 cartons of frozen yoghurt.
+      Step 7: Each frozen yoghurt carton cost 1 dollar.
+      Step 8: Multiply 4 by 1.
+      Step 9: 4 * 1 = <<4*1=4>>4.
+      Step 10: So Caleb spent 4 dollars on frozen yoghurt.
+      Step 11: Find how much more he spent on ice cream by subtracting 4 from 40.
+      Step 12: 40 - 4 = <<40-4=36>>36.
+      #### 36
+
+  - user: "Jack has a stack of books that is 12 inches thick. He knows from experience that 80 pages is one inch thick. If he has 6 books, how many pages is each one on average?"
+    assistant: |
+      Step 1: The stack is 12 inches thick.
+      Step 2: Each inch corresponds to 80 pages.
+      Step 3: Multiply 12 by 80 to get the total pages.
+      Step 4: 12 * 80 = <<12*80=960>>960.
+      Step 5: So all the books together have 960 pages.
+      Step 6: Jack has 6 books.
+      Step 7: Divide the total number of pages by 6.
+      Step 8: 960 / 6 = <<960/6=160>>160.
+      Step 9: That gives the average number of pages in each book.
+      #### 160
+
+  - user: "Jimmy bought 3 pens for school for $1 each, 4 notebooks for $3 each and 2 folders for $5 each. If he paid with a $50 bill, how much change will he get back?"
+    assistant: |
+      Step 1: Jimmy bought 3 pens.
+      Step 2: Each pen cost 1 dollar.
+      Step 3: 3 * 1 = <<3*1=3>>3.
+      Step 4: So the pens cost 3 dollars.
+      Step 5: Jimmy bought 4 notebooks.
+      Step 6: Each notebook cost 3 dollars.
+      Step 7: 4 * 3 = <<4*3=12>>12.
+      Step 8: So the notebooks cost 12 dollars.
+      Step 9: Jimmy bought 2 folders.
+      Step 10: Each folder cost 5 dollars.
+      Step 11: 2 * 5 = <<2*5=10>>10.
+      Step 12: Add the costs: 3 + 12 + 10 = <<3+12+10=25>>25, then subtract from 50: 50 - 25 = <<50-25=25>>25.
+      #### 25
+
+  - user: "Sarah's age is equal to three times Mark's age minus 4. Mark is four years older than Billy. Billy is half Ana's age. If Ana will be 15 in 3 years, how old is Sarah?"
+    assistant: |
+      Step 1: Ana will be 15 in 3 years.
+      Step 2: So Ana's current age is 15 - 3.
+      Step 3: 15 - 3 = <<15-3=12>>12.
+      Step 4: Billy is half Ana's age.
+      Step 5: So Billy's age is 12 / 2.
+      Step 6: 12 / 2 = <<12/2=6>>6.
+      Step 7: Mark is 4 years older than Billy.
+      Step 8: So Mark's age is 6 + 4.
+      Step 9: 6 + 4 = <<6+4=10>>10.
+      Step 10: Sarah's age is three times Mark's age minus 4.
+      Step 11: 3 * 10 = <<3*10=30>>30.
+      Step 12: 30 - 4 = <<30-4=26>>26.
+      #### 26
+
+  - user: "Johnny is a dog walker. He can walk 3 dogs at once. He gets paid $15 for a 30-minute walk and $20 for a 60-minute walk. Johnny works for 4 hours per day. If he always walks the maximum number of dogs possible and 6 dogs have 60-minute walks per day, how much money does he make in a week where he works 5 days?"
+    assistant: |
+      Step 1: Johnny can walk 3 dogs at one time.
+      Step 2: There are 6 dogs that need 60-minute walks.
+      Step 3: Divide 6 by 3 to find how many 60-minute walking slots he needs.
+      Step 4: 6 / 3 = <<6/3=2>>2.
+      Step 5: So he spends 2 hours on the 60-minute walks.
+      Step 6: Each of those 6 dogs pays 20 dollars.
+      Step 7: 6 * 20 = <<6*20=120>>120.
+      Step 8: Johnny works 4 hours total, so he has 4 - 2 = <<4-2=2>>2 hours left.
+      Step 9: Two hours is 2 * 60 = <<2*60=120>>120 minutes.
+      Step 10: Each short walk is 30 minutes, so he can do 120 / 30 = <<120/30=4>>4 short walks.
+      Step 11: Each short walk handles 3 dogs, so that is 4 * 3 = <<4*3=12>>12 dogs, worth 12 * 15 = <<12*15=180>>180 dollars.
+      Step 12: Daily pay is 120 + 180 = <<120+180=300>>300, and weekly pay is 300 * 5 = <<300*5=1500>>1500.
+      #### 1500
+
+  - user: "There are 360 balls in the ball pit. If a quarter of the balls in the ball pit are red and a fifth of the remaining balls are blue. How many of the balls are neither red nor blue?"
+    assistant: |
+      Step 1: Start with 360 balls.
+      Step 2: A quarter of them are red.
+      Step 3: Compute 360 / 4.
+      Step 4: 360 / 4 = <<360/4=90>>90.
+      Step 5: So 90 balls are red.
+      Step 6: Subtract the red balls from the total.
+      Step 7: 360 - 90 = <<360-90=270>>270.
+      Step 8: Now 270 balls remain.
+      Step 9: A fifth of the remaining balls are blue.
+      Step 10: Compute 270 / 5.
+      Step 11: 270 / 5 = <<270/5=54>>54.
+      Step 12: Subtract red and blue from the total: 360 - 90 - 54 = <<360-90-54=216>>216.
+      #### 216
+
+  - user: "Mason is mixing up some salad dressing. He takes a bowl that holds 150 ml and fills it 2/3rds with oil and 1/3rd with vinegar. The oil weighs 5 g/ml and the vinegar weighs 4 g/ml. How many grams does the salad dressing weigh?"
+    assistant: |
+      Step 1: The bowl holds 150 ml in total.
+      Step 2: Two-thirds of the bowl is oil.
+      Step 3: Compute the oil volume as 150 * 2 / 3.
+      Step 4: 150 * 2 / 3 = <<150*2/3=100>>100.
+      Step 5: So there are 100 ml of oil.
+      Step 6: One-third of the bowl is vinegar.
+      Step 7: Compute the vinegar volume as 150 * 1 / 3.
+      Step 8: 150 * 1 / 3 = <<150*1/3=50>>50.
+      Step 9: So there are 50 ml of vinegar.
+      Step 10: Oil weighs 100 * 5 = <<100*5=500>>500 grams, and vinegar weighs 50 * 4 = <<50*4=200>>200 grams.
+      Step 11: Add the two weights together.
+      Step 12: 500 + 200 = <<500+200=700>>700.
+      #### 700
+
+  - user: "Aryan owes Fernanda $1200, which is twice what Kyro owes Fernanda. Aryan decides to pay 60% of her debt to Fernanda, and Kyro pays Fernanda 80% of her dept. If Fernanda had $300 in her savings account and adds the money she's been paid by her debtors to the savings account, calculate the total amount of money in her savings account now."
+    assistant: |
+      Step 1: Aryan owes 1200 dollars.
+      Step 2: This is twice what Kyro owes.
+      Step 3: So Kyro owes 1200 / 2.
+      Step 4: 1200 / 2 = <<1200/2=600>>600.
+      Step 5: Aryan pays 60% of 1200.
+      Step 6: Convert 60% to 0.6.
+      Step 7: 1200 * 0.6 = <<1200*0.6=720>>720.
+      Step 8: Kyro pays 80% of 600.
+      Step 9: Convert 80% to 0.8.
+      Step 10: 600 * 0.8 = <<600*0.8=480>>480.
+      Step 11: Fernanda starts with 300 dollars, so add 300 + 720 + 480.
+      Step 12: 300 + 720 + 480 = <<300+720+480=1500>>1500.
+      #### 1500
+
+user_template: "{question}"

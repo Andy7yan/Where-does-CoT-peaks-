@@ -253,6 +253,35 @@ That pattern is still valid when a job needs to validate environment state befor
 
 It is not the standard template for every other job in this project.
 
+### 5.4A Pilot job logging and naming rule
+
+For `jobs/pilot.pbs`, the current project rule is stricter than the generic template:
+
+- keep Katana's native PBS stdout/stderr output enabled
+- do not hardwire `#PBS -o` to a fixed scratch file for Pilot
+- also keep a project log at `${RUN_DIR}/logs/pilot.log` via `tee`
+- default `RUN_NAME` must include the last 4 digits of `PBS_JOBID`
+
+The canonical pattern is:
+
+```bash
+RUN_DATE=$(date +%m%d)
+JOB_ID_SHORT=${PBS_JOBID%%.*}
+JOB_ID_SHORT=${JOB_ID_SHORT: -4}
+: "${RUN_NAME:=pilot-${RUN_DATE}_${JOB_ID_SHORT}}"
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${RUN_DIR}/logs/pilot.log") 2>&1
+```
+
+This is intentional for traceability:
+
+- Katana-native PBS output remains available for scheduler/runtime diagnostics
+- the project keeps a stable per-run log under the run directory
+- the run directory can be matched back to the PBS job by the last 4 digits
+
+If a future change removes the native PBS output file or stops using the job-ID suffix for Pilot runs, treat that change as a regression unless the project owner explicitly approves it.
+
 ### 5.5 Resource profile for current Stage 1 jobs
 
 The current repo uses single-node, single-GPU jobs.

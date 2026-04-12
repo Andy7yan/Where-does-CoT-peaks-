@@ -4,6 +4,9 @@
 #PBS -l walltime=02:00:00
 #PBS -j oe
 #PBS -o /srv/scratch/${USER}/peak-CoT/pbs-logs/nldd.log
+#
+# For clusters with typed GPU resources, request a compatible accelerator at submit time,
+# for example by adding the site-specific GPU selector to `qsub -l ...`.
 
 cd /home/peak-CoT || exit 1
 source .venv/bin/activate
@@ -16,5 +19,8 @@ mkdir -p /srv/scratch/${USER}/peak-CoT/pbs-logs
 mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
 exec > >(tee -a "${RUN_DIR}/logs/nldd.log") 2>&1
 
-python scripts/run_nldd.py
+echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
+echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK:-0}"
+python scripts/check_runtime_device.py
 
+python scripts/run_nldd.py

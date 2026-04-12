@@ -45,6 +45,7 @@ class GenerationConfig:
     num_icl_groups: int | None
     samples_per_group: int | None
     temperature: float | None
+    icl_group_temperatures: dict[str, float]
     max_new_tokens: int | None
 
 
@@ -164,6 +165,7 @@ class ExperimentConfig:
                 num_icl_groups=_optional_int(generation, "num_icl_groups"),
                 samples_per_group=_optional_int(generation, "samples_per_group"),
                 temperature=_optional_float(generation, "temperature"),
+                icl_group_temperatures=_parse_icl_group_temperatures(generation),
                 max_new_tokens=_optional_int(generation, "max_new_tokens"),
             ),
             step_segmentation=StepSegmentationConfig(
@@ -306,6 +308,25 @@ def _optional_float(data: dict[str, Any], key: str) -> float | None:
     if value is None:
         return None
     return _coerce_float(value, key, allow_null=True)
+
+
+def _parse_icl_group_temperatures(data: dict[str, Any]) -> dict[str, float]:
+    raw_groups = data.get("icl_groups")
+    if raw_groups is None:
+        return {}
+    if not isinstance(raw_groups, dict):
+        raise TypeError("Config field 'icl_groups' must be a mapping.")
+
+    temperatures: dict[str, float] = {}
+    for prompt_id, group_config in raw_groups.items():
+        if not isinstance(prompt_id, str):
+            raise TypeError("Config field 'icl_groups' must use string prompt ids.")
+        if not isinstance(group_config, dict):
+            raise TypeError(
+                f"Config field 'icl_groups.{prompt_id}' must be a mapping."
+            )
+        temperatures[prompt_id] = _require_float(group_config, "temperature")
+    return temperatures
 
 
 def _require_float_list(data: dict[str, Any], key: str) -> list[float]:

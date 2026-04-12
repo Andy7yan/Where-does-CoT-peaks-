@@ -1,6 +1,7 @@
 """ICL-driven trace generation utilities for Stage 1."""
 
 from collections.abc import Mapping
+import copy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -11,6 +12,7 @@ from typing import Any
 
 from src.prompting import build_generation_messages
 from src.reasoning import extract_answer, judge, segment_steps
+from src.runtime_env import select_runtime_device
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,7 @@ class GenerationOutput:
 
 
 TRACE_SCHEMA_VERSION = "stage1_trace_v2"
+DEFAULT_GENERATION_BATCH_SIZE = 4
 
 
 def ensure_model_available(
@@ -94,7 +97,8 @@ class LLMGenerator:
             "HF_HUB_CACHE",
             str(Path.home() / ".cache" / "huggingface" / "hub"),
         )
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.runtime_device = select_runtime_device(torch)
+        self.device = torch.device(self.runtime_device.resolved_device)
         self._input_diagnostics_logged = False
 
         load_start = time.perf_counter()
@@ -110,6 +114,7 @@ class LLMGenerator:
         )
         if self.tokenizer.pad_token_id is None and self.tokenizer.eos_token_id is not None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
 
         self.model = AutoModelForCausalLM.from_pretrained(
             local_model_path,
@@ -124,6 +129,12 @@ class LLMGenerator:
         model_device = next(self.model.parameters()).device
         parameter_count = sum(parameter.numel() for parameter in self.model.parameters())
 
+        print("requested_device=", self.runtime_device.requested_device)
+        print("resolved_device=", self.runtime_device.resolved_device)
+        print("device_resolution_reason=", self.runtime_device.reason)
+        print("gpu_name=", self.runtime_device.gpu_name)
+        print("gpu_compute_capability=", self.runtime_device.gpu_compute_capability)
+        print("torch_supported_cuda_arches=", list(self.runtime_device.supported_cuda_arches))
         print("cuda_available=", torch.cuda.is_available())
         print("device_count=", torch.cuda.device_count())
         print("model_device=", model_device)
@@ -142,9 +153,29 @@ class LLMGenerator:
     ) -> GenerationOutput:
         """Run a single autoregressive generation from chat messages."""
 
+        return self.generate_batch(
+            [messages],
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+        )[0]
+
+    def generate_batch(
+        self,
+        messages_batch: list[list[dict]],
+        temperature: float = 0.7,
+        max_new_tokens: int = 512,
+    ) -> list[GenerationOutput]:
+        """Run batched autoregressive generation from one or more chat prompts."""
+
         import torch
 
-        model_inputs = self._prepare_model_inputs(messages)
+        if not messages_batch:
+            return []
+
+        if len(messages_batch) == 1:
+            model_inputs = self._prepare_model_inputs(messages_batch[0])
+        else:
+            model_inputs = self._prepare_batched_model_inputs(messages_batch)
         if "input_ids" not in model_inputs:
             raise RuntimeError("Tokenizer chat template did not return input_ids.")
         if "attention_mask" not in model_inputs:
@@ -163,26 +194,38 @@ class LLMGenerator:
             print("batch_shape=", tuple(input_ids.shape))
             self._input_diagnostics_logged = True
 
-        generation_kwargs: dict[str, Any] = {
-            **model_inputs,
-            "max_new_tokens": max_new_tokens,
-            "pad_token_id": self.tokenizer.eos_token_id,
-        }
-        if temperature > 0:
-            generation_kwargs["do_sample"] = True
-            generation_kwargs["temperature"] = temperature
-        else:
-            generation_kwargs["do_sample"] = False
+        generation_config = self._build_generation_config(
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+        )
 
         with torch.no_grad():
-            outputs = self.model.generate(**generation_kwargs)
+            outputs = self.model.generate(
+                **model_inputs,
+                generation_config=generation_config,
+            )
 
-        generated_tokens = outputs[0, input_ids.shape[-1] :]
-        raw_completion = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-        return GenerationOutput(
-            raw_completion=raw_completion,
-            token_count=int(generated_tokens.shape[-1]),
-        )
+        input_width = input_ids.shape[-1]
+        pad_token_id = generation_config.pad_token_id
+        generations: list[GenerationOutput] = []
+        for row in outputs:
+            generated_tokens = row[input_width:]
+            decoded_tokens = (
+                generated_tokens[generated_tokens != pad_token_id]
+                if pad_token_id is not None
+                else generated_tokens
+            )
+            raw_completion = self.tokenizer.decode(
+                decoded_tokens,
+                skip_special_tokens=True,
+            )
+            generations.append(
+                GenerationOutput(
+                    raw_completion=raw_completion,
+                    token_count=int(decoded_tokens.shape[-1]),
+                )
+            )
+        return generations
 
     def _prepare_model_inputs(self, messages: list[dict]) -> dict[str, Any]:
         """Prepare model inputs from chat messages with a robust backend fallback."""
@@ -227,6 +270,63 @@ class LLMGenerator:
             _debug_log(f"fallback_tokenizer_call_repr={_short_repr(tokenized)}")
             return _move_model_inputs_to_device(tokenized, self.device)
 
+    def _prepare_batched_model_inputs(
+        self,
+        messages_batch: list[list[dict]],
+    ) -> dict[str, Any]:
+        """Prepare left-padded model inputs for a batch of chat prompts."""
+
+        rendered_prompts = [
+            self._render_prompt_from_messages(messages)
+            for messages in messages_batch
+        ]
+        tokenized = self.tokenizer(
+            rendered_prompts,
+            return_tensors="pt",
+            add_special_tokens=False,
+            padding=True,
+        )
+        _debug_log(f"batched_tokenizer_call_type={type(tokenized).__name__}")
+        _debug_log(f"batched_tokenizer_call_repr={_short_repr(tokenized)}")
+        return _move_model_inputs_to_device(tokenized, self.device)
+
+    def _render_prompt_from_messages(self, messages: list[dict]) -> str:
+        """Render chat messages to a prompt string for batched tokenization."""
+
+        rendered_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        if not isinstance(rendered_prompt, str):
+            raise RuntimeError("Tokenizer chat template did not return a prompt string.")
+        return rendered_prompt
+
+    def _build_generation_config(
+        self,
+        *,
+        temperature: float,
+        max_new_tokens: int,
+    ) -> Any:
+        """Build and log the effective generation config for this call."""
+
+        generation_config = copy.deepcopy(self.model.generation_config)
+        generation_config.max_new_tokens = max_new_tokens
+        generation_config.pad_token_id = self.tokenizer.pad_token_id
+        generation_config.do_sample = temperature > 0
+        generation_config.temperature = temperature
+        print(
+            "model.generation_config=",
+            {
+                "do_sample": generation_config.do_sample,
+                "temperature": generation_config.temperature,
+                "max_new_tokens": generation_config.max_new_tokens,
+                "pad_token_id": generation_config.pad_token_id,
+                "eos_token_id": generation_config.eos_token_id,
+            },
+        )
+        return generation_config
+
 
 def generate_traces_for_question(
     generator: LLMGenerator,
@@ -235,8 +335,10 @@ def generate_traces_for_question(
     gold_answer: float,
     prompt_templates: list[dict[str, Any]],
     samples_per_group: int,
-    temperature: float,
     max_new_tokens: int,
+    temperature: float | None = None,
+    prompt_temperatures: Mapping[str, float] | None = None,
+    batch_size: int = DEFAULT_GENERATION_BATCH_SIZE,
 ) -> list[dict]:
     """Generate all Stage 1 traces for a single question across ICL prompt groups."""
 
@@ -250,42 +352,85 @@ def generate_traces_for_question(
             question=question_text,
             prompt_template=prompt_template,
         )
-        for sample_idx in range(1, samples_per_group + 1):
+        effective_temperature = _resolve_prompt_temperature(
+            prompt_id=prompt_id,
+            temperature=temperature,
+            prompt_temperatures=prompt_temperatures,
+        )
+        sample_idx = 1
+        while sample_idx <= samples_per_group:
+            batch_sample_end = min(sample_idx + max(batch_size, 1) - 1, samples_per_group)
+            batch_sample_indices = list(range(sample_idx, batch_sample_end + 1))
             generation_start = time.perf_counter()
-            print(f"    sample={sample_idx}/{samples_per_group} generating...")
-            generation = generator.generate(
-                messages=messages,
-                temperature=temperature,
-                max_new_tokens=max_new_tokens,
-            )
             print(
-                f"    sample={sample_idx}/{samples_per_group} done "
+                "    samples="
+                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{samples_per_group} "
+                f"generating temperature={effective_temperature}..."
+            )
+            if hasattr(generator, "generate_batch"):
+                generations = generator.generate_batch(
+                    messages_batch=[messages for _ in batch_sample_indices],
+                    temperature=effective_temperature,
+                    max_new_tokens=max_new_tokens,
+                )
+            else:
+                generations = [
+                    generator.generate(
+                        messages=messages,
+                        temperature=effective_temperature,
+                        max_new_tokens=max_new_tokens,
+                    )
+                    for _ in batch_sample_indices
+                ]
+            if len(generations) != len(batch_sample_indices):
+                raise RuntimeError("Generator returned a mismatched number of batched outputs.")
+            print(
+                "    samples="
+                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{samples_per_group} done "
                 f"seconds={time.perf_counter() - generation_start:.2f} "
-                f"tokens={generation.token_count}"
+                f"tokens={[generation.token_count for generation in generations]}"
             )
-            segmentation = segment_steps(generation.raw_completion)
-            extraction = extract_answer(generation.raw_completion)
-
-            traces.append(
-                {
-                    "trace_id": f"{question_id}_{prompt_id}_{sample_idx}",
-                    "question_id": question_id,
-                    "question_text": question_text,
-                    "gold_answer": gold_answer,
-                    "prompt_id": prompt_id,
-                    "raw_completion": generation.raw_completion,
-                    "steps": segmentation.steps,
-                    "actual_num_steps": segmentation.num_steps,
-                    "final_answer_line": segmentation.final_answer_line,
-                    "extracted_answer": extraction.value,
-                    "is_correct": judge(extraction.value, gold_answer),
-                    "extraction_failed": extraction.extraction_failed,
-                    "token_count": generation.token_count,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
+            for current_sample_idx, generation in zip(batch_sample_indices, generations):
+                segmentation = segment_steps(generation.raw_completion)
+                extraction = extract_answer(generation.raw_completion)
+                traces.append(
+                    {
+                        "trace_id": f"{question_id}_{prompt_id}_{current_sample_idx}",
+                        "question_id": question_id,
+                        "question_text": question_text,
+                        "gold_answer": gold_answer,
+                        "prompt_id": prompt_id,
+                        "raw_completion": generation.raw_completion,
+                        "steps": segmentation.steps,
+                        "actual_num_steps": segmentation.num_steps,
+                        "final_answer_line": segmentation.final_answer_line,
+                        "extracted_answer": extraction.value,
+                        "is_correct": judge(extraction.value, gold_answer),
+                        "extraction_failed": extraction.extraction_failed,
+                        "token_count": generation.token_count,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            sample_idx = batch_sample_end + 1
 
     return traces
+
+
+def _resolve_prompt_temperature(
+    *,
+    prompt_id: str,
+    temperature: float | None,
+    prompt_temperatures: Mapping[str, float] | None,
+) -> float:
+    """Resolve the effective temperature for a prompt group."""
+
+    if prompt_temperatures is not None and prompt_id in prompt_temperatures:
+        return prompt_temperatures[prompt_id]
+    if temperature is None:
+        raise ValueError(
+            f"No generation temperature configured for prompt group '{prompt_id}'."
+        )
+    return temperature
 
 
 def write_run_metadata(output_dir: str, run_metadata: dict[str, Any]) -> str:

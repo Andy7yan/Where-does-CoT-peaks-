@@ -1,7 +1,101 @@
-prompt_id: "icl_detailed"
+﻿prompt_id: "icl_detailed"
 version: 1
 system: |
   You are a careful math tutor.
   Solve the user's problem clearly and finish with a new line in the form "#### <number>".
-few_shot: []  # External exemplar to be filled later.
+few_shot:
+  - user: "Caleb bought 10 cartons of ice cream and 4 cartons of frozen yoghurt. Each carton of ice cream cost $4 and each carton of frozen yoghurt cost $1. How much more did Caleb spend on ice cream than on frozen yoghurt?"
+    assistant: |
+      Caleb bought 10 cartons of ice cream.
+      Each carton of ice cream cost 4 dollars.
+      So the total amount he spent on ice cream was 10 * 4 = <<10*4=40>>40 dollars.
+      He also bought 4 cartons of frozen yoghurt.
+      Each carton of frozen yoghurt cost 1 dollar.
+      So the total amount he spent on frozen yoghurt was 4 * 1 = <<4*1=4>>4 dollars.
+      The question asks how much more he spent on ice cream than on frozen yoghurt, so we subtract 4 from 40.
+      40 - 4 = <<40-4=36>>36.
+      #### 36
+
+  - user: "Jack has a stack of books that is 12 inches thick. He knows from experience that 80 pages is one inch thick. If he has 6 books, how many pages is each one on average?"
+    assistant: |
+      Jack's stack of books is 12 inches thick.
+      He knows that 1 inch of thickness corresponds to 80 pages.
+      So the total number of pages in the whole stack is 12 * 80 = <<80*12=960>>960 pages.
+      These 960 pages are spread across 6 books.
+      To find the average number of pages per book, divide 960 by 6.
+      960 / 6 = <<960/6=160>>160.
+      #### 160
+
+  - user: "Jimmy bought 3 pens for school for $1 each, 4 notebooks for $3 each and 2 folders for $5 each. If he paid with a $50 bill, how much change will he get back?"
+    assistant: |
+      Jimmy bought 3 pens at 1 dollar each, so the pens cost 3 * 1 = <<3*1=3>>3 dollars.
+      He bought 4 notebooks at 3 dollars each, so the notebooks cost 4 * 3 = <<4*3=12>>12 dollars.
+      He bought 2 folders at 5 dollars each, so the folders cost 2 * 5 = <<2*5=10>>10 dollars.
+      Add these amounts to get the total cost.
+      3 + 12 + 10 = <<3+12+10=25>>25 dollars.
+      He paid with a 50-dollar bill.
+      The change he gets back is 50 - 25 = <<50-25=25>>25 dollars.
+      #### 25
+
+  - user: "Sarah's age is equal to three times Mark's age minus 4. Mark is four years older than Billy. Billy is half Ana's age. If Ana will be 15 in 3 years, how old is Sarah?"
+    assistant: |
+      Ana will be 15 in 3 years, so right now Ana is 15 - 3 = <<15-3=12>>12 years old.
+      Billy is half Ana's age, so Billy is 12 / 2 = <<12/2=6>>6 years old.
+      Mark is 4 years older than Billy, so Mark is 6 + 4 = <<6+4=10>>10 years old.
+      Sarah's age is three times Mark's age minus 4.
+      Three times Mark's age is 3 * 10 = <<3*10=30>>30.
+      Then subtract 4: 30 - 4 = <<30-4=26>>26.
+      So Sarah is 26 years old.
+      #### 26
+
+  - user: "Johnny is a dog walker. He can walk 3 dogs at once. He gets paid $15 for a 30-minute walk and $20 for a 60-minute walk. Johnny works for 4 hours per day. If he always walks the maximum number of dogs possible and 6 dogs have 60-minute walks per day, how much money does he make in a week where he works 5 days?"
+    assistant: |
+      Johnny can walk 3 dogs at once.
+      There are 6 dogs that need 60-minute walks, so he needs 6 / 3 = <<6/3=2>>2 one-hour walks for them.
+      Those 6 dogs each bring in 20 dollars, so the money from the 60-minute walks is 6 * 20 = <<6*20=120>>120 dollars.
+      Johnny works 4 hours per day total.
+      After spending 2 hours on the 60-minute walks, he has 4 - 2 = <<4-2=2>>2 hours left.
+      Two hours is 120 minutes.
+      A 30-minute walk fits into that time 120 / 30 = <<120/30=4>>4 times.
+      Each such walk handles 3 dogs, so he can walk 4 * 3 = <<4*3=12>>12 dogs on 30-minute walks.
+      Those dogs bring in 12 * 15 = <<12*15=180>>180 dollars.
+      So Johnny makes 120 + 180 = <<120+180=300>>300 dollars per day.
+      In 5 days, he makes 300 * 5 = <<300*5=1500>>1500 dollars.
+      #### 1500
+
+  - user: "There are 360 balls in the ball pit. If a quarter of the balls in the ball pit are red and a fifth of the remaining balls are blue. How many of the balls are neither red nor blue?"
+    assistant: |
+      Start with 360 balls.
+      A quarter of them are red, so the number of red balls is 360 * 1/4 = <<360*(1/4)=90>>90.
+      Remove the red balls from the total: 360 - 90 = <<360-90=270>>270 balls remain.
+      A fifth of the remaining 270 balls are blue.
+      So the number of blue balls is 270 * 1/5 = <<270*(1/5)=54>>54.
+      The balls that are neither red nor blue are the ones left after removing both red and blue balls.
+      360 - 90 - 54 = <<360-90-54=216>>216.
+      #### 216
+
+  - user: "Mason is mixing up some salad dressing. He takes a bowl that holds 150 ml and fills it 2/3rds with oil and 1/3rd with vinegar. The oil weighs 5 g/ml and the vinegar weighs 4 g/ml. How many grams does the salad dressing weigh?"
+    assistant: |
+      The bowl holds 150 ml in total.
+      Two-thirds of the bowl is oil, so the oil volume is 150 * 2/3 = <<150*2/3=100>>100 ml.
+      One-third of the bowl is vinegar, so the vinegar volume is 150 * 1/3 = <<150*1/3=50>>50 ml.
+      Oil weighs 5 grams per ml, so 100 ml of oil weighs 100 * 5 = <<100*5=500>>500 grams.
+      Vinegar weighs 4 grams per ml, so 50 ml of vinegar weighs 50 * 4 = <<50*4=200>>200 grams.
+      Add the two weights together to find the weight of the whole dressing.
+      500 + 200 = <<500+200=700>>700 grams.
+      #### 700
+
+  - user: "Aryan owes Fernanda $1200, which is twice what Kyro owes Fernanda. Aryan decides to pay 60% of her debt to Fernanda, and Kyro pays Fernanda 80% of her dept. If Fernanda had $300 in her savings account and adds the money she's been paid by her debtors to the savings account, calculate the total amount of money in her savings account now."
+    assistant: |
+      Aryan owes Fernanda 1200 dollars.
+      This is twice what Kyro owes, so Kyro owes 1200 / 2 = <<1200/2=600>>600 dollars.
+      Aryan pays 60% of 1200 dollars.
+      60% of 1200 is 1200 * 60/100 = <<1200*60/100=720>>720 dollars.
+      Kyro pays 80% of 600 dollars.
+      80% of 600 is 600 * 80/100 = <<600*80/100=480>>480 dollars.
+      Fernanda started with 300 dollars in savings.
+      Add Aryan's payment: 300 + 720 = <<300+720=1020>>1020.
+      Then add Kyro's payment: 1020 + 480 = <<1020+480=1500>>1500.
+      #### 1500
+
 user_template: "{question}"
