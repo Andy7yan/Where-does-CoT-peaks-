@@ -1,12 +1,12 @@
 #!/bin/bash
 #PBS -N peak-cot-smoke
-#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb:gpu_model=L40S
 #PBS -l walltime=00:20:00
 #PBS -j oe
 #PBS -V
 #
-# For clusters with typed GPU resources, request a compatible accelerator at submit time,
-# for example by adding the site-specific GPU selector to `qsub -l ...`.
+# Pin smoke generation to L40S on Katana.
+# Model load peaked near 19 GiB RSS in Pilot, so 32 GiB avoids a tight CPU-memory cgroup.
 
 set -euo pipefail
 
@@ -32,26 +32,25 @@ set -u
 : "${CONFIG_PATH:=configs/stage1.yaml}"
 : "${START_IDX:=0}"
 : "${END_IDX:=1}"
-: "${PROMPT_ID:=len_guided_v1}"
+: "${SHARD_ID:=smoke_${START_IDX}_${END_IDX}}"
 : "${DEBUG:=1}"
-: "${LENGTH_GRID:=3}"
-: "${SAMPLES_PER_LENGTH:=1}"
-: "${TEMPERATURE:=0}"
-: "${MAX_NEW_TOKENS:=32}"
 : "${SUBSET_PATH:=${SCRATCH}/data/eval_subset.jsonl}"
 
 export RUN_NAME
 RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
 VENV_DIR="${SCRATCH}/.venv"
+LOG_PATH="${RUN_DIR}/logs/generation-${SHARD_ID}.log"
 
 mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
-exec > >(tee -a "${RUN_DIR}/logs/generation.log") 2>&1
+exec > >(tee -a "${LOG_PATH}") 2>&1
 
 echo "project_home=${PROJECT_HOME}"
 echo "scratch_root=${SCRATCH_ROOT}"
 echo "venv_dir=${VENV_DIR}"
 echo "subset_path=${SUBSET_PATH}"
 echo "run_dir=${RUN_DIR}"
+echo "log_path=${LOG_PATH}"
+echo "shard_id=${SHARD_ID}"
 echo "start_idx=${START_IDX}"
 echo "end_idx=${END_IDX}"
 echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
@@ -62,13 +61,9 @@ cmd=(
   --config "${CONFIG_PATH}"
   --subset-path "${SUBSET_PATH}"
   --output-dir "${RUN_DIR}"
+  --shard-id "${SHARD_ID}"
   --start-idx "${START_IDX}"
   --end-idx "${END_IDX}"
-  --prompt-id "${PROMPT_ID}"
-  --length-grid "${LENGTH_GRID}"
-  --samples-per-length "${SAMPLES_PER_LENGTH}"
-  --temperature "${TEMPERATURE}"
-  --max-new-tokens "${MAX_NEW_TOKENS}"
 )
 
 if [[ "${DEBUG}" == "1" ]]; then

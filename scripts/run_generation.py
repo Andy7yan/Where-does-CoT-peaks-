@@ -35,10 +35,17 @@ def main() -> None:
     subset = load_subset(args.subset_path)
     selected_subset = subset[args.start_idx : args.end_idx]
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "traces.jsonl"
-    validate_output_dir_schema(str(output_dir), expected_schema_version=TRACE_SCHEMA_VERSION)
+    root_output_dir = Path(args.output_dir)
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    shard_id = args.shard_id or build_default_shard_id(
+        start_idx=args.start_idx,
+        end_idx=args.end_idx,
+        subset_size=len(subset),
+    )
+    shard_dir = root_output_dir / "shards" / shard_id
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    output_path = shard_dir / "traces.jsonl"
+    validate_output_dir_schema(str(shard_dir), expected_schema_version=TRACE_SCHEMA_VERSION)
 
     run_start = time.perf_counter()
     generator = LLMGenerator(
@@ -79,13 +86,23 @@ def main() -> None:
         num_icl_groups=num_icl_groups,
         samples_per_group=samples_per_group,
     )
-    write_run_metadata(str(output_dir), run_metadata)
+    write_run_metadata(str(shard_dir), run_metadata)
+    write_shard_metadata(
+        shard_dir=shard_dir,
+        shard_id=shard_id,
+        start_idx=args.start_idx,
+        end_idx=args.end_idx,
+        selected_questions=len(selected_subset),
+    )
     existing_trace_ids = load_existing_trace_ids(str(output_path))
 
     written_traces = 0
     skipped_traces = 0
     extraction_failed_count = 0
 
+    print(f"root_output_dir: {root_output_dir}")
+    print(f"shard_id: {shard_id}")
+    print(f"shard_dir: {shard_dir}")
     print(f"selected_questions: {len(selected_subset)}")
     print(f"prompt_ids: {prompt_ids}")
     print(f"samples_per_group: {samples_per_group}")
@@ -147,6 +164,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to the experiment config YAML.")
     parser.add_argument("--subset-path", required=True, help="Path to eval_subset.jsonl.")
     parser.add_argument("--output-dir", required=True, help="Directory for generated run outputs.")
+    parser.add_argument(
+        "--shard-id",
+        default=None,
+        help="Optional shard label used to isolate outputs under output-dir/shards/.",
+    )
     parser.add_argument("--start-idx", type=int, default=0, help="Inclusive question start index.")
     parser.add_argument("--end-idx", type=int, default=None, help="Exclusive question end index.")
     parser.add_argument(
@@ -216,6 +238,37 @@ def build_run_metadata(
         "schema_version": TRACE_SCHEMA_VERSION,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
+
+def build_default_shard_id(*, start_idx: int, end_idx: int | None, subset_size: int) -> str:
+    """Build a stable shard label from the selected question range."""
+
+    effective_end = subset_size if end_idx is None else end_idx
+    return f"q{start_idx:04d}_{effective_end:04d}"
+
+
+def write_shard_metadata(
+    *,
+    shard_dir: Path,
+    shard_id: str,
+    start_idx: int,
+    end_idx: int | None,
+    selected_questions: int,
+) -> str:
+    """Write shard-specific bookkeeping without touching the shared run root."""
+
+    shard_meta_path = shard_dir / "shard_meta.json"
+    payload = {
+        "shard_id": shard_id,
+        "start_idx": start_idx,
+        "end_idx": end_idx,
+        "selected_questions": selected_questions,
+    }
+    shard_meta_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return str(shard_meta_path)
 
 
 def load_subset(subset_path: str) -> list[dict]:

@@ -1,13 +1,13 @@
 #!/bin/bash
 #PBS -N peak-cot-generate
-#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb:gpu_model=L40S
 #PBS -l walltime=11:50:00
 #PBS -j oe
 #PBS -V
 #PBS -o /srv/scratch/${USER}/peak-CoT/generate.pbs.log
 #
-# For clusters with typed GPU resources, request a compatible accelerator at submit time,
-# for example by adding the site-specific GPU selector to `qsub -l ...`.
+# Pin formal generation to L40S on Katana.
+# Pilot hit a CPU RSS peak near 19 GiB during model load, so 32 GiB leaves safer headroom.
 
 set -euo pipefail
 
@@ -17,12 +17,8 @@ PROJECT_NAME="peak-CoT"
 : "${CONFIG_PATH:=configs/stage1.yaml}"
 : "${START_IDX:=0}"
 : "${END_IDX:=200}"
-: "${PROMPT_ID:=len_guided_v1}"
+: "${SHARD_ID:=q${START_IDX}_${END_IDX}}"
 : "${DEBUG:=0}"
-: "${LENGTH_GRID:=}"
-: "${SAMPLES_PER_LENGTH:=}"
-: "${TEMPERATURE:=}"
-: "${MAX_NEW_TOKENS:=}"
 
 cd "${PROJECT_HOME}" || exit 1
 if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
@@ -46,15 +42,18 @@ export RUN_NAME
 SCRATCH_ROOT="${SCRATCH}"
 RUN_DIR="${SCRATCH_ROOT}/runs/${RUN_NAME}"
 VENV_DIR="${SCRATCH_ROOT}/.venv"
+LOG_PATH="${RUN_DIR}/logs/generation-${SHARD_ID}.log"
 
 mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
-exec > >(tee -a "${RUN_DIR}/logs/generation.log") 2>&1
+exec > >(tee -a "${LOG_PATH}") 2>&1
 
 echo "project_home=${PROJECT_HOME}"
 echo "scratch_root=${SCRATCH_ROOT}"
 echo "venv_dir=${VENV_DIR}"
 echo "subset_path=${SUBSET_PATH}"
 echo "run_dir=${RUN_DIR}"
+echo "log_path=${LOG_PATH}"
+echo "shard_id=${SHARD_ID}"
 echo "start_idx=${START_IDX}"
 echo "end_idx=${END_IDX}"
 echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
@@ -65,29 +64,10 @@ cmd=(
   --config "${CONFIG_PATH}"
   --subset-path "${SUBSET_PATH}"
   --output-dir "${RUN_DIR}"
+  --shard-id "${SHARD_ID}"
   --start-idx "${START_IDX}"
   --end-idx "${END_IDX}"
-  --prompt-id "${PROMPT_ID}"
 )
-
-if [[ -n "${LENGTH_GRID}" ]]; then
-  cmd+=(--length-grid)
-  for value in ${LENGTH_GRID}; do
-    cmd+=("${value}")
-  done
-fi
-
-if [[ -n "${SAMPLES_PER_LENGTH}" ]]; then
-  cmd+=(--samples-per-length "${SAMPLES_PER_LENGTH}")
-fi
-
-if [[ -n "${TEMPERATURE}" ]]; then
-  cmd+=(--temperature "${TEMPERATURE}")
-fi
-
-if [[ -n "${MAX_NEW_TOKENS}" ]]; then
-  cmd+=(--max-new-tokens "${MAX_NEW_TOKENS}")
-fi
 
 if [[ "${DEBUG}" == "1" ]]; then
   cmd+=(--debug)

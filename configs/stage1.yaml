@@ -5,7 +5,7 @@
 dataset:
   name: "gsm8k"
   split: "test"
-  subset_size: null  # Backfill after pilot review.
+  subset_size: 200
   subset_hash_seed: 42
 
 model:
@@ -15,14 +15,15 @@ model:
 
 generation:
   num_icl_groups: 5
-  samples_per_group: 3
+  samples_per_group: 15
+  temperature: 0.7
   icl_groups:
-    icl_minimal: { temperature: 0.0 }
-    icl_short: { temperature: 0.3 }
-    icl_medium: { temperature: 0.5 }
     icl_detailed: { temperature: 0.7 }
+    icl_medium: { temperature: 0.7 }
+    icl_minimal: { temperature: 0.7 }
+    icl_short: { temperature: 0.7 }
     icl_verbose: { temperature: 0.7 }
-  max_new_tokens: 512
+  max_new_tokens: 544
 
 step_segmentation:
   method: "newline"
@@ -53,12 +54,12 @@ pilot:
 
 tas:
   layer: "middle"
-  plateau_threshold: null  # Backfill after pilot review.
+  plateau_threshold: 0.05
 
 analysis:
-  min_bin_size: null  # Backfill after pilot review.
-  num_full_analysis_questions: null  # Backfill after pilot review.
-  num_spot_checks: null  # Backfill after pilot review.
+  min_bin_size: 5
+  num_full_analysis_questions: 25  # Backfill after pilot review.
+  num_spot_checks: 3
   max_extraction_fail_rate: 0.05
 
 output:

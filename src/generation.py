@@ -121,6 +121,7 @@ class LLMGenerator:
             dtype=torch_dtype,
             cache_dir=self.cache_dir,
             local_files_only=True,
+            low_cpu_mem_usage=True,
         )
         self.model.to(self.device)
         self.model.eval()

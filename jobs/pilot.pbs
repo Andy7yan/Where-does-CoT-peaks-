@@ -1,12 +1,12 @@
 #!/bin/bash
 #PBS -N peak-cot-pilot
-#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb:gpu_model=A100
+#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb:gpu_model=L40S
 #PBS -l walltime=02:00:00
 #PBS -j oe
 #PBS -V
 #
-# Pin Pilot runs to A100 on Katana.
-# This matches the current PyTorch build and avoids V100 incompatibility.
+# Pin Pilot runs to L40S on Katana.
+# L40S is compatible with the current PyTorch build and is less premium than A100/H200.
 
 set -euo pipefail
 

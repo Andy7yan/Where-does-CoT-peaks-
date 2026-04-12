@@ -32,24 +32,24 @@ def test_config_can_be_loaded(monkeypatch) -> None:
     assert config.model.hf_cache == "/tmp/hf-home/hub"
     assert config.answer_extraction.numeric_tolerance == 1e-3
     assert config.output.base_dir == "/tmp/runs/test"
-    assert config.dataset.subset_size is None
+    assert config.dataset.subset_size == 200
     assert config.generation.num_icl_groups == 5
-    assert config.generation.samples_per_group == 3
-    assert config.generation.temperature is None
+    assert config.generation.samples_per_group == 15
+    assert config.generation.temperature == 0.7
     assert config.generation.icl_group_temperatures == {
-        "icl_minimal": 0.0,
-        "icl_short": 0.3,
-        "icl_medium": 0.5,
         "icl_detailed": 0.7,
+        "icl_medium": 0.7,
+        "icl_minimal": 0.7,
+        "icl_short": 0.7,
         "icl_verbose": 0.7,
     }
-    assert config.generation.max_new_tokens == 512
+    assert config.generation.max_new_tokens == 544
     assert config.pilot.num_questions == 50
     assert config.tas.layer == "middle"
-    assert config.tas.plateau_threshold is None
-    assert config.analysis.min_bin_size is None
-    assert config.analysis.num_full_analysis_questions is None
-    assert config.analysis.num_spot_checks is None
+    assert config.tas.plateau_threshold == 0.05
+    assert config.analysis.min_bin_size == 5
+    assert config.analysis.num_full_analysis_questions == 25
+    assert config.analysis.num_spot_checks == 3
     assert config.analysis.max_extraction_fail_rate == 0.05
 
 
@@ -60,22 +60,22 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     settings = load_settings("configs/stage1.yaml")
 
     assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-llama31"
-    assert settings["dataset"]["subset_size"] is None
+    assert settings["dataset"]["subset_size"] == 200
     assert settings["generation"]["num_icl_groups"] == 5
-    assert settings["generation"]["samples_per_group"] == 3
-    assert "temperature" not in settings["generation"]
+    assert settings["generation"]["samples_per_group"] == 15
+    assert settings["generation"]["temperature"] == 0.7
     assert settings["generation"]["icl_groups"] == {
-        "icl_minimal": {"temperature": 0.0},
-        "icl_short": {"temperature": 0.3},
-        "icl_medium": {"temperature": 0.5},
         "icl_detailed": {"temperature": 0.7},
+        "icl_medium": {"temperature": 0.7},
+        "icl_minimal": {"temperature": 0.7},
+        "icl_short": {"temperature": 0.7},
         "icl_verbose": {"temperature": 0.7},
     }
-    assert settings["generation"]["max_new_tokens"] == 512
-    assert settings["tas"]["plateau_threshold"] is None
-    assert settings["analysis"]["min_bin_size"] is None
-    assert settings["analysis"]["num_full_analysis_questions"] is None
-    assert settings["analysis"]["num_spot_checks"] is None
+    assert settings["generation"]["max_new_tokens"] == 544
+    assert settings["tas"]["plateau_threshold"] == 0.05
+    assert settings["analysis"]["min_bin_size"] == 5
+    assert settings["analysis"]["num_full_analysis_questions"] == 25
+    assert settings["analysis"]["num_spot_checks"] == 3
     assert settings["analysis"]["max_extraction_fail_rate"] == 0.05
     assert settings["output"]["base_dir"] == "/tmp/runs/stage-a"
 
