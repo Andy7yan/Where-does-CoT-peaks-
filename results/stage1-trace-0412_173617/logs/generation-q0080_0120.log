@@ -1,0 +1,894 @@
+project_home=/home/z5534565/peak-CoT
+scratch_root=/srv/scratch/z5534565/peak-CoT
+venv_dir=/srv/scratch/z5534565/peak-CoT/.venv
+subset_path=/srv/scratch/z5534565/peak-CoT/data/eval_subset.jsonl
+run_dir=/srv/scratch/z5534565/peak-CoT/runs/stage1-trace-0412_173617
+log_path=/srv/scratch/z5534565/peak-CoT/runs/stage1-trace-0412_173617/logs/generation-q0080_0120.log
+shard_id=q0080_0120
+start_idx=80
+end_idx=120
+force_device=auto
+allow_cpu_fallback=0
+command= python scripts/run_generation.py --config configs/stage1.yaml --subset-path /srv/scratch/z5534565/peak-CoT/data/eval_subset.jsonl --output-dir /srv/scratch/z5534565/peak-CoT/runs/stage1-trace-0412_173617 --shard-id q0080_0120 --start-idx 80 --end-idx 120
+runtime_device_requested= auto
+runtime_device_resolved= cuda
+runtime_device_reason= Using CUDA on NVIDIA L40S (compute capability 8.9), which is compatible with the current PyTorch build.
+runtime_gpu_name= NVIDIA L40S
+runtime_gpu_compute_capability= 8.9
+runtime_torch_supported_cuda_arches= ['7.5', '8.0', '8.6', '9.0', '10.0', '12.0']
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:09<00:29,  9.86s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:20<00:20, 10.41s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:31<00:10, 10.54s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:33<00:00,  7.07s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:33<00:00,  8.28s/it]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+requested_device= auto
+resolved_device= cuda
+device_resolution_reason= Using CUDA on NVIDIA L40S (compute capability 8.9), which is compatible with the current PyTorch build.
+gpu_name= NVIDIA L40S
+gpu_compute_capability= 8.9
+torch_supported_cuda_arches= ['7.5', '8.0', '8.6', '9.0', '10.0', '12.0']
+cuda_available= True
+device_count= 1
+model_device= cuda:0
+parameter_count= 8030261248
+load_seconds= 35.782
+cache_hit= True
+downloaded_model= False
+local_model_path= /srv/scratch/z5534565/peak-CoT/hf-home/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659
+tokenizer_class= PreTrainedTokenizerFast
+root_output_dir: /srv/scratch/z5534565/peak-CoT/runs/stage1-trace-0412_173617
+shard_id: q0080_0120
+shard_dir: /srv/scratch/z5534565/peak-CoT/runs/stage1-trace-0412_173617/shards/q0080_0120
+selected_questions: 40
+prompt_ids: ['icl_minimal', 'icl_short', 'icl_medium', 'icl_detailed', 'icl_verbose']
+samples_per_group: 3
+default_temperature: None
+icl_group_temperatures: {'icl_minimal': 0.0, 'icl_short': 0.3, 'icl_medium': 0.5, 'icl_detailed': 0.7, 'icl_verbose': 0.7}
+max_new_tokens: 512
+starting_question: 1/40 question_id=gsm8k_0080
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+input_device= cuda:0
+batch_shape= (3, 1066)
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=15.11 tokens=[512, 512, 512]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=14.52 tokens=[512, 321, 286]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.10 tokens=[168, 149, 142]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.79 tokens=[137, 151, 186]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.14 tokens=[214, 218, 226]
+starting_question: 2/40 question_id=gsm8k_0081
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.37 tokens=[42, 42, 42]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.18 tokens=[104, 94, 91]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.62 tokens=[111, 115, 113]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.77 tokens=[142, 112, 150]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.52 tokens=[205, 205, 195]
+starting_question: 3/40 question_id=gsm8k_0082
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.77 tokens=[56, 56, 56]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.72 tokens=[123, 114, 114]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.99 tokens=[199, 178, 172]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.89 tokens=[197, 205, 224]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=8.61 tokens=[273, 276, 254]
+starting_question: 4/40 question_id=gsm8k_0083
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.03 tokens=[29, 29, 29]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.68 tokens=[40, 49, 49]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.54 tokens=[76, 75, 61]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.08 tokens=[90, 73, 61]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.91 tokens=[109, 107, 114]
+starting_question: 5/40 question_id=gsm8k_0084
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=0.93 tokens=[25, 25, 25]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.01 tokens=[60, 48, 61]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.49 tokens=[71, 67, 74]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.74 tokens=[83, 105, 113]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.09 tokens=[183, 183, 189]
+starting_question: 6/40 question_id=gsm8k_0085
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.37 tokens=[41, 41, 41]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.20 tokens=[104, 94, 95]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.03 tokens=[129, 109, 102]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.16 tokens=[161, 141, 163]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.36 tokens=[224, 199, 233]
+starting_question: 7/40 question_id=gsm8k_0086
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.58 tokens=[49, 49, 49]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.97 tokens=[58, 96, 70]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.63 tokens=[106, 145, 151]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.61 tokens=[179, 177, 162]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.88 tokens=[251, 236, 236]
+starting_question: 8/40 question_id=gsm8k_0087
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.03 tokens=[29, 29, 29]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.73 tokens=[41, 41, 51]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.59 tokens=[78, 76, 68]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.83 tokens=[69, 81, 75]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.29 tokens=[127, 126, 124]
+starting_question: 9/40 question_id=gsm8k_0088
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.02 tokens=[28, 28, 28]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.85 tokens=[55, 55, 55]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.43 tokens=[70, 62, 72]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.14 tokens=[92, 83, 81]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.53 tokens=[135, 121, 130]
+starting_question: 10/40 question_id=gsm8k_0089
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.24 tokens=[74, 74, 74]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.35 tokens=[146, 76, 106]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.89 tokens=[117, 125, 160]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.40 tokens=[242, 130, 229]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=9.42 tokens=[304, 270, 226]
+progress: 10/40 questions | last_question_seconds=28.31 | elapsed_seconds=281.33 | eta_seconds=843.98
+starting_question: 11/40 question_id=gsm8k_0090
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.39 tokens=[42, 42, 42]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.84 tokens=[91, 90, 91]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.37 tokens=[141, 112, 140]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.44 tokens=[171, 152, 173]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.69 tokens=[244, 209, 241]
+starting_question: 12/40 question_id=gsm8k_0091
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.13 tokens=[69, 69, 69]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.26 tokens=[142, 124, 103]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.04 tokens=[201, 236, 177]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=8.39 tokens=[276, 203, 218]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=10.75 tokens=[300, 270, 349]
+starting_question: 13/40 question_id=gsm8k_0092
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.11 tokens=[32, 32, 32]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.20 tokens=[60, 60, 68]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.32 tokens=[104, 87, 93]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.95 tokens=[115, 121, 92]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.67 tokens=[174, 145, 175]
+starting_question: 14/40 question_id=gsm8k_0093
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=0.73 tokens=[17, 17, 17]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.91 tokens=[57, 54, 49]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.60 tokens=[58, 78, 66]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.95 tokens=[75, 85, 78]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.43 tokens=[144, 131, 166]
+starting_question: 15/40 question_id=gsm8k_0094
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.10 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.83 tokens=[52, 91, 70]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.19 tokens=[82, 171, 97]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.93 tokens=[89, 155, 97]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=9.69 tokens=[314, 158, 130]
+starting_question: 16/40 question_id=gsm8k_0095
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.09 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.68 tokens=[45, 49, 46]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.46 tokens=[73, 71, 73]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.72 tokens=[73, 75, 77]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.07 tokens=[105, 113, 119]
+starting_question: 17/40 question_id=gsm8k_0096
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.15 tokens=[33, 33, 33]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.45 tokens=[101, 112, 113]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.34 tokens=[107, 140, 106]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.71 tokens=[145, 147, 101]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=8.06 tokens=[257, 224, 186]
+starting_question: 18/40 question_id=gsm8k_0097
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.09 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.96 tokens=[59, 58, 57]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.82 tokens=[85, 77, 86]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.90 tokens=[119, 90, 92]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.73 tokens=[140, 142, 133]
+starting_question: 19/40 question_id=gsm8k_0098
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.57 tokens=[49, 49, 49]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.61 tokens=[79, 77, 83]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.21 tokens=[117, 136, 128]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.06 tokens=[135, 128, 160]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.45 tokens=[223, 236, 237]
+starting_question: 20/40 question_id=gsm8k_0099
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.28 tokens=[37, 37, 37]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.37 tokens=[75, 146, 75]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.02 tokens=[140, 164, 141]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.49 tokens=[162, 174, 141]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.53 tokens=[232, 238, 230]
+progress: 20/40 questions | last_question_seconds=23.71 | elapsed_seconds=482.24 | eta_seconds=482.24
+starting_question: 21/40 question_id=gsm8k_0100
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.31 tokens=[77, 77, 77]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=14.47 tokens=[91, 512, 99]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.74 tokens=[148, 124, 155]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.25 tokens=[164, 237, 191]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=8.94 tokens=[288, 228, 236]
+starting_question: 22/40 question_id=gsm8k_0101
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.14 tokens=[33, 33, 33]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.63 tokens=[34, 47, 47]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.65 tokens=[55, 80, 65]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.59 tokens=[97, 108, 86]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.13 tokens=[155, 143, 156]
+starting_question: 23/40 question_id=gsm8k_0102
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=0.88 tokens=[23, 23, 23]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.57 tokens=[45, 45, 42]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.37 tokens=[70, 70, 70]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.52 tokens=[70, 70, 58]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.06 tokens=[119, 108, 115]
+starting_question: 24/40 question_id=gsm8k_0103
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.79 tokens=[57, 57, 57]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.99 tokens=[96, 97, 133]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.95 tokens=[170, 196, 198]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.43 tokens=[201, 208, 188]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=8.69 tokens=[236, 279, 243]
+starting_question: 25/40 question_id=gsm8k_0104
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.54 tokens=[85, 85, 85]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.24 tokens=[142, 99, 70]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.59 tokens=[170, 138, 185]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.38 tokens=[232, 241, 212]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=10.64 tokens=[346, 280, 304]
+starting_question: 26/40 question_id=gsm8k_0105
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.06 tokens=[30, 30, 30]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.12 tokens=[50, 65, 60]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.65 tokens=[70, 80, 66]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.25 tokens=[91, 89, 96]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.48 tokens=[168, 130, 131]
+starting_question: 27/40 question_id=gsm8k_0106
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.09 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.26 tokens=[70, 45, 60]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.93 tokens=[75, 84, 90]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.16 tokens=[92, 91, 93]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.24 tokens=[151, 160, 158]
+starting_question: 28/40 question_id=gsm8k_0107
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.96 tokens=[63, 63, 63]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.80 tokens=[69, 149, 162]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.04 tokens=[141, 165, 122]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.24 tokens=[175, 236, 233]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=9.57 tokens=[309, 254, 292]
+starting_question: 29/40 question_id=gsm8k_0108
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.17 tokens=[71, 71, 71]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.21 tokens=[91, 104, 83]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.04 tokens=[129, 126, 124]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.53 tokens=[144, 211, 141]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=9.17 tokens=[245, 256, 295]
+starting_question: 30/40 question_id=gsm8k_0109
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.47 tokens=[45, 45, 45]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.51 tokens=[79, 75, 73]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.36 tokens=[86, 104, 105]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.93 tokens=[112, 155, 139]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.78 tokens=[178, 112, 147]
+progress: 30/40 questions | last_question_seconds=18.10 | elapsed_seconds=704.12 | eta_seconds=234.71
+starting_question: 31/40 question_id=gsm8k_0110
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.84 tokens=[59, 59, 59]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.50 tokens=[49, 79, 71]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.80 tokens=[69, 69, 85]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.76 tokens=[98, 123, 149]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.36 tokens=[233, 194, 216]
+starting_question: 32/40 question_id=gsm8k_0111
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.19 tokens=[71, 71, 71]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.40 tokens=[112, 183, 112]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.75 tokens=[154, 149, 145]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.48 tokens=[209, 178, 178]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.91 tokens=[219, 230, 251]
+starting_question: 33/40 question_id=gsm8k_0112
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.36 tokens=[41, 41, 41]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.09 tokens=[64, 64, 64]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.18 tokens=[93, 99, 85]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.90 tokens=[119, 98, 88]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.02 tokens=[181, 187, 168]
+starting_question: 34/40 question_id=gsm8k_0113
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.92 tokens=[61, 61, 61]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.71 tokens=[141, 158, 158]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.65 tokens=[164, 222, 160]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=9.05 tokens=[245, 208, 299]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=14.34 tokens=[347, 472, 340]
+starting_question: 35/40 question_id=gsm8k_0114
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.79 tokens=[57, 57, 57]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.41 tokens=[75, 72, 72]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.36 tokens=[93, 97, 105]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.06 tokens=[122, 109, 124]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=6.10 tokens=[187, 189, 185]
+starting_question: 36/40 question_id=gsm8k_0115
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.09 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.03 tokens=[62, 55, 43]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.29 tokens=[62, 67, 103]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.71 tokens=[73, 77, 71]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.98 tokens=[140, 151, 148]
+starting_question: 37/40 question_id=gsm8k_0116
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.09 tokens=[31, 31, 31]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.87 tokens=[56, 55, 55]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.98 tokens=[54, 56, 50]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.32 tokens=[59, 61, 63]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.78 tokens=[109, 93, 101]
+starting_question: 38/40 question_id=gsm8k_0117
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.79 tokens=[57, 57, 57]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.67 tokens=[85, 73, 85]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.33 tokens=[140, 137, 135]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.45 tokens=[138, 136, 130]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.79 tokens=[173, 197, 248]
+starting_question: 39/40 question_id=gsm8k_0118
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.15 tokens=[33, 33, 33]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.26 tokens=[70, 62, 67]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.24 tokens=[94, 95, 101]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.45 tokens=[97, 138, 107]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=5.39 tokens=[151, 133, 165]
+starting_question: 40/40 question_id=gsm8k_0119
+  prompt_id=icl_minimal
+    samples=1-3/3 generating temperature=0.0...
+model.generation_config= {'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=1.34 tokens=[40, 40, 40]
+  prompt_id=icl_short
+    samples=1-3/3 generating temperature=0.3...
+model.generation_config= {'do_sample': True, 'temperature': 0.3, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=2.75 tokens=[85, 88, 88]
+  prompt_id=icl_medium
+    samples=1-3/3 generating temperature=0.5...
+model.generation_config= {'do_sample': True, 'temperature': 0.5, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=3.52 tokens=[94, 111, 92]
+  prompt_id=icl_detailed
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=4.30 tokens=[123, 126, 133]
+  prompt_id=icl_verbose
+    samples=1-3/3 generating temperature=0.7...
+model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
+    samples=1-3/3 done seconds=7.76 tokens=[215, 247, 192]
+progress: 40/40 questions | last_question_seconds=19.70 | elapsed_seconds=903.71 | eta_seconds=0.00
+total_written_traces: 600
+total_skipped_existing_traces: 0
+extraction_failed_traces: 5
+total_elapsed_seconds: 903.71

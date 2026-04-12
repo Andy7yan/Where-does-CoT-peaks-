@@ -45,7 +45,9 @@ class GenerationConfig:
     num_icl_groups: int | None
     samples_per_group: int | None
     temperature: float | None
+    icl_group_prompt_ids: list[str]
     icl_group_temperatures: dict[str, float]
+    icl_group_sample_counts: dict[str, int]
     max_new_tokens: int | None
 
 
@@ -137,6 +139,7 @@ class ExperimentConfig:
         dataset = _require_mapping(data, "dataset")
         model = _require_mapping(data, "model")
         generation = _require_mapping(data, "generation")
+        icl_group_prompt_ids = _parse_icl_group_prompt_ids(generation)
         step_segmentation = _require_mapping(data, "step_segmentation")
         answer_extraction = _require_mapping(data, "answer_extraction")
         nldd = _require_mapping(data, "nldd")
@@ -165,7 +168,9 @@ class ExperimentConfig:
                 num_icl_groups=_optional_int(generation, "num_icl_groups"),
                 samples_per_group=_optional_int(generation, "samples_per_group"),
                 temperature=_optional_float(generation, "temperature"),
+                icl_group_prompt_ids=icl_group_prompt_ids,
                 icl_group_temperatures=_parse_icl_group_temperatures(generation),
+                icl_group_sample_counts=_parse_icl_group_sample_counts(generation),
                 max_new_tokens=_optional_int(generation, "max_new_tokens"),
             ),
             step_segmentation=StepSegmentationConfig(
@@ -311,13 +316,38 @@ def _optional_float(data: dict[str, Any], key: str) -> float | None:
 
 
 def _parse_icl_group_temperatures(data: dict[str, Any]) -> dict[str, float]:
+    raw_groups = _require_icl_groups_mapping(data)
+
+    temperatures: dict[str, float] = {}
+    for prompt_id, group_config in raw_groups.items():
+        if "temperature" in group_config:
+            temperatures[prompt_id] = _require_float(group_config, "temperature")
+    return temperatures
+
+
+def _parse_icl_group_prompt_ids(data: dict[str, Any]) -> list[str]:
+    raw_groups = _require_icl_groups_mapping(data)
+    return list(raw_groups)
+
+
+def _parse_icl_group_sample_counts(data: dict[str, Any]) -> dict[str, int]:
+    raw_groups = _require_icl_groups_mapping(data)
+
+    sample_counts: dict[str, int] = {}
+    for prompt_id, group_config in raw_groups.items():
+        if "samples_per_group" in group_config:
+            sample_counts[prompt_id] = _require_int(group_config, "samples_per_group")
+    return sample_counts
+
+
+def _require_icl_groups_mapping(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     raw_groups = data.get("icl_groups")
     if raw_groups is None:
         return {}
     if not isinstance(raw_groups, dict):
         raise TypeError("Config field 'icl_groups' must be a mapping.")
 
-    temperatures: dict[str, float] = {}
+    normalized: dict[str, dict[str, Any]] = {}
     for prompt_id, group_config in raw_groups.items():
         if not isinstance(prompt_id, str):
             raise TypeError("Config field 'icl_groups' must use string prompt ids.")
@@ -325,8 +355,8 @@ def _parse_icl_group_temperatures(data: dict[str, Any]) -> dict[str, float]:
             raise TypeError(
                 f"Config field 'icl_groups.{prompt_id}' must be a mapping."
             )
-        temperatures[prompt_id] = _require_float(group_config, "temperature")
-    return temperatures
+        normalized[prompt_id] = group_config
+    return normalized
 
 
 def _require_float_list(data: dict[str, Any], key: str) -> list[float]:

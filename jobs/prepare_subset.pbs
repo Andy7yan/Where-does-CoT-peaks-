@@ -13,6 +13,9 @@ PROJECT_NAME="peak-CoT"
 : "${CONFIG_PATH:=configs/stage1.yaml}"
 : "${SOURCE:=huggingface}"
 : "${LOCAL_PATH:=}"
+: "${SUBSET_SIZE:=}"
+: "${START_IDX:=0}"
+: "${EVAL_SUBSET_FILENAME:=eval_subset.jsonl}"
 : "${FULL_CORPUS_FILENAME:=gsm8k_test.jsonl}"
 
 cd "${PROJECT_HOME}" || exit 1
@@ -53,11 +56,17 @@ cmd=(
   --source "${SOURCE}"
   --output-dir "${OUTPUT_DIR}"
   --cache-dir "${CACHE_DIR}"
+  --start-idx "${START_IDX}"
+  --eval-subset-filename "${EVAL_SUBSET_FILENAME}"
   --full-corpus-filename "${FULL_CORPUS_FILENAME}"
 )
 
 if [[ -n "${LOCAL_PATH}" ]]; then
   cmd+=(--local-path "${LOCAL_PATH}")
+fi
+
+if [[ -n "${SUBSET_SIZE}" ]]; then
+  cmd+=(--subset-size "${SUBSET_SIZE}")
 fi
 
 printf 'command='

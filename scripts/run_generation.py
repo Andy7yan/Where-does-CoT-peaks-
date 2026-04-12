@@ -60,7 +60,7 @@ def main() -> None:
     prompt_templates = discover_prompt_templates(
         prompts_dir="prompts",
         expected_count=num_icl_groups,
-        preferred_prompt_ids=list(config.generation.icl_group_temperatures),
+        preferred_prompt_ids=config.generation.icl_group_prompt_ids or None,
     )
     samples_per_group = require_config_value(
         "generation.samples_per_group",
@@ -70,6 +70,11 @@ def main() -> None:
         prompt_ids=[template["prompt_id"] for template in prompt_templates],
         default_temperature=config.generation.temperature,
         configured_group_temperatures=config.generation.icl_group_temperatures,
+    )
+    prompt_sample_counts = resolve_prompt_sample_counts(
+        prompt_ids=[template["prompt_id"] for template in prompt_templates],
+        default_samples_per_group=samples_per_group,
+        configured_group_sample_counts=config.generation.icl_group_sample_counts,
     )
     temperature = config.generation.temperature
     max_new_tokens = require_config_value(
@@ -82,6 +87,7 @@ def main() -> None:
         prompt_ids=prompt_ids,
         temperature=temperature,
         icl_group_temperatures=prompt_temperatures,
+        icl_group_sample_counts=prompt_sample_counts,
         max_new_tokens=max_new_tokens,
         num_icl_groups=num_icl_groups,
         samples_per_group=samples_per_group,
@@ -100,23 +106,31 @@ def main() -> None:
     skipped_traces = 0
     extraction_failed_count = 0
 
-    print(f"root_output_dir: {root_output_dir}")
-    print(f"shard_id: {shard_id}")
-    print(f"shard_dir: {shard_dir}")
-    print(f"selected_questions: {len(selected_subset)}")
-    print(f"prompt_ids: {prompt_ids}")
-    print(f"samples_per_group: {samples_per_group}")
-    print(f"default_temperature: {temperature}")
-    print(f"icl_group_temperatures: {prompt_temperatures}")
-    print(f"max_new_tokens: {max_new_tokens}")
+    print(
+        "run_config:",
+        {
+            "output_dir": str(root_output_dir),
+            "shard_id": shard_id,
+            "selected_questions": len(selected_subset),
+            "prompt_ids": prompt_ids,
+            "samples_per_group": samples_per_group,
+            "icl_group_sample_counts": prompt_sample_counts,
+            "max_new_tokens": max_new_tokens,
+            "default_temperature": temperature,
+        },
+    )
+    if os.getenv("PEAK_COT_DEBUG") == "1":
+        print(
+            "run_config_details:",
+            {
+                "shard_dir": str(shard_dir),
+                "icl_group_temperatures": prompt_temperatures,
+            },
+        )
 
     total_questions = len(selected_subset)
     for index, record in enumerate(selected_subset, start=1):
         question_start = time.perf_counter()
-        print(
-            f"starting_question: {index}/{total_questions} "
-            f"question_id={record['question_id']}"
-        )
         traces = generate_traces_for_question(
             generator=generator,
             question_id=record["question_id"],
@@ -127,6 +141,7 @@ def main() -> None:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             prompt_temperatures=prompt_temperatures,
+            prompt_sample_counts=prompt_sample_counts,
         )
 
         new_traces = [trace for trace in traces if trace["trace_id"] not in existing_trace_ids]
@@ -139,15 +154,37 @@ def main() -> None:
         skipped_traces += len(traces) - len(new_traces)
         extraction_failed_count += sum(1 for trace in new_traces if trace["extraction_failed"])
 
-        if index % 10 == 0 or index == total_questions:
+        should_log_question = (
+            os.getenv("PEAK_COT_DEBUG") == "1"
+            or index == 1
+            or index % 10 == 0
+            or index == total_questions
+        )
+        if should_log_question:
             elapsed = time.perf_counter() - run_start
             average_per_question = elapsed / index if index else 0.0
             remaining = max(total_questions - index, 0) * average_per_question
             question_elapsed = time.perf_counter() - question_start
+            correct_count = sum(1 for trace in traces if trace["is_correct"])
+            question_failures = sum(1 for trace in traces if trace["extraction_failed"])
+            avg_tokens = (
+                sum(int(trace["token_count"]) for trace in traces) / len(traces)
+                if traces
+                else 0.0
+            )
             print(
-                f"progress: {index}/{total_questions} questions | "
-                f"last_question_seconds={question_elapsed:.2f} | "
-                f"elapsed_seconds={elapsed:.2f} | eta_seconds={remaining:.2f}"
+                "progress:",
+                {
+                    "questions_completed": f"{index}/{total_questions}",
+                    "last_question_id": record["question_id"],
+                    "question_seconds": round(question_elapsed, 2),
+                    "question_correct": f"{correct_count}/{len(traces)}",
+                    "question_extraction_failed": question_failures,
+                    "question_avg_tokens": round(avg_tokens, 1),
+                    "written_traces": written_traces,
+                    "elapsed_seconds": round(elapsed, 2),
+                    "eta_seconds": round(remaining, 2),
+                },
             )
 
     total_elapsed = time.perf_counter() - run_start
@@ -218,6 +255,7 @@ def build_run_metadata(
     prompt_ids: list[str],
     temperature: float | None,
     icl_group_temperatures: dict[str, float],
+    icl_group_sample_counts: dict[str, int],
     max_new_tokens: int,
     num_icl_groups: int,
     samples_per_group: int,
@@ -230,6 +268,7 @@ def build_run_metadata(
         "dataset": f"{config.dataset.name}:{config.dataset.split}",
         "temperature": temperature,
         "icl_group_temperatures": icl_group_temperatures,
+        "icl_group_sample_counts": icl_group_sample_counts,
         "max_new_tokens": max_new_tokens,
         "num_icl_groups": num_icl_groups,
         "samples_per_group": samples_per_group,
@@ -313,6 +352,34 @@ def resolve_prompt_temperatures(
         missing = ", ".join(sorted(missing_prompt_ids))
         raise ValueError(
             "Missing temperatures for prompt groups with no default fallback: "
+            f"{missing}"
+        )
+
+    return resolved
+
+
+def resolve_prompt_sample_counts(
+    *,
+    prompt_ids: list[str],
+    default_samples_per_group: int | None,
+    configured_group_sample_counts: dict[str, int],
+) -> dict[str, int]:
+    """Resolve the effective sample count for each discovered prompt group."""
+
+    resolved: dict[str, int] = {}
+    missing_prompt_ids: list[str] = []
+    for prompt_id in prompt_ids:
+        if prompt_id in configured_group_sample_counts:
+            resolved[prompt_id] = configured_group_sample_counts[prompt_id]
+        elif default_samples_per_group is not None:
+            resolved[prompt_id] = default_samples_per_group
+        else:
+            missing_prompt_ids.append(prompt_id)
+
+    if missing_prompt_ids:
+        missing = ", ".join(sorted(missing_prompt_ids))
+        raise ValueError(
+            "Missing sample counts for prompt groups with no default fallback: "
             f"{missing}"
         )
 

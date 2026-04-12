@@ -15,14 +15,14 @@ model:
 
 generation:
   num_icl_groups: 5
-  samples_per_group: 15
+  samples_per_group: 3
   temperature: 0.7
   icl_groups:
-    icl_detailed: { temperature: 0.7 }
-    icl_medium: { temperature: 0.7 }
-    icl_minimal: { temperature: 0.7 }
-    icl_short: { temperature: 0.7 }
-    icl_verbose: { temperature: 0.7 }
+    icl_minimal: { samples_per_group: 3 }
+    icl_short: { samples_per_group: 3 }
+    icl_medium: { samples_per_group: 3 }
+    icl_detailed: { samples_per_group: 5 }
+    icl_verbose: { samples_per_group: 5 }
   max_new_tokens: 544
 
 step_segmentation:

@@ -38,15 +38,22 @@ def main() -> None:
         )
     subset = select_eval_subset(
         questions,
-        n=config.dataset.subset_size,
+        n=resolve_subset_size(args.subset_size, config.dataset.subset_size),
         hash_seed=config.dataset.subset_hash_seed,
+        start_idx=args.start_idx,
     )
-    jsonl_path, meta_path = save_eval_subset(subset, args.output_dir)
+    jsonl_path, meta_path = save_eval_subset(
+        subset,
+        args.output_dir,
+        jsonl_filename=args.eval_subset_filename,
+    )
 
     gold_answers = [record["gold_answer"] for record in subset]
     summary = {
         "total_questions": len(questions),
         "subset_size": len(subset),
+        "subset_start_idx": getattr(subset, "start_idx", 0),
+        "subset_end_idx_exclusive": getattr(subset, "start_idx", 0) + len(subset),
         "gold_answer_min": min(gold_answers) if gold_answers else None,
         "gold_answer_max": max(gold_answers) if gold_answers else None,
         "gold_answer_mean": statistics.fmean(gold_answers) if gold_answers else None,
@@ -86,6 +93,22 @@ def parse_args() -> argparse.Namespace:
         help="Directory where eval_subset.jsonl and eval_subset_meta.json will be written.",
     )
     parser.add_argument(
+        "--subset-size",
+        default=None,
+        help="Override the config subset size with an integer or 'all'.",
+    )
+    parser.add_argument(
+        "--start-idx",
+        type=int,
+        default=0,
+        help="Start index within the deterministic ranked corpus before slicing.",
+    )
+    parser.add_argument(
+        "--eval-subset-filename",
+        default="eval_subset.jsonl",
+        help="Filename for the ranked evaluation subset JSONL.",
+    )
+    parser.add_argument(
         "--full-corpus-filename",
         default="gsm8k_test.jsonl",
         help="Filename for exporting the full GSM8K test corpus as JSONL.",
@@ -96,6 +119,16 @@ def parse_args() -> argparse.Namespace:
         help="Skip writing the full GSM8K corpus JSONL and only write the eval subset files.",
     )
     return parser.parse_args()
+
+
+def resolve_subset_size(cli_value: str | None, config_value: int | None) -> int | None:
+    """Resolve the subset-size override, supporting 'all' for the full ranked corpus."""
+
+    if cli_value is None:
+        return config_value
+    if cli_value.lower() == "all":
+        return None
+    return int(cli_value)
 
 
 if __name__ == "__main__":

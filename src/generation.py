@@ -100,6 +100,7 @@ class LLMGenerator:
         self.runtime_device = select_runtime_device(torch)
         self.device = torch.device(self.runtime_device.resolved_device)
         self._input_diagnostics_logged = False
+        self._generation_configs_logged: set[tuple[bool, float, int, int | None, str]] = set()
 
         load_start = time.perf_counter()
         local_model_path, downloaded = ensure_model_available(
@@ -130,21 +131,37 @@ class LLMGenerator:
         model_device = next(self.model.parameters()).device
         parameter_count = sum(parameter.numel() for parameter in self.model.parameters())
 
-        print("requested_device=", self.runtime_device.requested_device)
-        print("resolved_device=", self.runtime_device.resolved_device)
-        print("device_resolution_reason=", self.runtime_device.reason)
-        print("gpu_name=", self.runtime_device.gpu_name)
-        print("gpu_compute_capability=", self.runtime_device.gpu_compute_capability)
-        print("torch_supported_cuda_arches=", list(self.runtime_device.supported_cuda_arches))
-        print("cuda_available=", torch.cuda.is_available())
-        print("device_count=", torch.cuda.device_count())
-        print("model_device=", model_device)
-        print("parameter_count=", parameter_count)
-        print("load_seconds=", round(load_elapsed, 3))
-        print("cache_hit=", not downloaded)
-        print("downloaded_model=", downloaded)
-        print("local_model_path=", local_model_path)
-        print("tokenizer_class=", self.tokenizer.__class__.__name__)
+        print(
+            "model_init:",
+            {
+                "model_name": self.model_name,
+                "resolved_device": self.runtime_device.resolved_device,
+                "gpu_name": self.runtime_device.gpu_name,
+                "dtype": self.dtype_name,
+                "parameter_count": parameter_count,
+                "load_seconds": round(load_elapsed, 3),
+                "cache_hit": not downloaded,
+            },
+        )
+        _debug_log(
+            "model_init_details="
+            + repr(
+                {
+                    "requested_device": self.runtime_device.requested_device,
+                    "device_resolution_reason": self.runtime_device.reason,
+                    "gpu_compute_capability": self.runtime_device.gpu_compute_capability,
+                    "torch_supported_cuda_arches": list(
+                        self.runtime_device.supported_cuda_arches
+                    ),
+                    "cuda_available": torch.cuda.is_available(),
+                    "device_count": torch.cuda.device_count(),
+                    "model_device": str(model_device),
+                    "downloaded_model": downloaded,
+                    "local_model_path": local_model_path,
+                    "tokenizer_class": self.tokenizer.__class__.__name__,
+                }
+            )
+        )
 
     def generate(
         self,
@@ -191,8 +208,8 @@ class LLMGenerator:
         _debug_log(f"prepared_input_ids_shape={getattr(input_ids, 'shape', None)}")
 
         if not self._input_diagnostics_logged:
-            print("input_device=", input_ids.device)
-            print("batch_shape=", tuple(input_ids.shape))
+            _debug_log(f"input_device={input_ids.device}")
+            _debug_log(f"batch_shape={tuple(input_ids.shape)}")
             self._input_diagnostics_logged = True
 
         generation_config = self._build_generation_config(
@@ -316,16 +333,25 @@ class LLMGenerator:
         generation_config.pad_token_id = self.tokenizer.pad_token_id
         generation_config.do_sample = temperature > 0
         generation_config.temperature = temperature
-        print(
-            "model.generation_config=",
-            {
-                "do_sample": generation_config.do_sample,
-                "temperature": generation_config.temperature,
-                "max_new_tokens": generation_config.max_new_tokens,
-                "pad_token_id": generation_config.pad_token_id,
-                "eos_token_id": generation_config.eos_token_id,
-            },
+        config_key = (
+            bool(generation_config.do_sample),
+            float(generation_config.temperature),
+            int(generation_config.max_new_tokens),
+            generation_config.pad_token_id,
+            repr(generation_config.eos_token_id),
         )
+        if config_key not in self._generation_configs_logged:
+            print(
+                "generation_config:",
+                {
+                    "do_sample": generation_config.do_sample,
+                    "temperature": generation_config.temperature,
+                    "max_new_tokens": generation_config.max_new_tokens,
+                    "pad_token_id": generation_config.pad_token_id,
+                    "eos_token_id": generation_config.eos_token_id,
+                },
+            )
+            self._generation_configs_logged.add(config_key)
         return generation_config
 
 
@@ -335,10 +361,11 @@ def generate_traces_for_question(
     question_text: str,
     gold_answer: float,
     prompt_templates: list[dict[str, Any]],
-    samples_per_group: int,
+    samples_per_group: int | None,
     max_new_tokens: int,
     temperature: float | None = None,
     prompt_temperatures: Mapping[str, float] | None = None,
+    prompt_sample_counts: Mapping[str, int] | None = None,
     batch_size: int = DEFAULT_GENERATION_BATCH_SIZE,
 ) -> list[dict]:
     """Generate all Stage 1 traces for a single question across ICL prompt groups."""
@@ -348,7 +375,7 @@ def generate_traces_for_question(
         prompt_id = prompt_template.get("prompt_id")
         if not isinstance(prompt_id, str):
             raise TypeError("prompt_template['prompt_id'] must be a string.")
-        print(f"  prompt_id={prompt_id}")
+        _debug_log(f"prompt_id={prompt_id}")
         messages = build_generation_messages(
             question=question_text,
             prompt_template=prompt_template,
@@ -358,15 +385,23 @@ def generate_traces_for_question(
             temperature=temperature,
             prompt_temperatures=prompt_temperatures,
         )
+        effective_samples_per_group = _resolve_prompt_sample_count(
+            prompt_id=prompt_id,
+            samples_per_group=samples_per_group,
+            prompt_sample_counts=prompt_sample_counts,
+        )
         sample_idx = 1
-        while sample_idx <= samples_per_group:
-            batch_sample_end = min(sample_idx + max(batch_size, 1) - 1, samples_per_group)
+        while sample_idx <= effective_samples_per_group:
+            batch_sample_end = min(
+                sample_idx + max(batch_size, 1) - 1,
+                effective_samples_per_group,
+            )
             batch_sample_indices = list(range(sample_idx, batch_sample_end + 1))
             generation_start = time.perf_counter()
-            print(
-                "    samples="
-                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{samples_per_group} "
-                f"generating temperature={effective_temperature}..."
+            _debug_log(
+                "samples="
+                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{effective_samples_per_group} "
+                f"generating prompt_id={prompt_id} temperature={effective_temperature}"
             )
             if hasattr(generator, "generate_batch"):
                 generations = generator.generate_batch(
@@ -385,10 +420,11 @@ def generate_traces_for_question(
                 ]
             if len(generations) != len(batch_sample_indices):
                 raise RuntimeError("Generator returned a mismatched number of batched outputs.")
-            print(
-                "    samples="
-                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{samples_per_group} done "
-                f"seconds={time.perf_counter() - generation_start:.2f} "
+            batch_seconds = time.perf_counter() - generation_start
+            _debug_log(
+                "samples="
+                f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{effective_samples_per_group} done "
+                f"prompt_id={prompt_id} seconds={batch_seconds:.2f} "
                 f"tokens={[generation.token_count for generation in generations]}"
             )
             for current_sample_idx, generation in zip(batch_sample_indices, generations):
@@ -432,6 +468,23 @@ def _resolve_prompt_temperature(
             f"No generation temperature configured for prompt group '{prompt_id}'."
         )
     return temperature
+
+
+def _resolve_prompt_sample_count(
+    *,
+    prompt_id: str,
+    samples_per_group: int | None,
+    prompt_sample_counts: Mapping[str, int] | None,
+) -> int:
+    """Resolve the effective sample count for a prompt group."""
+
+    if prompt_sample_counts is not None and prompt_id in prompt_sample_counts:
+        return int(prompt_sample_counts[prompt_id])
+    if samples_per_group is None:
+        raise ValueError(
+            f"No sample count configured for prompt group '{prompt_id}'."
+        )
+    return samples_per_group
 
 
 def write_run_metadata(output_dir: str, run_metadata: dict[str, Any]) -> str:

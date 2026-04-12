@@ -17,11 +17,15 @@ class EvalSubset(list[dict[str, Any]]):
         records: list[dict[str, Any]],
         *,
         hash_seed: int,
+        start_idx: int = 0,
+        total_questions: int | None = None,
         dataset: str = "gsm8k",
         split: str = "test",
     ) -> None:
         super().__init__(records)
         self.hash_seed = hash_seed
+        self.start_idx = start_idx
+        self.total_questions = total_questions
         self.dataset = dataset
         self.split = split
 
@@ -55,8 +59,9 @@ def parse_gold_answer(raw_answer: str) -> float:
 
 def select_eval_subset(
     questions: list[dict],
-    n: int = 200,
+    n: int | None = 200,
     hash_seed: int = 42,
+    start_idx: int = 0,
 ) -> list[dict]:
     """Select a deterministic evaluation subset using salted SHA-256 sorting."""
 
@@ -67,11 +72,21 @@ def select_eval_subset(
         ranked_records.append((rank, record))
 
     ranked_records.sort(key=lambda item: item[0])
+    if start_idx < 0:
+        raise ValueError("start_idx must be non-negative.")
+    if start_idx > len(ranked_records):
+        raise ValueError(
+            f"start_idx {start_idx} exceeds the ranked corpus size {len(ranked_records)}."
+        )
+    end_idx = len(ranked_records) if n is None else min(start_idx + n, len(ranked_records))
     subset_records: list[dict[str, Any]] = []
-    for index, (_, record) in enumerate(ranked_records[:n]):
+    for global_index, (_, record) in enumerate(
+        ranked_records[start_idx:end_idx],
+        start=start_idx,
+    ):
         subset_records.append(
             {
-                "question_id": f"gsm8k_{index:04d}",
+                "question_id": f"gsm8k_{global_index:04d}",
                 "question_text": _require_text_field(record, "question"),
                 "gold_answer": parse_gold_answer(_require_text_field(record, "answer")),
             }
@@ -80,19 +95,30 @@ def select_eval_subset(
     return EvalSubset(
         subset_records,
         hash_seed=hash_seed,
+        start_idx=start_idx,
+        total_questions=len(ranked_records),
         dataset="gsm8k",
         split="test",
     )
 
 
-def save_eval_subset(subset: list[dict], output_dir: str) -> tuple[str, str]:
+def save_eval_subset(
+    subset: list[dict],
+    output_dir: str,
+    *,
+    jsonl_filename: str = "eval_subset.jsonl",
+    meta_filename: str | None = None,
+) -> tuple[str, str]:
     """Write the evaluation subset JSONL and metadata JSON files."""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    jsonl_path = output_path / "eval_subset.jsonl"
-    meta_path = output_path / "eval_subset_meta.json"
+    jsonl_path = output_path / jsonl_filename
+    if meta_filename is None:
+        meta_stem = Path(jsonl_filename).stem
+        meta_filename = f"{meta_stem}_meta.json"
+    meta_path = output_path / meta_filename
 
     with jsonl_path.open("w", encoding="utf-8") as handle:
         for record in subset:
@@ -101,6 +127,8 @@ def save_eval_subset(subset: list[dict], output_dir: str) -> tuple[str, str]:
     metadata = {
         "n": len(subset),
         "hash_seed": getattr(subset, "hash_seed", None),
+        "start_idx": getattr(subset, "start_idx", 0),
+        "total_questions": getattr(subset, "total_questions", None),
         "dataset": getattr(subset, "dataset", "gsm8k"),
         "split": getattr(subset, "split", "test"),
         "timestamp": datetime.now(timezone.utc).isoformat(),

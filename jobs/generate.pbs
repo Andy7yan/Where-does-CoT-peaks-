@@ -44,7 +44,7 @@ RUN_DIR="${SCRATCH_ROOT}/runs/${RUN_NAME}"
 VENV_DIR="${SCRATCH_ROOT}/.venv"
 LOG_PATH="${RUN_DIR}/logs/generation-${SHARD_ID}.log"
 
-mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
+mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints"
 exec > >(tee -a "${LOG_PATH}") 2>&1
 
 echo "project_home=${PROJECT_HOME}"

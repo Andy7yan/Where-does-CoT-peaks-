@@ -63,8 +63,40 @@ def test_save_eval_subset_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> No
         assert len(parsed) == 10
         assert metadata["n"] == 10
         assert metadata["hash_seed"] == 42
+        assert metadata["start_idx"] == 0
+        assert metadata["total_questions"] == 50
         assert metadata["dataset"] == "gsm8k"
         assert metadata["split"] == "test"
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_select_eval_subset_supports_start_idx_with_global_question_ids(sample_gsm8k: list[dict]) -> None:
+    subset = select_eval_subset(sample_gsm8k, n=5, hash_seed=42, start_idx=10)
+
+    assert len(subset) == 5
+    assert [record["question_id"] for record in subset] == [
+        "gsm8k_0010",
+        "gsm8k_0011",
+        "gsm8k_0012",
+        "gsm8k_0013",
+        "gsm8k_0014",
+    ]
+
+
+def test_save_eval_subset_supports_custom_filename(sample_gsm8k: list[dict]) -> None:
+    subset = select_eval_subset(sample_gsm8k, n=5, hash_seed=42)
+
+    temp_dir = Path("tests") / f"_tmp_save_eval_subset_named_{uuid.uuid4().hex}"
+    try:
+        jsonl_path, meta_path = save_eval_subset(
+            subset,
+            str(temp_dir),
+            jsonl_filename="eval_subset_full.jsonl",
+        )
+
+        assert Path(jsonl_path).name == "eval_subset_full.jsonl"
+        assert Path(meta_path).name == "eval_subset_full_meta.json"
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 

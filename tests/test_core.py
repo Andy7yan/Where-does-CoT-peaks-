@@ -34,14 +34,22 @@ def test_config_can_be_loaded(monkeypatch) -> None:
     assert config.output.base_dir == "/tmp/runs/test"
     assert config.dataset.subset_size == 200
     assert config.generation.num_icl_groups == 5
-    assert config.generation.samples_per_group == 15
+    assert config.generation.samples_per_group == 3
     assert config.generation.temperature == 0.7
-    assert config.generation.icl_group_temperatures == {
-        "icl_detailed": 0.7,
-        "icl_medium": 0.7,
-        "icl_minimal": 0.7,
-        "icl_short": 0.7,
-        "icl_verbose": 0.7,
+    assert config.generation.icl_group_prompt_ids == [
+        "icl_minimal",
+        "icl_short",
+        "icl_medium",
+        "icl_detailed",
+        "icl_verbose",
+    ]
+    assert config.generation.icl_group_temperatures == {}
+    assert config.generation.icl_group_sample_counts == {
+        "icl_minimal": 3,
+        "icl_short": 3,
+        "icl_medium": 3,
+        "icl_detailed": 5,
+        "icl_verbose": 5,
     }
     assert config.generation.max_new_tokens == 544
     assert config.pilot.num_questions == 50
@@ -62,14 +70,14 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-llama31"
     assert settings["dataset"]["subset_size"] == 200
     assert settings["generation"]["num_icl_groups"] == 5
-    assert settings["generation"]["samples_per_group"] == 15
+    assert settings["generation"]["samples_per_group"] == 3
     assert settings["generation"]["temperature"] == 0.7
     assert settings["generation"]["icl_groups"] == {
-        "icl_detailed": {"temperature": 0.7},
-        "icl_medium": {"temperature": 0.7},
-        "icl_minimal": {"temperature": 0.7},
-        "icl_short": {"temperature": 0.7},
-        "icl_verbose": {"temperature": 0.7},
+        "icl_minimal": {"samples_per_group": 3},
+        "icl_short": {"samples_per_group": 3},
+        "icl_medium": {"samples_per_group": 3},
+        "icl_detailed": {"samples_per_group": 5},
+        "icl_verbose": {"samples_per_group": 5},
     }
     assert settings["generation"]["max_new_tokens"] == 544
     assert settings["tas"]["plateau_threshold"] == 0.05

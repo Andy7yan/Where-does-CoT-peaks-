@@ -9,6 +9,7 @@ import uuid
 from scripts.run_generation import (
     build_run_metadata,
     discover_prompt_templates,
+    resolve_prompt_sample_counts,
     resolve_prompt_temperatures,
 )
 from src.generation import (
@@ -424,6 +425,7 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
         prompt_ids=["icl_short", "icl_medium"],
         temperature=None,
         icl_group_temperatures={"icl_short": 0.3, "icl_medium": 0.5},
+        icl_group_sample_counts={"icl_short": 3, "icl_medium": 5},
         max_new_tokens=96,
         num_icl_groups=2,
         samples_per_group=3,
@@ -436,6 +438,10 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     assert metadata["icl_group_temperatures"] == {
         "icl_short": 0.3,
         "icl_medium": 0.5,
+    }
+    assert metadata["icl_group_sample_counts"] == {
+        "icl_short": 3,
+        "icl_medium": 5,
     }
     assert metadata["max_new_tokens"] == 96
     assert metadata["num_icl_groups"] == 2
@@ -528,3 +534,51 @@ def test_resolve_prompt_temperatures_requires_complete_coverage_without_default(
         assert "icl_medium" in str(exc)
     else:
         raise AssertionError("resolve_prompt_temperatures should reject uncovered prompts")
+
+
+def test_resolve_prompt_sample_counts_uses_group_values_and_default_fallback() -> None:
+    resolved = resolve_prompt_sample_counts(
+        prompt_ids=["icl_short", "icl_medium", "icl_verbose"],
+        default_samples_per_group=3,
+        configured_group_sample_counts={"icl_verbose": 5},
+    )
+
+    assert resolved == {
+        "icl_short": 3,
+        "icl_medium": 3,
+        "icl_verbose": 5,
+    }
+
+
+def test_generate_traces_for_question_uses_prompt_specific_sample_counts() -> None:
+    generator = BatchFakeGenerator()
+    prompt_templates = [
+        {
+            "prompt_id": "icl_short",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+        {
+            "prompt_id": "icl_verbose",
+            "system": "Solve the user's problem clearly.",
+            "few_shot": [],
+            "user_template": "{question}",
+        },
+    ]
+
+    traces = generate_traces_for_question(
+        generator=generator,
+        question_id="gsm8k_0001",
+        question_text="What is 2 + 2?",
+        gold_answer=4.0,
+        prompt_templates=prompt_templates,
+        samples_per_group=3,
+        prompt_sample_counts={"icl_verbose": 5},
+        max_new_tokens=64,
+        temperature=0.7,
+        batch_size=4,
+    )
+
+    assert len(traces) == 8
+    assert generator.batch_calls == [(3, 0.7), (4, 0.7), (1, 0.7)]
