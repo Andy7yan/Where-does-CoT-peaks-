@@ -1,0 +1,73 @@
+#!/bin/bash
+#PBS -N peak-cot-c12
+#PBS -l select=1:ncpus=4:mem=16gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/c12.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${SOURCE_RUN_NAME:=full_run}"
+: "${OUTPUT_NAME:=c12-$(date +%m%d_%H%M)}"
+: "${SAMPLED_MIN_STEPS:=1}"
+: "${SAMPLED_MAX_STEPS:=2}"
+: "${APPROXIMATE_TOKENS:=0}"
+: "${INCLUDE_INCORRECT_TRACES:=0}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HOME:?HF_HOME must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HUB_CACHE:?HF_HUB_CACHE must be set by ${PROJECT_HOME}/.env}"
+
+SOURCE_RUN_DIR="${SCRATCH}/runs/${SOURCE_RUN_NAME}"
+OUTPUT_DIR="${SCRATCH}/runs/${OUTPUT_NAME}"
+LOG_PATH="${OUTPUT_DIR}/logs/c12.log"
+
+mkdir -p "${OUTPUT_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH}"
+echo "source_run_dir=${SOURCE_RUN_DIR}"
+echo "output_dir=${OUTPUT_DIR}"
+echo "config_path=${CONFIG_PATH}"
+echo "sampled_min_steps=${SAMPLED_MIN_STEPS}"
+echo "sampled_max_steps=${SAMPLED_MAX_STEPS}"
+
+cmd=(
+  python scripts/run_nldd.py
+  --config "${CONFIG_PATH}"
+  --source-run-dir "${SOURCE_RUN_DIR}"
+  --output-dir "${OUTPUT_DIR}"
+  --sampled-min-steps "${SAMPLED_MIN_STEPS}"
+  --sampled-max-steps "${SAMPLED_MAX_STEPS}"
+)
+
+if [[ "${APPROXIMATE_TOKENS}" == "1" ]]; then
+  cmd+=(--approximate-tokens)
+fi
+
+if [[ "${INCLUDE_INCORRECT_TRACES}" == "1" ]]; then
+  cmd+=(--include-incorrect-traces)
+fi
+
+printf 'command='
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+"${cmd[@]}"

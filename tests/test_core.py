@@ -294,6 +294,18 @@ def test_corrupt_step_text_with_fallbacks_swaps_operator() -> None:
     assert result.corruption_type == "operator_swap"
 
 
+def test_corrupt_step_text_with_fallbacks_skips_hyphenated_words() -> None:
+    result = corrupt_step_text_with_fallbacks(
+        "One-fourth of the TVs sold were smart TVs.",
+        token_counter=lambda text: len(text.split()),
+        token_delta_max=2,
+        rng=random.Random(42),
+    )
+
+    assert result.corruption_failed is True
+    assert result.failure_tier == "uncorruptible"
+
+
 def test_corrupt_step_text_with_fallbacks_uses_semantic_flip() -> None:
     result = corrupt_step_text_with_fallbacks(
         "The price increased after the sale.",

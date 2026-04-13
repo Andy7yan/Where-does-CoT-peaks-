@@ -1,0 +1,3 @@
+difficulty,dedup_mode,bucket_label,n,mean,se
+medium,dedup,6.5,2,0.500000,0.353553
+medium,raw,5,7,0.714286,0.170747

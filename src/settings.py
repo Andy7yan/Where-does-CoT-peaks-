@@ -100,6 +100,20 @@ class AnalysisConfig:
     """Analysis-stage settings."""
 
     min_bin_size: int | None
+    min_nldd_length: int | None
+    difficulty_quantiles: list[float] | None
+    num_length_bins: int | None
+    length_bin_mode: str | None
+    target_traces_per_cell: int | None
+    target_traces_near_lstar: int | None
+    per_question_trace_cap: int | None
+    primary_lstar_window: int | None
+    fallback_lstar_window: int | None
+    min_near_lstar_traces: int | None
+    min_cell_size: int | None
+    num_normalized_bins: int | None
+    min_bin_coverage_ratio: float | None
+    accuracy_exclusion_bounds: list[float] | None
     num_full_analysis_questions: int | None
     num_spot_checks: int | None
     max_extraction_fail_rate: float | None
@@ -200,6 +214,50 @@ class ExperimentConfig:
             ),
             analysis=AnalysisConfig(
                 min_bin_size=_optional_int(analysis, "min_bin_size"),
+                min_nldd_length=_optional_int(analysis, "min_nldd_length"),
+                difficulty_quantiles=_optional_float_list(
+                    analysis,
+                    "difficulty_quantiles",
+                ),
+                num_length_bins=_optional_int(analysis, "num_length_bins"),
+                length_bin_mode=_optional_string(analysis, "length_bin_mode"),
+                target_traces_per_cell=_optional_int(
+                    analysis,
+                    "target_traces_per_cell",
+                ),
+                target_traces_near_lstar=_optional_int(
+                    analysis,
+                    "target_traces_near_lstar",
+                ),
+                per_question_trace_cap=_optional_int(
+                    analysis,
+                    "per_question_trace_cap",
+                ),
+                primary_lstar_window=_optional_int(
+                    analysis,
+                    "primary_lstar_window",
+                ),
+                fallback_lstar_window=_optional_int(
+                    analysis,
+                    "fallback_lstar_window",
+                ),
+                min_near_lstar_traces=_optional_int(
+                    analysis,
+                    "min_near_lstar_traces",
+                ),
+                min_cell_size=_optional_int(analysis, "min_cell_size"),
+                num_normalized_bins=_optional_int(
+                    analysis,
+                    "num_normalized_bins",
+                ),
+                min_bin_coverage_ratio=_optional_float(
+                    analysis,
+                    "min_bin_coverage_ratio",
+                ),
+                accuracy_exclusion_bounds=_optional_float_list(
+                    analysis,
+                    "accuracy_exclusion_bounds",
+                ),
                 num_full_analysis_questions=_optional_int(
                     analysis,
                     "num_full_analysis_questions",
@@ -293,6 +351,15 @@ def _optional_int(data: dict[str, Any], key: str) -> int | None:
     return value
 
 
+def _optional_string(data: dict[str, Any], key: str) -> str | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"Config field '{key}' must be a string or null.")
+    return value
+
+
 def _require_float(data: dict[str, Any], key: str) -> float:
     value = data.get(key)
     return _coerce_float(value, key, allow_null=False)
@@ -366,6 +433,22 @@ def _require_float_list(
             f"Config field '{key}' must contain exactly {expected_length} floats."
         )
     return converted
+
+
+def _optional_float_list(
+    data: dict[str, Any],
+    key: str,
+    *,
+    expected_length: int | None = None,
+) -> list[float] | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    return _require_float_list(
+        data,
+        key,
+        expected_length=expected_length,
+    )
 
 
 def _require_string_list(data: dict[str, Any], key: str) -> list[str]:

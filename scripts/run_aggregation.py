@@ -15,7 +15,7 @@ def main() -> None:
     """Run a Stage 1 aggregation task."""
 
     args = parse_args()
-    if args.stage == "e":
+    if args.stage in {"c", "e"}:
         artifacts = aggregate_stage1_outputs(
             args.run_dir,
             config_path=args.config,
@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--stage",
-        choices=("e", "g"),
+        choices=("c", "e", "g"),
         required=True,
         help="Aggregation stage to run.",
     )

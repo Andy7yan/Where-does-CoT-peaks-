@@ -1,0 +1,4 @@
+difficulty,L_star,window_left,window_right,n_traces_near_lstar,window_status
+easy,,,,0,missing_lstar
+medium,,,,0,missing_lstar
+hard,,,,0,missing_lstar

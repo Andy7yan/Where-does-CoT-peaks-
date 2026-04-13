@@ -1,61 +1,0 @@
-project_home=/home/z5534565/peak-CoT
-run_dir=/srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753
-pbs_job_id=7673753.kman.restech.unsw.edu.au
-job_id_short=3753
-config_path=configs/stage1.yaml
-source=huggingface
-cache_dir=/srv/scratch/z5534565/peak-CoT/hf-home/datasets
-command= python scripts/run_pilot.py --config configs/stage1.yaml --output-dir /srv/scratch/z5534565/peak-CoT/runs/pilot-0411_3753 --source huggingface --cache-dir /srv/scratch/z5534565/peak-CoT/hf-home/datasets
-gpu_monitor_pid=436750
-python_pid=436751
-process_monitor_pid=436752
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:11<00:33, 11.13s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:22<00:23, 11.54s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:34<00:11, 11.69s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:37<00:00,  7.94s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:37<00:00,  9.25s/it]
-/srv/scratch/z5534565/peak-CoT/.venv/lib/python3.10/site-packages/torch/cuda/__init__.py:371: UserWarning: Found GPU0 Tesla V100-SXM2-32GB which is of compute capability (CC) 7.0.
-The following list shows the CCs this version of PyTorch was built for and the hardware CCs it supports:
-- 7.5 which supports hardware CC >=7.5,<8.0
-- 8.0 which supports hardware CC >=8.0,<9.0 except {8.7}
-- 8.6 which supports hardware CC >=8.6,<9.0 except {8.7}
-- 9.0 which supports hardware CC >=9.0,<10.0
-- 10.0 which supports hardware CC >=10.0,<11.0 except {10.1}
-- 12.0 which supports hardware CC >=12.0,<13.0
-Please follow the instructions at https://pytorch.org/get-started/locally/ to install a PyTorch release that supports one of these CUDA versions: 12.6, 12.8
-  _warn_unsupported_code(d, device_cc, code_ccs)
-cuda_available= True
-device_count= 1
-model_device= cuda:0
-parameter_count= 8030261248
-load_seconds= 41.884
-cache_hit= True
-downloaded_model= False
-local_model_path= /srv/scratch/z5534565/peak-CoT/hf-home/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659
-tokenizer_class= PreTrainedTokenizerFast
-  prompt_id=icl_minimal
-    samples=1-4/15 generating temperature=0.7...
-input_device= cuda:0
-batch_shape= (4, 1076)
-model.generation_config= {'do_sample': True, 'temperature': 0.7, 'max_new_tokens': 512, 'pad_token_id': 128009, 'eos_token_id': [128001, 128008, 128009]}
-Traceback (most recent call last):
-  File "/home/z5534565/peak-CoT/scripts/run_pilot.py", line 88, in <module>
-    main()
-  File "/home/z5534565/peak-CoT/scripts/run_pilot.py", line 22, in main
-    artifacts = run_pilot(
-  File "/home/z5534565/peak-CoT/src/pilot.py", line 186, in run_pilot
-    traces = generate_traces_for_question(
-  File "/home/z5534565/peak-CoT/src/generation.py", line 363, in generate_traces_for_question
-    generations = generator.generate_batch(
-  File "/home/z5534565/peak-CoT/src/generation.py", line 195, in generate_batch
-    outputs = self.model.generate(
-  File "/srv/scratch/z5534565/peak-CoT/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
-    return func(*args, **kwargs)
-  File "/srv/scratch/z5534565/peak-CoT/.venv/lib/python3.10/site-packages/transformers/generation/utils.py", line 2431, in generate
-    self._prepare_special_tokens(generation_config, kwargs_has_attention_mask, device=device)
-  File "/srv/scratch/z5534565/peak-CoT/.venv/lib/python3.10/site-packages/transformers/generation/utils.py", line 2111, in _prepare_special_tokens
-    and isin_mps_friendly(elements=eos_token_tensor, test_elements=pad_token_tensor).any()
-  File "/srv/scratch/z5534565/peak-CoT/.venv/lib/python3.10/site-packages/transformers/pytorch_utils.py", line 345, in isin_mps_friendly
-    return torch.isin(elements, test_elements)
-torch.AcceleratorError: CUDA error: no kernel image is available for execution on the device
-Search for `cudaErrorNoKernelImageForDevice' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
-CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
-For debugging consider passing CUDA_LAUNCH_BLOCKING=1
-Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
-

@@ -1,0 +1,54 @@
+#!/bin/bash
+#PBS -N peak-cot-dedup
+#PBS -l select=1:ncpus=4:mem=16gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/dedup.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${RUN_NAME:=full_run_diff-temperature}"
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${RUN_DIR:=}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+if [[ -z "${RUN_DIR}" ]]; then
+  RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+fi
+LOG_PATH="${RUN_DIR}/logs/dedup.log"
+
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+
+cmd=(
+  python scripts/dedupe_run.py
+  --run-dir "${RUN_DIR}"
+  --config "${CONFIG_PATH}"
+)
+
+printf 'command='
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+"${cmd[@]}"

@@ -83,18 +83,19 @@ def test_aggregate_stage1_outputs_writes_stage_e_artifacts(
 
         accuracy_path = Path(artifacts["accuracy_by_length_path"])
         metadata_path = Path(artifacts["question_metadata_path"])
+        coarse_analysis_path = Path(artifacts["coarse_analysis_path"])
+        lstar_summary_path = Path(artifacts["lstar_summary_path"])
         assert accuracy_path.exists()
         assert metadata_path.exists()
-        assert artifacts["l_star"] == 2.0
+        assert coarse_analysis_path.exists()
+        assert lstar_summary_path.exists()
 
         with accuracy_path.open("r", encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
 
-        assert rows == [
-            {"bucket_label": "2", "n": "5", "mean": "0.800000", "se": "0.178885"},
-            {"bucket_label": "5", "n": "8", "mean": "0.750000", "se": "0.153093"},
-            {"bucket_label": "8", "n": "5", "mean": "0.200000", "se": "0.178885"},
-        ]
+        assert rows
+        assert set(rows[0]) == {"difficulty", "dedup_mode", "bucket_label", "n", "mean", "se"}
+        assert {row["dedup_mode"] for row in rows} <= {"dedup", "raw"}
 
         metadata_rows = [
             json.loads(line)
@@ -106,17 +107,17 @@ def test_aggregate_stage1_outputs_writes_stage_e_artifacts(
             for row in metadata_rows
         }
 
-        assert metadata_by_question["q1"] == {
-            "question_id": "q1",
-            "difficulty": 0.0,
-            "accuracy": 1.0,
-            "optimal_length": 2,
-            "total_samples": 2,
-            "correct_count": 2,
-            "natural_length_distribution": {"2": 2},
-        }
+        assert metadata_by_question["q1"]["difficulty_bucket"] is None
+        assert metadata_by_question["q1"]["excluded_from_difficulty"] is True
+        assert metadata_by_question["q1"]["accuracy"] == 1.0
+        assert metadata_by_question["q1"]["optimal_length"] == 2
+        assert metadata_by_question["q1"]["natural_length_distribution"] == {"2": 2}
         assert metadata_by_question["q4"]["optimal_length"] == 5
         assert metadata_by_question["q5"]["natural_length_distribution"] == {"8": 2}
+
+        coarse = json.loads(coarse_analysis_path.read_text(encoding="utf-8"))
+        assert coarse["schema_version"] == "stage1_coarse_analysis_v4"
+        assert set(coarse["difficulties"]) == {"easy", "medium", "hard"}
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
 

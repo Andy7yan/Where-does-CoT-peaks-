@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import random
 import re
 from typing import Callable
@@ -196,6 +197,7 @@ def corrupt_arithmetic(
                 validation = _validate_corruption_candidate(
                     clean_text=step_text,
                     corrupt_text=corrupt_text,
+                    expected_change="numeric",
                     token_counter=token_counter,
                     token_delta_max=token_delta_max,
                     perplexity_scorer=perplexity_scorer,
@@ -241,6 +243,7 @@ def corrupt_arithmetic(
             validation = _validate_corruption_candidate(
                 clean_text=step_text,
                 corrupt_text=corrupt_text,
+                expected_change="numeric",
                 token_counter=token_counter,
                 token_delta_max=token_delta_max,
                 perplexity_scorer=perplexity_scorer,
@@ -439,6 +442,7 @@ def _validate_corruption_candidate(
     *,
     clean_text: str,
     corrupt_text: str,
+    expected_change: str,
     token_counter: Callable[[str], int] | None,
     token_delta_max: int | None,
     perplexity_scorer: Callable[[str, str], float] | None,
@@ -446,6 +450,22 @@ def _validate_corruption_candidate(
 ) -> tuple[int, float | None] | None:
     if clean_text == corrupt_text:
         return None
+    if not corrupt_text.strip():
+        return None
+    if segment_steps(corrupt_text).num_steps != 1:
+        return None
+    if not _has_legal_numeric_tokens(corrupt_text):
+        return None
+    if expected_change == "numeric":
+        if _count_changed_numeric_spans(clean_text, corrupt_text) != 1:
+            return None
+        if _numeric_template(clean_text) != _numeric_template(corrupt_text):
+            return None
+    elif expected_change == "operator":
+        if _operator_change_count(clean_text, corrupt_text) != 1:
+            return None
+        if _extract_numeric_spans(clean_text) != _extract_numeric_spans(corrupt_text):
+            return None
 
     token_delta = 0
     if token_counter is not None and token_delta_max is not None:
@@ -460,6 +480,36 @@ def _validate_corruption_candidate(
             return None
 
     return token_delta, perplexity_ratio
+
+
+def _numeric_template(text: str) -> str:
+    return ARITHMETIC_NUMBER_RE.sub("<NUM>", text)
+
+
+def _count_changed_numeric_spans(clean_text: str, corrupt_text: str) -> int:
+    clean_numbers = _extract_numeric_spans(clean_text)
+    corrupt_numbers = _extract_numeric_spans(corrupt_text)
+    if len(clean_numbers) != len(corrupt_numbers):
+        return -1
+    return sum(1 for clean, corrupt in zip(clean_numbers, corrupt_numbers) if clean != corrupt)
+
+
+def _operator_change_count(clean_text: str, corrupt_text: str) -> int:
+    if len(clean_text) != len(corrupt_text):
+        return -1
+    return sum(1 for clean, corrupt in zip(clean_text, corrupt_text) if clean != corrupt)
+
+
+def _extract_numeric_spans(text: str) -> list[str]:
+    return [match.group(0) for match in ARITHMETIC_NUMBER_RE.finditer(text)]
+
+
+def _has_legal_numeric_tokens(text: str) -> bool:
+    for match in ARITHMETIC_NUMBER_RE.finditer(text):
+        normalized = normalize_numeric(match.group(0))
+        if normalized is None or not math.isfinite(normalized):
+            return False
+    return True
 
 
 def _corrupt_operator(
@@ -500,6 +550,7 @@ def _corrupt_operator(
         validation = _validate_corruption_candidate(
             clean_text=step_text,
             corrupt_text=corrupt_text,
+            expected_change="operator",
             token_counter=token_counter,
             token_delta_max=token_delta_max,
             perplexity_scorer=perplexity_scorer,
@@ -542,6 +593,8 @@ def _find_operator_matches(
             continue
         if char in {"+", "-"} and _looks_like_sign(text, index):
             continue
+        if char == "-" and _is_hyphenated_word(text, index):
+            continue
         replacement = replacements.get(char)
         if replacement is None:
             continue
@@ -556,6 +609,12 @@ def _looks_like_sign(text: str, index: int) -> bool:
     if cursor < 0:
         return True
     return text[cursor] in "(=</>"
+
+
+def _is_hyphenated_word(text: str, index: int) -> bool:
+    if index <= 0 or index >= len(text) - 1:
+        return False
+    return text[index - 1].isalpha() and text[index + 1].isalpha()
 
 
 def _corrupt_semantic_flip(
@@ -581,6 +640,7 @@ def _corrupt_semantic_flip(
     validation = _validate_corruption_candidate(
         clean_text=step_text,
         corrupt_text=corrupt_text,
+        expected_change="semantic",
         token_counter=token_counter,
         token_delta_max=token_delta_max,
         perplexity_scorer=perplexity_scorer,
