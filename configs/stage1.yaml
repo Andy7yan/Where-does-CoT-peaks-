@@ -27,18 +27,16 @@ generation:
 
 step_segmentation:
   method: "newline"
-  strip_whitespace: true
-  drop_empty: true
   answer_markers: ["####", "The answer is"]
 
 answer_extraction:
-  method: "marker_then_regex"
   numeric_tolerance: 1e-3
 
 nldd:
   corruption_type: "arithmetic_perturbation"
   integer_perturbation: "+/-1"
   float_perturbation_range: [0.5, 0.9, 1.1, 1.5]
+  enable_tier3_semantic_flip: false
   corruption_token_delta_max: 2
   corruption_retry_limit: 3
   ld_epsilon: 1.0e-6
@@ -61,6 +59,3 @@ analysis:
   num_full_analysis_questions: 25  # Backfill after pilot review.
   num_spot_checks: 3
   max_extraction_fail_rate: 0.05
-
-output:
-  base_dir: "${SCRATCH}/runs/${RUN_NAME}"

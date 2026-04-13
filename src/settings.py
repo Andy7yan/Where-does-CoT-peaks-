@@ -56,8 +56,6 @@ class StepSegmentationConfig:
     """Rules for turning a completion into reasoning steps."""
 
     method: str
-    strip_whitespace: bool
-    drop_empty: bool
     answer_markers: list[str]
 
 
@@ -65,7 +63,6 @@ class StepSegmentationConfig:
 class AnswerExtractionConfig:
     """Rules for extracting numeric answers from completions."""
 
-    method: str
     numeric_tolerance: float
 
 
@@ -76,6 +73,7 @@ class NLDDConfig:
     corruption_type: str
     integer_perturbation: str
     float_perturbation_range: list[float]
+    enable_tier3_semantic_flip: bool
     corruption_token_delta_max: int
     corruption_retry_limit: int
     ld_epsilon: float
@@ -108,13 +106,6 @@ class AnalysisConfig:
 
 
 @dataclass
-class OutputConfig:
-    """Output directory configuration."""
-
-    base_dir: str
-
-
-@dataclass
 class ExperimentConfig:
     """Typed representation of the Stage 1 YAML configuration."""
 
@@ -128,7 +119,6 @@ class ExperimentConfig:
     pilot: PilotConfig
     tas: TASConfig
     analysis: AnalysisConfig
-    output: OutputConfig
 
     @classmethod
     def from_yaml(cls, path: str) -> "ExperimentConfig":
@@ -146,7 +136,12 @@ class ExperimentConfig:
         pilot = _require_mapping(data, "pilot")
         tas = _require_mapping(data, "tas")
         analysis = _require_mapping(data, "analysis")
-        output = _require_mapping(data, "output")
+        float_perturbation_range = _require_float_list(
+            nldd,
+            "float_perturbation_range",
+            expected_length=4,
+        )
+        _validate_float_perturbation_range(float_perturbation_range)
 
         return cls(
             experiment=ExperimentMetadataConfig(
@@ -175,20 +170,18 @@ class ExperimentConfig:
             ),
             step_segmentation=StepSegmentationConfig(
                 method=_require_string(step_segmentation, "method"),
-                strip_whitespace=_require_bool(step_segmentation, "strip_whitespace"),
-                drop_empty=_require_bool(step_segmentation, "drop_empty"),
                 answer_markers=_require_string_list(step_segmentation, "answer_markers"),
             ),
             answer_extraction=AnswerExtractionConfig(
-                method=_require_string(answer_extraction, "method"),
                 numeric_tolerance=_require_float(answer_extraction, "numeric_tolerance"),
             ),
             nldd=NLDDConfig(
                 corruption_type=_require_string(nldd, "corruption_type"),
                 integer_perturbation=_require_string(nldd, "integer_perturbation"),
-                float_perturbation_range=_require_float_list(
+                float_perturbation_range=float_perturbation_range,
+                enable_tier3_semantic_flip=_require_bool(
                     nldd,
-                    "float_perturbation_range",
+                    "enable_tier3_semantic_flip",
                 ),
                 corruption_token_delta_max=_require_int(
                     nldd,
@@ -216,9 +209,6 @@ class ExperimentConfig:
                     analysis,
                     "max_extraction_fail_rate",
                 ),
-            ),
-            output=OutputConfig(
-                base_dir=_require_string(output, "base_dir"),
             ),
         )
 
@@ -359,13 +349,22 @@ def _require_icl_groups_mapping(data: dict[str, Any]) -> dict[str, dict[str, Any
     return normalized
 
 
-def _require_float_list(data: dict[str, Any], key: str) -> list[float]:
+def _require_float_list(
+    data: dict[str, Any],
+    key: str,
+    *,
+    expected_length: int | None = None,
+) -> list[float]:
     value = data.get(key)
     if not isinstance(value, list):
         raise TypeError(f"Config field '{key}' must be a list.")
     converted: list[float] = []
     for item in value:
         converted.append(_coerce_float(item, key, allow_null=False))
+    if expected_length is not None and len(converted) != expected_length:
+        raise TypeError(
+            f"Config field '{key}' must contain exactly {expected_length} floats."
+        )
     return converted
 
 
@@ -398,6 +397,15 @@ def _coerce_float(value: Any, key: str, allow_null: bool) -> float:
     raise TypeError(f"Config field '{key}' must be a float.")
 
 
+def _validate_float_perturbation_range(values: list[float]) -> None:
+    low_min, low_max, high_min, high_max = values
+    if not (low_min < low_max < high_min < high_max):
+        raise TypeError(
+            "Config field 'float_perturbation_range' must satisfy "
+            "low_min < low_max < high_min < high_max."
+        )
+
+
 __all__ = [
     "AnalysisConfig",
     "AnswerExtractionConfig",
@@ -407,7 +415,6 @@ __all__ = [
     "GenerationConfig",
     "ModelConfig",
     "NLDDConfig",
-    "OutputConfig",
     "PilotConfig",
     "StepSegmentationConfig",
     "TASConfig",

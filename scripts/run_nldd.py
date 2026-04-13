@@ -39,13 +39,15 @@ def main() -> None:
         seed=args.seed if args.seed is not None else config.experiment.seed,
         include_incorrect_traces=args.include_incorrect_traces,
     )
+    effective_enable_tier3 = config.nldd.enable_tier3_semantic_flip or args.use_tier3
     records_by_mode = build_corruption_records(
         trace_sources,
         token_counter=token_counter,
         token_delta_max=config.nldd.corruption_token_delta_max,
         retry_limit=config.nldd.corruption_retry_limit,
         selection=selection,
-        use_tier3=args.use_tier3,
+        float_perturbation_range=tuple(config.nldd.float_perturbation_range),
+        enable_tier3_semantic_flip=effective_enable_tier3,
         max_perplexity_ratio=None,
     )
     summary = summarize_corruption_records(records_by_mode)
@@ -58,7 +60,7 @@ def main() -> None:
         "sampled_max_steps": selection.sampled_max_steps,
         "seed": selection.seed,
         "include_incorrect_traces": selection.include_incorrect_traces,
-        "tier3_semantic_flip_enabled": args.use_tier3,
+        "tier3_semantic_flip_enabled": effective_enable_tier3,
         "perplexity_filter_enabled": False,
     }
     artifacts = write_corruption_artifacts(

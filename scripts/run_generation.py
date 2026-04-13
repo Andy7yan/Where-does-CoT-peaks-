@@ -188,9 +188,29 @@ def main() -> None:
             )
 
     total_elapsed = time.perf_counter() - run_start
+    total_traces, final_extraction_failed_count = summarize_trace_file(output_path)
+    extraction_fail_threshold = require_config_value(
+        "analysis.max_extraction_fail_rate",
+        config.analysis.max_extraction_fail_rate,
+    )
+    extraction_failed_rate = (
+        final_extraction_failed_count / total_traces if total_traces else 0.0
+    )
+    threshold_exceeded = extraction_failed_rate > extraction_fail_threshold
+    if threshold_exceeded:
+        print(
+            "[WARN] extraction_failed rate "
+            f"{extraction_failed_rate:.2%} exceeds threshold "
+            f"{extraction_fail_threshold:.2%}"
+        )
+
     print(f"total_written_traces: {written_traces}")
     print(f"total_skipped_existing_traces: {skipped_traces}")
-    print(f"extraction_failed_traces: {extraction_failed_count}")
+    print(f"extraction_failed_traces: {final_extraction_failed_count}")
+    print(f"total_traces: {total_traces}")
+    print(f"extraction_failed_rate: {extraction_failed_rate:.2%}")
+    print(f"extraction_fail_threshold: {extraction_fail_threshold:.2%}")
+    print(f"threshold_exceeded: {threshold_exceeded}")
     print(f"total_elapsed_seconds: {total_elapsed:.2f}")
 
 
@@ -320,6 +340,23 @@ def load_subset(subset_path: str) -> list[dict]:
             if stripped:
                 records.append(json.loads(stripped))
     return records
+
+
+def summarize_trace_file(trace_path: Path) -> tuple[int, int]:
+    """Count final traces and extraction failures from the written trace file."""
+
+    total_traces = 0
+    extraction_failed_count = 0
+    with trace_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            record = json.loads(stripped)
+            total_traces += 1
+            if record.get("extraction_failed"):
+                extraction_failed_count += 1
+    return total_traces, extraction_failed_count
 
 
 def require_config_value(field_path: str, value: Any) -> Any:

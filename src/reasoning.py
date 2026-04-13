@@ -11,6 +11,7 @@ from typing import Callable
 NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*\.\d+|\d[\d,]*\.?|\.\d+)")
 ARITHMETIC_NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)")
 DEFAULT_ANSWER_MARKERS = ["####", "The answer is"]
+DEFAULT_FLOAT_PERTURBATION_RANGE = (0.5, 0.9, 1.1, 1.5)
 PUNCTUATION_ONLY_RE = re.compile(r"^\W+$")
 OPERATOR_CHARS = {"+", "-", "*", "/", "×", "÷"}
 SEMANTIC_FLIP_PAIRS = [
@@ -152,8 +153,7 @@ def judge(extracted: float | None, gold: float, tolerance: float = 1e-3) -> bool
 
 def corrupt_arithmetic(
     step_text: str,
-    perturbation_range: tuple[float, float] = (0.5, 1.5),
-    exclusion_zone: tuple[float, float] = (0.9, 1.1),
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     rng: random.Random | None = None,
     min_value: float = 0.0,
     token_counter: Callable[[str], int] | None = None,
@@ -222,8 +222,7 @@ def corrupt_arithmetic(
 
         for attempt_index in range(1, max(retry_limit, 1) + 1):
             multiplier = _sample_multiplier(
-                perturbation_range=perturbation_range,
-                exclusion_zone=exclusion_zone,
+                float_perturbation_range=float_perturbation_range,
                 rng=generator,
             )
             perturbed_number = _format_perturbed_value(
@@ -278,18 +277,22 @@ def corrupt_step_text_with_fallbacks(
     step_text: str,
     *,
     rng: random.Random | None = None,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    enable_tier3_semantic_flip: bool = False,
     token_counter: Callable[[str], int] | None = None,
     token_delta_max: int = 2,
     retry_limit: int = 3,
-    use_tier3: bool = False,
+    use_tier3: bool | None = None,
     perplexity_scorer: Callable[[str, str], float] | None = None,
     max_perplexity_ratio: float | None = None,
 ) -> CorruptionResult:
     """Apply the layered corruption strategy with tiered fallback."""
 
     generator = rng or random.Random()
+    tier3_enabled = enable_tier3_semantic_flip or bool(use_tier3)
     tier1 = corrupt_arithmetic(
         step_text,
+        float_perturbation_range=float_perturbation_range,
         rng=generator,
         min_value=0.0,
         token_counter=token_counter,
@@ -314,7 +317,7 @@ def corrupt_step_text_with_fallbacks(
         return tier2
 
     tier3_failure_tier: str | None = None
-    if use_tier3:
+    if tier3_enabled:
         tier3 = _corrupt_semantic_flip(
             step_text,
             token_counter=token_counter,
@@ -631,38 +634,19 @@ def _match_case(source: str, target: str) -> str:
 
 
 def _sample_multiplier(
-    perturbation_range: tuple[float, float],
-    exclusion_zone: tuple[float, float],
+    float_perturbation_range: tuple[float, float, float, float],
     rng: random.Random,
 ) -> float:
-    low, high = perturbation_range
-    exclude_low, exclude_high = exclusion_zone
+    low_min, low_max, high_min, high_max = float_perturbation_range
+    if not (low_min < low_max < high_min < high_max):
+        raise ValueError(
+            "float_perturbation_range must satisfy "
+            "low_min < low_max < high_min < high_max."
+        )
 
-    intervals = [
-        (low, min(high, exclude_low)),
-        (max(low, exclude_high), high),
-    ]
-    valid_intervals = [
-        (interval_low, interval_high)
-        for interval_low, interval_high in intervals
-        if interval_high > interval_low
-    ]
-    if not valid_intervals:
-        raise ValueError("No valid multiplier interval remains after exclusion.")
-
-    total_width = sum(
-        interval_high - interval_low
-        for interval_low, interval_high in valid_intervals
+    interval_low, interval_high = (
+        (low_min, low_max) if rng.random() < 0.5 else (high_min, high_max)
     )
-    draw = rng.uniform(0.0, total_width)
-    cursor = 0.0
-    for interval_low, interval_high in valid_intervals:
-        width = interval_high - interval_low
-        if draw <= cursor + width:
-            return interval_low + (draw - cursor)
-        cursor += width
-
-    interval_low, interval_high = valid_intervals[-1]
     return rng.uniform(interval_low, interval_high)
 
 

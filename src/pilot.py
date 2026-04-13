@@ -17,8 +17,8 @@ from src.generation import (
 )
 from src.gsm8k import load_gsm8k_test, select_eval_subset
 from src.prompting import load_prompt_template
-from src.reasoning import corrupt_arithmetic
-from src.settings import load_settings
+from src.reasoning import DEFAULT_FLOAT_PERTURBATION_RANGE, corrupt_arithmetic
+from src.settings import ExperimentConfig, load_settings
 
 
 @dataclass(frozen=True)
@@ -139,6 +139,7 @@ def run_pilot(
     """Execute the Stage D Pilot workflow and write its artifacts."""
 
     settings = load_settings(config_path)
+    experiment_config = ExperimentConfig.from_yaml(config_path)
     pilot = parse_pilot_overrides(settings)
     generation_settings = _require_mapping(settings, "generation")
     prompt_templates = discover_prompt_templates(
@@ -213,6 +214,7 @@ def run_pilot(
             _require_mapping(settings, "nldd"),
             "corruption_token_delta_max",
         ),
+        float_perturbation_range=tuple(experiment_config.nldd.float_perturbation_range),
         token_counter_label="whitespace_approximation" if mock else "model_tokenizer",
     )
     report_text = render_pilot_report(
@@ -292,6 +294,7 @@ def evaluate_pilot_checks(
     pilot: PilotOverrides,
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     token_counter_label: str,
 ) -> list[PilotCheckResult]:
     """Compute Pilot checks A/B/C/D/E from generated traces."""
@@ -304,6 +307,7 @@ def evaluate_pilot_checks(
             traces=traces,
             token_counter=token_counter,
             corruption_token_delta_max=corruption_token_delta_max,
+            float_perturbation_range=float_perturbation_range,
             token_counter_label=token_counter_label,
         ),
         evaluate_check_e(),
@@ -472,6 +476,7 @@ def evaluate_check_d(
     traces: list[dict[str, Any]],
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     token_counter_label: str,
 ) -> PilotCheckResult:
     """Evaluate single-step corruption feasibility over correct traces."""
@@ -482,6 +487,7 @@ def evaluate_check_d(
         traces=correct_traces,
         token_counter=token_counter,
         corruption_token_delta_max=corruption_token_delta_max,
+        float_perturbation_range=float_perturbation_range,
     )
     failure_counts: dict[str, int] = defaultdict(int)
     for record in failure_records:
@@ -534,6 +540,7 @@ def diagnose_corruption_failures(
     traces: list[dict[str, Any]],
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
 ) -> list[dict[str, Any]]:
     """Collect failed corruption attempts over the steps of correct traces."""
 
@@ -552,6 +559,7 @@ def diagnose_corruption_failures(
                 step_text=step_text,
                 token_counter=token_counter,
                 corruption_token_delta_max=corruption_token_delta_max,
+                float_perturbation_range=float_perturbation_range,
             )
             if failure_reason is None:
                 continue
@@ -573,11 +581,15 @@ def classify_corruption_failure(
     step_text: str,
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
 ) -> str | None:
     """Classify a corruption failure reason for a single reasoning step."""
 
     try:
-        result = corrupt_arithmetic(step_text)
+        result = corrupt_arithmetic(
+            step_text,
+            float_perturbation_range=float_perturbation_range,
+        )
     except Exception:
         return "other"
 

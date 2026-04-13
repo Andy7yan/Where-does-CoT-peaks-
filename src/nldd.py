@@ -11,7 +11,11 @@ import random
 from typing import Any, Callable
 
 from src.prompting import build_nldd_corrupt_prompt
-from src.reasoning import CorruptionResult, corrupt_step_text_with_fallbacks
+from src.reasoning import (
+    CorruptionResult,
+    DEFAULT_FLOAT_PERTURBATION_RANGE,
+    corrupt_step_text_with_fallbacks,
+)
 from src.reports import discover_stage1_shard_paths
 
 
@@ -53,11 +57,14 @@ def build_corruption_records(
     token_delta_max: int,
     retry_limit: int,
     selection: CorruptionSelectionConfig,
-    use_tier3: bool = False,
+    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    enable_tier3_semantic_flip: bool = False,
+    use_tier3: bool | None = None,
     max_perplexity_ratio: float | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Build all-step and sampled corruption records from existing clean traces."""
 
+    effective_enable_tier3 = enable_tier3_semantic_flip or bool(use_tier3)
     records_by_mode = {
         "all_steps": [],
         "sampled_steps": [],
@@ -88,10 +95,11 @@ def build_corruption_records(
                 corruption = corrupt_step_text_with_fallbacks(
                     step_text,
                     rng=rng,
+                    float_perturbation_range=float_perturbation_range,
+                    enable_tier3_semantic_flip=effective_enable_tier3,
                     token_counter=token_counter,
                     token_delta_max=token_delta_max,
                     retry_limit=retry_limit,
-                    use_tier3=use_tier3,
                     max_perplexity_ratio=max_perplexity_ratio,
                 )
                 record = build_corruption_record(
