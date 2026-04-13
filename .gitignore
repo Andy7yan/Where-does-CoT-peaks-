@@ -22,4 +22,5 @@ __pycache__/
 *.jsonl
 *.gz
 *.OU
+*.log
 
