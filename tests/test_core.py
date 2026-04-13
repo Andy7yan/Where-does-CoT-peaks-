@@ -5,6 +5,7 @@ import re
 
 from src.reasoning import (
     corrupt_arithmetic,
+    corrupt_step_text_with_fallbacks,
     extract_answer,
     judge,
     normalize_numeric,
@@ -214,12 +215,13 @@ def test_extract_answer_handles_sample_answers(sample_gsm8k: list[dict]) -> None
         assert result.value == expected_value
 
 
-def test_corrupt_arithmetic_prefers_value_above_threshold() -> None:
+def test_corrupt_arithmetic_prefers_rhs_result_without_min_threshold() -> None:
     result = corrupt_arithmetic("So 5 * 3 = 15", rng=random.Random(42))
 
     assert result.corruption_failed is False
     assert result.original_number == "15"
     assert result.perturbed_number != "15"
+    assert result.corruption_type == "numeric_result"
     assert result.corrupt_text == f"So 5 * 3 = {result.perturbed_number}"
 
 
@@ -239,6 +241,7 @@ def test_corrupt_arithmetic_failure_when_no_numeric_candidate() -> None:
     assert result.corrupt_text == "Therefore x = y"
     assert result.original_number == ""
     assert result.perturbed_number == ""
+    assert result.failure_tier == "uncorruptible"
 
 
 def test_corrupt_arithmetic_is_deterministic_with_fixed_seed() -> None:
@@ -250,7 +253,7 @@ def test_corrupt_arithmetic_is_deterministic_with_fixed_seed() -> None:
 
 def test_corrupt_arithmetic_multiplier_stays_outside_exclusion_zone() -> None:
     for seed in range(20):
-        result = corrupt_arithmetic("Value: 100", rng=random.Random(seed))
+        result = corrupt_arithmetic("Value: 100.0", rng=random.Random(seed))
         perturbed = normalize_numeric(result.perturbed_number)
         assert perturbed is not None
         ratio = perturbed / 100.0
@@ -261,10 +264,7 @@ def test_corrupt_arithmetic_on_sample_step(sample_gsm8k: list[dict]) -> None:
     step_text = ""
     for item in sample_gsm8k:
         for candidate in segment_steps(item["answer"]).steps:
-            if any(
-                abs(float(match.replace(",", ""))) >= 10
-                for match in re.findall(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)", candidate)
-            ):
+            if re.search(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)", candidate):
                 step_text = candidate
                 break
         if step_text:
@@ -279,3 +279,54 @@ def test_corrupt_arithmetic_on_sample_step(sample_gsm8k: list[dict]) -> None:
     assert result.original_number in step_text
     assert result.perturbed_number in result.corrupt_text
     assert len(re.findall(r"=", step_text)) == len(re.findall(r"=", result.corrupt_text))
+
+
+def test_corrupt_step_text_with_fallbacks_swaps_operator() -> None:
+    result = corrupt_step_text_with_fallbacks(
+        "Let x + y be the total.",
+        token_counter=lambda text: len(text.split()),
+        token_delta_max=2,
+        rng=random.Random(42),
+    )
+
+    assert result.corruption_failed is False
+    assert result.corruption_tier == 2
+    assert result.corruption_type == "operator_swap"
+
+
+def test_corrupt_step_text_with_fallbacks_uses_semantic_flip() -> None:
+    result = corrupt_step_text_with_fallbacks(
+        "The price increased after the sale.",
+        token_counter=lambda text: len(text.split()),
+        token_delta_max=2,
+        rng=random.Random(42),
+        use_tier3=True,
+    )
+
+    assert result.corruption_failed is False
+    assert result.corruption_tier == 3
+    assert result.corruption_type == "semantic_flip"
+
+
+def test_corrupt_step_text_with_fallbacks_marks_uncorruptible() -> None:
+    result = corrupt_step_text_with_fallbacks(
+        "Therefore x equals y.",
+        token_counter=lambda text: len(text.split()),
+        token_delta_max=2,
+        rng=random.Random(42),
+    )
+
+    assert result.corruption_failed is True
+    assert result.failure_tier == "uncorruptible"
+
+
+def test_corrupt_step_text_with_fallbacks_disables_semantic_flip_by_default() -> None:
+    result = corrupt_step_text_with_fallbacks(
+        "The price increased after the sale.",
+        token_counter=lambda text: len(text.split()),
+        token_delta_max=2,
+        rng=random.Random(42),
+    )
+
+    assert result.corruption_failed is True
+    assert result.failure_tier == "uncorruptible"
