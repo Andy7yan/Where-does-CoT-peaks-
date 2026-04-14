@@ -65,7 +65,7 @@ analysis:
   per_question_trace_cap: 2
   primary_lstar_window: 1
   fallback_lstar_window: 2
-  min_near_lstar_traces: 60
+  min_near_lstar_traces: 49
   min_cell_size: 30
   num_normalized_bins: 6
   min_bin_coverage_ratio: 0.6
