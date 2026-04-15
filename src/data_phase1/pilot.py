@@ -687,7 +687,7 @@ def render_pilot_report(
             "",
             "## Notes",
             "",
-            "- Check E is intentionally deferred to Stage F and does not exercise `src/nldd.py` in Stage D.",
+            "- Check E is intentionally deferred to Stage F and does not exercise `src/analysis_phase/nldd.py` in Stage D.",
             "- `tas.plateau_threshold` and `analysis.num_spot_checks` are provisional defaults until Stage F smoke data exists.",
             "- The backfill table is intended to be copied into `configs/stage1.yaml` by hand after Pilot review.",
         ]
