@@ -41,14 +41,14 @@ Stage 1 = Minimum Viable Loop on a single model + single dataset. The goal is to
 ### 2.2 Scope
 
 - Model: meta-llama/Llama-3.1-8B-Instruct
-- Dataset: GSM8K test split (full 1319 questions)
+- Dataset: GSM8K-Platinum test split (full 1209 questions)
 - Precision: float16
 - Deliverables: accuracy(L) curve and $L^*$ estimation, NLDD profile and $k^*$ estimation, direct comparison of $L^*$ vs $k^*$, 7 figures
 
 ### 2.3 Non-Goals
 
 - No multi-model comparisons. Qwen2.5-7B-Instruct or stronger models will be introduced in Stage 2.
-- No datasets other than GSM8K. MATH (all levels) is deferred to Stage 2.
+- No datasets other than GSM8K-Platinum. MATH (all levels) is deferred to Stage 2.
 - No NLDD analysis on incorrect traces. Incorrect traces only contribute to accuracy statistics.
 - No multi-step corruption. Only one step is altered at a time.
 - No RSA / probing or other interpretability analyses.
@@ -87,7 +87,7 @@ This definition is used simultaneously for: horizontal axis binning for accuracy
 
 ### 3.2 Answer Extraction
 
-The gold answer for GSM8K is a numerical value. Extraction rules by priority:
+The gold answer for GSM8K-Platinum is a numerical value. Extraction rules by priority:
 
 1. Look for content after `####` in the completion, taking the first matched numerical value.
 2. If there is no `####`, look for the numerical value after `The answer is`.
@@ -111,7 +111,7 @@ For a given prompt, confidence is defined as the normalized margin:
 
 $$LD = \frac{\max_{y \in Y_{correct}} \ell(y) - \max_{y' \in Y \setminus Y_{correct}} \ell(y')}{S}$$
 
-Where $Y_{correct}$ contains all valid token IDs for the correct answer (considering tokenization variants like leading spaces). For GSM8K multi-token answers, the first-token margin is used as a stable proxy.
+Where $Y_{correct}$ contains all valid token IDs for the correct answer (considering tokenization variants like leading spaces). For GSM8K-Platinum multi-token answers, the first-token margin is used as a stable proxy.
 
 This definition remains consistent under both clean and corrupt conditions.
 
@@ -163,7 +163,7 @@ If both Tier 1 and Tier 2 fail, mark `corruption_failed = True` and skip this po
 
 Each corruption record includes `corruption_tier` (1 or 2) and `corruption_type` (`numeric_result` / `numeric_operand` / `operator_swap` / `uncorruptible`) to stratify by tier during downstream analysis.
 
-Exclusion condition: Geometry questions are not corrupted (GSM8K contains almost no geometry; this rule is reserved for Stage 2 MATH).
+Exclusion condition: Geometry questions are not corrupted (GSM8K-Platinum contains almost no geometry; this rule is reserved for Stage 2 MATH).
 
 ### 3.8 Difficulty Definition
 
@@ -183,7 +183,7 @@ The Pilot Run is executed before the formal Data Phase and Analysis Phase. The g
 
 ### 4.1 Scope
 
-Randomly sample 50–100 questions from the GSM8K test split (can overlap with formal run questions; Pilot data is not included in formal analysis). Use the same ICL exemplar groups and sampling parameters as the formal run. The number of samples per question can be reduced to save costs.
+Randomly sample 50–100 questions from the GSM8K-Platinum test split (can overlap with formal run questions; Pilot data is not included in formal analysis). Use the same ICL exemplar groups and sampling parameters as the formal run. The number of samples per question can be reduced to save costs.
 
 The Pilot uses the same config file as the formal run, overriding generation parameters (like `pilot.samples_per_group`) via the `pilot.*` override block. No separate config file is needed.
 
@@ -266,7 +266,7 @@ Each group of exemplars must meet the following:
 - The solution content is correct (matches gold answer).
 - Solution styles have discernible differences in step counts (verified by Pilot Run).
 - The final answer is provided using the `####` format, consistent with §3.2 extraction rules.
-- Exemplar questions do not overlap with the GSM8K test split.
+- Exemplar questions do not overlap with the GSM8K-Platinum test split.
 
 Specific content and quantity of exemplars are defined in the `prompts/` directory; the spec does not dictate the text.
 
@@ -546,7 +546,7 @@ This chapter defines the execution sequence, input/output dependencies across st
 
 | Stage | Name | Input | Output | Prerequisites |
 |---|---|---|---|---|
-| A | Eval Subset Prep | GSM8K test split | `eval_subset.jsonl`, `eval_subset_meta.json` | None |
+| A | Eval Subset Prep | GSM8K-Platinum test split | `eval_subset.jsonl`, `eval_subset_meta.json` | None |
 | B | Trace Generation | eval subset, ICL exemplar, model | shard directories (with `traces.jsonl`), `run_meta.json` | A |
 | C | Accuracy Aggregation | `traces.jsonl` (merged) | `accuracy_by_length.csv`, $L^*$ estimate, per-question metadata | B |
 | D | NLDD & TAS Measure | `traces.jsonl`, S, manual question selection | `nldd_full.jsonl`, `nldd_spot.jsonl` | B, C |
@@ -557,13 +557,13 @@ This chapter defines the execution sequence, input/output dependencies across st
 
 #### Stage A: Eval Subset Preparation
 
-Fix an evaluation subset from the GSM8K test split. Fixing strategy: Sort `question_text` by `sha256("{hash_seed}:{question_text}")` and take the top `SUBSET_SIZE` questions. The hash seed is written to metadata to guarantee reproducibility. `question_id` is generated by the loop index after sorting (`gsm8k_{global_index:04d}`), not sourced from the raw data.
+Fix an evaluation subset from the GSM8K-Platinum test split. Fixing strategy: Sort `question_text` by `sha256("{hash_seed}:{question_text}")` and take the top `SUBSET_SIZE` questions. The hash seed is written to metadata to guarantee reproducibility. `question_id` is generated by the loop index after sorting (`gsm8k_platinum_{global_index:04d}`), not sourced from the raw data.
 
 Artifacts:
 
 - `eval_subset.jsonl`: Each line contains `question_id`, `question_text`, `gold_answer`
 - `eval_subset_meta.json`: `SUBSET_SIZE` (field name `n`), hash seed, dataset split
-- `gsm8k_test.jsonl`: Export of the full test split (auxiliary artifact, optional)
+- `gsm8k_platinum_test.jsonl`: Export of the full test split (auxiliary artifact, optional)
 
 #### Stage B: Trace Generation
 
@@ -650,14 +650,14 @@ All experimental parameters are centralized in a single configuration file. Pilo
 
 | Parameter | Description | Current Value |
 |---|---|---|
-| `run_id` | Unique identifier for this run | `"peak-cot-stage1-gsm8k-llama31"` |
+| `run_id` | Unique identifier for this run | `"peak-cot-stage1-gsm8k-platinum-llama31"` |
 | `seed` | Global random seed | 42 |
 
 #### Dataset
 
 | Parameter | Description | Current Value |
 |---|---|---|
-| `dataset.name` | Dataset identifier | `"gsm8k"` |
+| `dataset.name` | Dataset identifier | `"madrylab/gsm8k-platinum"` |
 | `dataset.split` | Split | `"test"` |
 | `dataset.subset_size` | Evaluation subset size | 1319 (full test split) |
 | `dataset.hash_seed` | Hash sorting seed | 42 |

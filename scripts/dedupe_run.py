@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.canonical_artifacts import resolve_corruption_artifact_dir, resolve_corruption_artifact_path
 from src.nldd import summarize_corruption_records
 from src.reports import (
     aggregate_stage1_outputs,
@@ -137,14 +138,15 @@ def dedupe_corruption_artifacts(
     run_path: Path,
     removed_trace_ids: set[str],
 ) -> dict[str, Any] | None:
-    corruption_dir = run_path / "corruptted_traces"
-    if not corruption_dir.exists():
+    summary_path = resolve_corruption_artifact_path(run_path, "corruption_summary.json")
+    corruption_dir = resolve_corruption_artifact_dir(run_path)
+    if not summary_path.exists():
         return None
 
     mode_rows: dict[str, list[dict[str, Any]]] = {}
     mode_stats: dict[str, dict[str, int]] = {}
     for mode_name in ("all_steps", "sampled_steps"):
-        path = corruption_dir / f"{mode_name}.jsonl"
+        path = resolve_corruption_artifact_path(run_path, f"{mode_name}.jsonl")
         if not path.exists():
             continue
         rows = _load_jsonl(path)
@@ -171,7 +173,6 @@ def dedupe_corruption_artifacts(
             "removed": len(rows) - len(deduped),
         }
 
-    summary_path = corruption_dir / "corruption_summary.json"
     metadata: dict[str, Any] = {}
     if summary_path.exists():
         loaded = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -183,7 +184,11 @@ def dedupe_corruption_artifacts(
         json.dumps({"metadata": metadata, "summary": summary}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    return {"modes": mode_stats, "summary_path": str(summary_path)}
+    return {
+        "artifact_dir": str(corruption_dir),
+        "modes": mode_stats,
+        "summary_path": str(summary_path),
+    }
 
 
 def _dedupe_trace_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], set[str]]:

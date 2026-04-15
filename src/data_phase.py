@@ -13,6 +13,7 @@ import shutil
 import time
 from typing import Any
 
+from src.canonical_artifacts import resolve_corruption_artifact_path
 from src.coarse_analysis import (
     DIFFICULTY_ORDER,
     build_accuracy_buckets_by_difficulty,
@@ -28,7 +29,11 @@ from src.settings import ExperimentConfig, require_config_value
 CANONICAL_ROOT_ITEMS = {
     "accuracy_by_length.csv",
     "coarse_analysis.json",
+    "all_steps.jsonl",
+    "sampled_steps.jsonl",
+    "corruption_summary.json",
     "corruptted_traces",
+    "difficulty_groups",
     "lstar_summary.csv",
     "question_metadata.jsonl",
     "run_meta.json",
@@ -215,9 +220,9 @@ def build_data_phase_manifest(
             "coarse_analysis.json",
             "lstar_summary.csv",
             "run_meta.json",
-            "corruptted_traces/all_steps.jsonl",
-            "corruptted_traces/sampled_steps.jsonl",
-            "corruptted_traces/corruption_summary.json",
+            "all_steps.jsonl",
+            "sampled_steps.jsonl",
+            "corruption_summary.json",
         ],
         "legacy_sources": [
             str(run_path / "legacy"),
@@ -352,7 +357,7 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
-            path=run_path / "corruptted_traces" / "all_steps.jsonl",
+            path=resolve_corruption_artifact_path(run_path, "all_steps.jsonl"),
             role="canonical",
             default_for_analysis=True,
             join_keys=["corruption_id", "trace_id"],
@@ -361,7 +366,7 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
-            path=run_path / "corruptted_traces" / "sampled_steps.jsonl",
+            path=resolve_corruption_artifact_path(run_path, "sampled_steps.jsonl"),
             role="canonical",
             default_for_analysis=True,
             join_keys=["corruption_id", "trace_id"],
@@ -370,12 +375,21 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
-            path=run_path / "corruptted_traces" / "corruption_summary.json",
+            path=resolve_corruption_artifact_path(run_path, "corruption_summary.json"),
             role="canonical",
             default_for_analysis=True,
             join_keys=[],
             source="derived from canonical corruption records",
             notes="Official corruption success/failure summary for analysis.",
+        ),
+        _artifact_entry(
+            run_path=run_path,
+            path=run_path / "difficulty_groups",
+            role="derived",
+            default_for_analysis=False,
+            join_keys=[],
+            source="derived from canonical traces and coarse analysis",
+            notes="Per-difficulty jsonl exports with flat length groups for inspection.",
         ),
         _artifact_entry(
             run_path=run_path,
@@ -438,6 +452,9 @@ def _build_external_legacy_entries(run_path: Path, external_legacy_path: Path) -
         "lstar_summary.csv",
         "run_meta.json",
         "failed_corruptions.jsonl",
+        "all_steps.jsonl",
+        "sampled_steps.jsonl",
+        "corruption_summary.json",
         "corruptted_traces/all_steps.jsonl",
         "corruptted_traces/sampled_steps.jsonl",
         "corruptted_traces/corruption_summary.json",
@@ -547,8 +564,7 @@ def _validate_accuracy_csv(run_path: Path, *, traces: list[dict[str, Any]], conf
 
 
 def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
-    corruption_dir = run_path / "corruptted_traces"
-    summary_path = corruption_dir / "corruption_summary.json"
+    summary_path = resolve_corruption_artifact_path(run_path, "corruption_summary.json")
     if not summary_path.exists():
         raise FileNotFoundError(f"Missing corruption summary: {summary_path}")
 
@@ -560,7 +576,7 @@ def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
     validation: dict[str, dict[str, int]] = {}
     mode_rows: dict[str, list[dict[str, Any]]] = {}
     for mode_name in CORRUPTION_MODES:
-        mode_path = corruption_dir / f"{mode_name}.jsonl"
+        mode_path = resolve_corruption_artifact_path(run_path, f"{mode_name}.jsonl")
         rows = _load_jsonl(mode_path)
         mode_rows[mode_name] = rows
         failure_count = sum(1 for row in rows if row.get("corruption_failed"))
@@ -691,21 +707,27 @@ def _move_path(source: Path, destination: Path) -> None:
 
 
 def _remove_path(path: Path) -> None:
-    for attempt in range(5):
+    for attempt in range(20):
         try:
             if path.is_dir():
                 shutil.rmtree(path)
             else:
                 os.chmod(path, 0o666)
-                path.unlink()
+                os.remove(path)
             return
         except PermissionError:
-            if attempt == 4:
+            if attempt == 19:
                 raise
-            time.sleep(0.1)
+            time.sleep(0.2)
 
 
 def _move_path_windows(source: Path, destination: Path) -> bool:
-    flags = 0x1 | 0x2  # MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED
-    result = ctypes.windll.kernel32.MoveFileExW(str(source), str(destination), flags)
-    return bool(result)
+    flag_sets = (
+        0x1 | 0x8,        # MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+        0x1 | 0x2 | 0x8,  # MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH
+    )
+    for flags in flag_sets:
+        result = ctypes.windll.kernel32.MoveFileExW(str(source), str(destination), flags)
+        if result:
+            return True
+    return False

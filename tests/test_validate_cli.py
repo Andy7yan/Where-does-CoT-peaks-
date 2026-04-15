@@ -1,85 +1,84 @@
-"""Tests for data-phase curation helpers."""
+"""Tests for the validation CLI."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import uuid
 
-from src.data_phase import curate_data_phase
 from src.nldd import summarize_corruption_records
 from src.reports import aggregate_stage1_outputs
 
 
-def test_curate_data_phase_restructures_canonical_run(monkeypatch) -> None:
+def test_validate_cli_emits_json(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
 
-    workspace = Path("tests") / f"_tmp_data_phase_{uuid.uuid4().hex}"
-    canonical = workspace / "full_generation"
-    legacy = workspace / "full_run_diff-temperature"
+    workspace = Path("tests") / f"_tmp_validate_cli_{uuid.uuid4().hex}"
+    run_dir = workspace / "full_generation"
     try:
-        _build_valid_run(canonical, dedup=True)
-        _build_valid_run(legacy, dedup=False)
+        _build_valid_run(run_dir)
 
-        result = curate_data_phase(
-            str(canonical),
-            legacy_run_dir=str(legacy),
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/validate.py",
+                "--canonical-run-dir",
+                str(run_dir),
+                "--json",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            check=True,
+            capture_output=True,
+            text=True,
         )
 
-        assert Path(result["manifest_path"]).exists()
-        assert Path(result["readme_path"]).exists()
-        assert (canonical / "legacy" / "failed_corruptions.jsonl").exists()
-        assert (canonical / "legacy" / "stage1_analysis_report.md").exists()
-        assert (canonical / "legacy" / "manual_review_items.md").exists()
-        assert (canonical / "legacy" / "logs").exists()
-        assert (canonical / "legacy" / "shards").exists()
-        assert not (canonical / "failed_corruptions.jsonl").exists()
-
-        manifest = json.loads((canonical / "data_phase_manifest.json").read_text(encoding="utf-8"))
-        artifacts = {row["path"]: row for row in manifest["artifacts"]}
-        assert artifacts["traces.jsonl"]["role"] == "canonical"
-        assert artifacts["traces.jsonl"]["default_for_analysis"] is True
-        assert artifacts["legacy/failed_corruptions.jsonl"]["role"] == "legacy"
-        assert artifacts["../full_run_diff-temperature/traces.jsonl"]["role"] == "legacy"
-        assert artifacts["../full_run_diff-temperature/traces.jsonl"]["default_for_analysis"] is False
-
-        readme = (canonical / "README.md").read_text(encoding="utf-8")
-        assert "唯一的正式 data-phase 入口" in readme
-        assert "旧口径步骤失败记录" in readme
+        payload = json.loads(result.stdout)
+        assert payload["trace_count"] == 4
+        assert payload["question_count"] == 2
+        assert payload["accuracy_csv_matches_traces"] is True
+        assert payload["corruption_summary_matches_records"] is True
+        assert payload["corruption_validation"]["all_steps"]["records"] == 2
+        assert payload["corruption_validation"]["sampled_steps"]["records"] == 1
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def test_curate_data_phase_rejects_duplicate_trace_ids(monkeypatch) -> None:
+def test_validate_cli_accepts_flat_corruption_layout(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
 
-    workspace = Path("tests") / f"_tmp_data_phase_dup_{uuid.uuid4().hex}"
-    canonical = workspace / "full_generation"
-    legacy = workspace / "full_run_diff-temperature"
+    workspace = Path("tests") / f"_tmp_validate_cli_{uuid.uuid4().hex}"
+    run_dir = workspace / "full_generation"
     try:
-        _build_valid_run(canonical, dedup=True)
-        _build_valid_run(legacy, dedup=False)
+        _build_valid_run(run_dir)
+        for name in ("all_steps.jsonl", "sampled_steps.jsonl", "corruption_summary.json"):
+            payload = (run_dir / "corruptted_traces" / name).read_text(encoding="utf-8")
+            (run_dir / name).write_text(payload, encoding="utf-8")
 
-        with (canonical / "traces.jsonl").open("a", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(_trace("q1", "icl_short", 1, True, 2), ensure_ascii=False) + "\n"
-            )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/validate.py",
+                "--canonical-run-dir",
+                str(run_dir),
+                "--json",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
-        try:
-            curate_data_phase(
-                str(canonical),
-                legacy_run_dir=str(legacy),
-            )
-        except ValueError as exc:
-            assert "duplicate trace_id" in str(exc)
-        else:
-            raise AssertionError("curate_data_phase should reject duplicate trace ids")
+        payload = json.loads(result.stdout)
+        assert payload["corruption_validation"]["all_steps"]["records"] == 2
+        assert payload["corruption_validation"]["sampled_steps"]["records"] == 1
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def _build_valid_run(run_dir: Path, *, dedup: bool) -> None:
+def _build_valid_run(run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     traces = [
         _trace("q1", "icl_short", 1, True, 2),
@@ -87,8 +86,6 @@ def _build_valid_run(run_dir: Path, *, dedup: bool) -> None:
         _trace("q2", "icl_short", 1, False, 4),
         _trace("q2", "icl_medium", 1, True, 4),
     ]
-    if not dedup:
-        traces.append(_trace("q2", "icl_medium", 2, True, 4))
     with (run_dir / "traces.jsonl").open("w", encoding="utf-8") as handle:
         for row in traces:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -116,28 +113,6 @@ def _build_valid_run(run_dir: Path, *, dedup: bool) -> None:
 
     aggregate_stage1_outputs(str(run_dir))
     _write_corruption_artifacts(run_dir)
-
-    (run_dir / "failed_corruptions.jsonl").write_text(
-        json.dumps(
-            {
-                "trace_id": "q1_icl_short_1",
-                "question_id": "q1",
-                "step_index": 1,
-                "step_text": "Step 1",
-                "actual_num_steps": 2,
-                "failure_reason": "no_numeric",
-            },
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    (run_dir / "stage1_analysis_report.md").write_text("# stale\n", encoding="utf-8")
-    (run_dir / "manual_review_items.md").write_text("# stale\n", encoding="utf-8")
-    (run_dir / "logs").mkdir(exist_ok=True)
-    (run_dir / "logs" / "dedup.log").write_text("dedup log\n", encoding="utf-8")
-    (run_dir / "shards").mkdir(exist_ok=True)
-    (run_dir / "shards" / "placeholder.txt").write_text("placeholder\n", encoding="utf-8")
 
 
 def _write_corruption_artifacts(run_dir: Path) -> None:

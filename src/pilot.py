@@ -243,18 +243,23 @@ def build_pilot_subset(
     local_path: str | None,
     cache_dir: str | None,
 ) -> list[dict[str, Any]]:
-    """Select the Pilot subset from GSM8K or a local GSM8K-style file."""
+    """Select the Pilot subset from the configured dataset or a local compatible file."""
 
     dataset = _require_mapping(settings, "dataset")
     records = load_gsm8k_test(
         source=source,
         local_path=local_path,
         cache_dir=cache_dir,
+        dataset_name=_require_string(dataset, "name"),
+        dataset_config=_optional_string(dataset, "hf_config"),
+        split=_require_string(dataset, "split"),
     )
     return select_eval_subset(
         records,
         n=pilot.num_questions,
         hash_seed=_require_int(dataset, "subset_hash_seed"),
+        dataset_name=_require_string(dataset, "name"),
+        split=_require_string(dataset, "split"),
     )
 
 

@@ -29,7 +29,7 @@ def test_config_can_be_loaded(monkeypatch) -> None:
 
     config = ExperimentConfig.from_yaml("configs/stage1.yaml")
 
-    assert config.experiment.run_id == "peak-cot-stage1-gsm8k-llama31"
+    assert config.experiment.run_id == "peak-cot-stage1-gsm8k-platinum-llama31"
     assert config.model.hf_cache == "/tmp/hf-home/hub"
     assert config.answer_extraction.numeric_tolerance == 1e-3
     assert config.output.base_dir == "/tmp/runs/test"
@@ -68,7 +68,7 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
 
     settings = load_settings("configs/stage1.yaml")
 
-    assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-llama31"
+    assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-platinum-llama31"
     assert settings["dataset"]["subset_size"] == 200
     assert settings["generation"]["num_icl_groups"] == 5
     assert settings["generation"]["samples_per_group"] == 3

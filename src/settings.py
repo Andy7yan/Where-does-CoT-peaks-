@@ -24,6 +24,7 @@ class DatasetConfig:
     """Dataset selection and subset controls."""
 
     name: str
+    hf_config: str | None
     split: str
     subset_size: int | None
     subset_hash_seed: int
@@ -164,6 +165,7 @@ class ExperimentConfig:
             ),
             dataset=DatasetConfig(
                 name=_require_string(dataset, "name"),
+                hf_config=_optional_string(dataset, "hf_config"),
                 split=_require_string(dataset, "split"),
                 subset_size=_optional_int(dataset, "subset_size"),
                 subset_hash_seed=_require_int(dataset, "subset_hash_seed"),

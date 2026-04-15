@@ -1,0 +1,44 @@
+#!/bin/bash
+#PBS -N peak-cot-nldd-d2
+#PBS -l select=1:ncpus=4:ngpus=1:mem=24gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/nldd_measure.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${RUN_NAME:=full_generation}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+LOG_PATH="${RUN_DIR}/logs/nldd_measure.log"
+
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+
+python scripts/check_runtime_device.py
+python scripts/run_nldd_measure.py \
+  --run-dir "${RUN_DIR}" \
+  --config "${CONFIG_PATH}"

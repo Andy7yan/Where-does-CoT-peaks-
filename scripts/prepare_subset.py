@@ -1,4 +1,4 @@
-"""CLI for preparing a deterministic GSM8K evaluation subset."""
+"""CLI for preparing a deterministic GSM8K-Platinum evaluation subset."""
 
 import argparse
 from pathlib import Path
@@ -28,6 +28,9 @@ def main() -> None:
         source=args.source,
         local_path=args.local_path,
         cache_dir=args.cache_dir,
+        dataset_name=config.dataset.name,
+        dataset_config=config.dataset.hf_config,
+        split=config.dataset.split,
     )
     corpus_path = None
     if not args.skip_full_corpus_export:
@@ -41,6 +44,8 @@ def main() -> None:
         n=resolve_subset_size(args.subset_size, config.dataset.subset_size),
         hash_seed=config.dataset.subset_hash_seed,
         start_idx=args.start_idx,
+        dataset_name=config.dataset.name,
+        split=config.dataset.split,
     )
     jsonl_path, meta_path = save_eval_subset(
         subset,
@@ -75,12 +80,12 @@ def parse_args() -> argparse.Namespace:
         "--source",
         choices=("huggingface", "local"),
         default="huggingface",
-        help="Where to load GSM8K from.",
+        help="Where to load the configured dataset from.",
     )
     parser.add_argument(
         "--local-path",
         default=None,
-        help="Path to a local GSM8K-style JSON file when using --source local.",
+        help="Path to a local GSM8K-Platinum-style JSON file when using --source local.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -110,13 +115,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--full-corpus-filename",
-        default="gsm8k_test.jsonl",
-        help="Filename for exporting the full GSM8K test corpus as JSONL.",
+        default="gsm8k_platinum_test.jsonl",
+        help="Filename for exporting the full GSM8K-Platinum test corpus as JSONL.",
     )
     parser.add_argument(
         "--skip-full-corpus-export",
         action="store_true",
-        help="Skip writing the full GSM8K corpus JSONL and only write the eval subset files.",
+        help="Skip writing the full GSM8K-Platinum corpus JSONL and only write the eval subset files.",
     )
     return parser.parse_args()
 

@@ -7,7 +7,7 @@
 Stage 1 is a single-model, single-dataset minimum viable pipeline.
 
 * **Model:** `meta-llama/Llama-3.1-8B-Instruct`
-* **Dataset:** GSM8K test split
+* **Dataset:** GSM8K-Platinum test split (`madrylab/gsm8k-platinum`)
 * **Goal:** jointly measure the behavioural optimum (L^*) and the mechanistic horizon (k^*) on the same pool of explicit CoT traces, then compare them in a controlled and interpretable way.
 
 The purpose of Stage 1 is not to establish a final general theory of CoT faithfulness. Its role is to validate the full technical route end-to-end and produce a first clean comparison between:
@@ -130,7 +130,7 @@ It checks whether:
 
 ### 2. Data Phase — Trace Generation
 
-For each GSM8K question, the model generates multiple explicit CoT traces.
+For each GSM8K-Platinum question, the model generates multiple explicit CoT traces.
 
 Length variation is induced **naturally**, not by hard length commands.
 
@@ -283,7 +283,7 @@ Add stronger or different instruction-tuned models, such as:
 
 ### Dataset dimension
 
-Extend beyond GSM8K to harder benchmarks such as:
+Extend beyond GSM8K-Platinum to harder benchmarks such as:
 
 * MATH
 

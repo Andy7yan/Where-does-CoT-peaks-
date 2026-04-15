@@ -1,75 +1,76 @@
-﻿prompt_id: "icl_medium"
-version: 1
+prompt_id: "icl_medium"
+version: 2
 system: |
   You are a careful math tutor.
   Solve the user's problem clearly and finish with a new line in the form "#### <number>".
 few_shot:
-  - user: "Caleb bought 10 cartons of ice cream and 4 cartons of frozen yoghurt. Each carton of ice cream cost $4 and each carton of frozen yoghurt cost $1. How much more did Caleb spend on ice cream than on frozen yoghurt?"
+  - user: "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"
     assistant: |
-      The ice cream cost 10 * 4 = <<10*4=40>>40 dollars.
-      The frozen yoghurt cost 4 * 1 = <<4*1=4>>4 dollars.
-      Caleb spent 40 - 4 = <<40-4=36>>36 dollars more on ice cream.
-      #### 36
+      Janet's ducks lay 16 eggs each day.
+      She uses 3 eggs for breakfast and 4 eggs for muffins, so she uses 3 + 4 = <<3+4=7>>7 eggs.
+      That leaves 16 - 7 = <<16-7=9>>9 eggs to sell.
+      She sells each egg for 2 dollars, so she makes 9 * 2 = <<9*2=18>>18 dollars.
+      #### 18
 
-  - user: "Jack has a stack of books that is 12 inches thick. He knows from experience that 80 pages is one inch thick. If he has 6 books, how many pages is each one on average?"
+  - user: "A bus has a capacity of 200 people. When it departed Chengli city, it had 20 people. On the first stop, 40 people entered the bus. On the second station, 3/4 of the total number of people who entered the bus at the first station entered the bus. If the number of passengers on the bus doubled at the third station, calculate the total number of people required to fill the remaining spaces on the bus."
     assistant: |
-      Since 80 pages make 1 inch, 12 inches contain 80 * 12 = <<80*12=960>>960 pages.
-      Jack has 6 books total.
-      So each book has 960 / 6 = <<960/6=160>>160 pages on average.
-      #### 160
+      The bus starts with 20 people.
+      At the first stop, 40 people enter, so it now has 20 + 40 = <<20+40=60>>60 people.
+      At the second stop, 3/4 of 40 people enter, which is 3/4 * 40 = <<3/4*40=30>>30 people.
+      So after the second stop, the bus has 60 + 30 = <<60+30=90>>90 people.
+      At the third stop, the number of passengers doubles to 90 * 2 = <<90*2=180>>180 people.
+      The remaining spaces are 200 - 180 = <<200-180=20>>20.
+      #### 20
 
-  - user: "Jimmy bought 3 pens for school for $1 each, 4 notebooks for $3 each and 2 folders for $5 each. If he paid with a $50 bill, how much change will he get back?"
+  - user: "The rug is 5 feet wider than the chair. The couch is 2 feet longer than twice the width of the rug. If the chair is 3 feet wide. How many feet long is the couch?"
     assistant: |
-      The pens cost 3 * 1 = <<3*1=3>>3 dollars.
-      The notebooks cost 4 * 3 = <<4*3=12>>12 dollars.
-      The folders cost 2 * 5 = <<2*5=10>>10 dollars.
-      Altogether, Jimmy spent 3 + 12 + 10 = <<3+12+10=25>>25 dollars.
-      His change is 50 - 25 = <<50-25=25>>25 dollars.
-      #### 25
+      The chair is 3 feet wide.
+      The rug is 5 feet wider, so the rug is 3 + 5 = <<3+5=8>>8 feet wide.
+      Twice the rug's width is 2 * 8 = <<2*8=16>>16 feet.
+      The couch is 2 feet longer than that, so its length is 16 + 2 = <<16+2=18>>18 feet.
+      #### 18
 
-  - user: "Sarah's age is equal to three times Mark's age minus 4. Mark is four years older than Billy. Billy is half Ana's age. If Ana will be 15 in 3 years, how old is Sarah?"
+  - user: "Jordan wanted to surprise her mom with a homemade birthday cake. From reading the instructions, she knew it would take 20 minutes to make the cake batter and 30 minutes to bake the cake. The cake would require 2 hours to cool and an additional 10 minutes to frost the cake. If she plans to make the cake all on the same day, what is the latest time of day that Jordan can start making the cake to be ready to serve it at 5:00 pm?"
     assistant: |
-      Ana is 15 - 3 = <<15-3=12>>12 years old now.
-      Billy is half of Ana's age, so Billy is 12 / 2 = <<12/2=6>>6.
-      Mark is 4 years older than Billy, so Mark is 6 + 4 = <<6+4=10>>10.
-      Sarah is three times Mark's age minus 4, so Sarah is 3 * 10 - 4 = <<3*10-4=26>>26.
-      #### 26
+      Making the batter takes 20 minutes and baking takes 30 minutes.
+      Cooling takes 2 hours, which is 120 minutes, and frosting takes 10 minutes.
+      So the total time is 20 + 30 + 120 + 10 = <<20+30+120+10=180>>180 minutes.
+      That is 3 hours.
+      Three hours before 5:00 pm is 2:00 pm.
+      #### 2
 
-  - user: "Johnny is a dog walker. He can walk 3 dogs at once. He gets paid $15 for a 30-minute walk and $20 for a 60-minute walk. Johnny works for 4 hours per day. If he always walks the maximum number of dogs possible and 6 dogs have 60-minute walks per day, how much money does he make in a week where he works 5 days?"
+  - user: "A football team has 105 members. There are twice as many players on the offense as there is on the defense. There is half the number of players on the special teams as there is on the defense. How many players are on the defense?"
     assistant: |
-      Johnny walks 3 dogs at once, so 6 dogs having 60-minute walks means 6 / 3 = <<6/3=2>>2 one-hour walks.
-      Those walks take 2 hours and earn 6 * 20 = <<6*20=120>>120 dollars.
-      He works 4 hours total, so he has 4 - 2 = <<4-2=2>>2 hours left.
-      In 2 hours, he can do 120 / 30 = <<120/30=4>>4 half-hour walks, covering 4 * 3 = <<4*3=12>>12 dogs.
-      Those dogs earn 12 * 15 = <<12*15=180>>180 dollars.
-      So he makes 120 + 180 = <<120+180=300>>300 dollars per day and 300 * 5 = <<300*5=1500>>1500 dollars per week.
-      #### 1500
+      Let the number of defense players be d.
+      Then the offense has 2d players and the special teams have d / 2 players.
+      The total is 2d + d + d / 2 = 105.
+      So 3.5d = 105.
+      Dividing both sides by 3.5 gives d = <<105/3.5=30>>30.
+      #### 30
 
-  - user: "There are 360 balls in the ball pit. If a quarter of the balls in the ball pit are red and a fifth of the remaining balls are blue. How many of the balls are neither red nor blue?"
+  - user: "Maria invited 4 of her friends over for a water balloon fight in the backyard. At the start of the game, Maria gave each of her friends 2 water balloons. She had one water balloon for herself. Then her mom came out and gave each person 3 more balloons. How many total balloons did the girls have?"
     assistant: |
-      A quarter of 360 balls are red, so there are 360 * 1/4 = <<360*(1/4)=90>>90 red balls.
-      That leaves 360 - 90 = <<360-90=270>>270 balls.
-      A fifth of the remaining balls are blue, so there are 270 * 1/5 = <<270*(1/5)=54>>54 blue balls.
-      The number that are neither red nor blue is 360 - 90 - 54 = <<360-90-54=216>>216.
-      #### 216
+      Maria invited 4 friends, so there are 4 + 1 = <<4+1=5>>5 girls in all.
+      At the start, the friends get 4 * 2 = <<4*2=8>>8 balloons and Maria has 1 balloon.
+      So they start with 8 + 1 = <<8+1=9>>9 balloons.
+      Then each of the 5 girls gets 3 more balloons, which is 5 * 3 = <<5*3=15>>15 balloons.
+      Altogether they have 9 + 15 = <<9+15=24>>24 balloons.
+      #### 24
 
-  - user: "Mason is mixing up some salad dressing. He takes a bowl that holds 150 ml and fills it 2/3rds with oil and 1/3rd with vinegar. The oil weighs 5 g/ml and the vinegar weighs 4 g/ml. How many grams does the salad dressing weigh?"
+  - user: "A nurses' station orders bandages in bulk packs of 50. On the first day, the nurses used 38 bandages and ordered one bulk pack of bandages. On the second day, they used ten fewer bandages. On the third day, they ordered two bulk packs of bandages and only used half a pack. They had 78 bandages left at the end of the third day. How many bandages did they start with on the first day?"
     assistant: |
-      The bowl holds 150 ml.
-      Oil takes 2/3 of the bowl, so the oil volume is 150 * 2/3 = <<150*2/3=100>>100 ml.
-      Vinegar takes 1/3 of the bowl, so the vinegar volume is 150 * 1/3 = <<150*1/3=50>>50 ml.
-      The oil weighs 100 * 5 = <<100*5=500>>500 grams.
-      The vinegar weighs 50 * 4 = <<50*4=200>>200 grams.
-      The total weight is 500 + 200 = <<500+200=700>>700 grams.
-      #### 700
+      On the second day, they used 38 - 10 = <<38-10=28>>28 bandages.
+      On the third day, they used half a pack, which is 50 / 2 = <<50/2=25>>25 bandages.
+      Altogether they used 38 + 28 + 25 = <<38+28+25=91>>91 bandages.
+      They ordered one pack on the first day and two packs on the third day, so they ordered 50 + 2 * 50 = <<50+2*50=150>>150 bandages.
+      Since they ended with 78 bandages, the starting amount was 78 - 150 + 91 = <<78-150+91=19>>19.
+      #### 19
 
-  - user: "Aryan owes Fernanda $1200, which is twice what Kyro owes Fernanda. Aryan decides to pay 60% of her debt to Fernanda, and Kyro pays Fernanda 80% of her dept. If Fernanda had $300 in her savings account and adds the money she's been paid by her debtors to the savings account, calculate the total amount of money in her savings account now."
+  - user: "The girls are trying to raise money for a carnival. Kim raises $320 more than Alexandra, who raises $430, and Maryam raises $400 more than Sarah, who raises $300. How much money, in dollars, did they all raise in total?"
     assistant: |
-      Aryan owes 1200 dollars, which is twice what Kyro owes.
-      So Kyro owes 1200 / 2 = <<1200/2=600>>600 dollars.
-      Aryan pays 60% of 1200, which is 1200 * 60/100 = <<1200*60/100=720>>720 dollars.
-      Kyro pays 80% of 600, which is 600 * 80/100 = <<600*80/100=480>>480 dollars.
-      Fernanda starts with 300 dollars, so she now has 300 + 720 + 480 = <<300+720+480=1500>>1500 dollars.
-      #### 1500
+      Alexandra raises 430 dollars, so Kim raises 430 + 320 = <<430+320=750>>750 dollars.
+      Sarah raises 300 dollars, so Maryam raises 300 + 400 = <<300+400=700>>700 dollars.
+      The total is 430 + 750 + 300 + 700 = <<430+750+300+700=2180>>2180 dollars.
+      #### 2180
 
 user_template: "{question}"

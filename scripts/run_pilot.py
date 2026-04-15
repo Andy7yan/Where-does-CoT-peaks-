@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
         "--source",
         choices=("huggingface", "local"),
         default="huggingface",
-        help="Where to load GSM8K from in real mode.",
+        help="Where to load the configured dataset from in real mode.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--local-path",
         default=None,
-        help="Path to a local GSM8K-style JSON file when using --source local.",
+        help="Path to a local GSM8K-Platinum-style JSON file when using --source local.",
     )
     parser.add_argument(
         "--prompts-dir",
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data",
         default=None,
-        help="Local GSM8K-style JSON file required by --mock.",
+        help="Local GSM8K-Platinum-style JSON file required by --mock.",
     )
     parser.add_argument(
         "--debug",

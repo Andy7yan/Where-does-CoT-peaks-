@@ -162,7 +162,7 @@ def test_write_run_metadata_writes_required_fields() -> None:
     run_metadata = {
         "run_id": "stage-c-run",
         "model_name": "meta-llama/Llama-3.1-8B-Instruct",
-        "dataset": "gsm8k:test",
+        "dataset": "madrylab/gsm8k-platinum:test",
         "temperature": None,
         "icl_group_temperatures": {"icl_short": 0.3, "icl_medium": 0.5},
         "max_new_tokens": 128,
@@ -417,7 +417,7 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
     config = SimpleNamespace(
         experiment=SimpleNamespace(run_id="stage-c-run", seed=42),
         model=SimpleNamespace(name="meta-llama/Llama-3.1-8B-Instruct"),
-        dataset=SimpleNamespace(name="gsm8k", split="test"),
+        dataset=SimpleNamespace(name="madrylab/gsm8k-platinum", split="test"),
     )
 
     metadata = build_run_metadata(
@@ -433,7 +433,7 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
 
     assert metadata["run_id"] == "stage-c-run"
     assert metadata["model_name"] == "meta-llama/Llama-3.1-8B-Instruct"
-    assert metadata["dataset"] == "gsm8k:test"
+    assert metadata["dataset"] == "madrylab/gsm8k-platinum:test"
     assert metadata["temperature"] is None
     assert metadata["icl_group_temperatures"] == {
         "icl_short": 0.3,

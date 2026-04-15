@@ -1,4 +1,4 @@
-"""Tests for GSM8K data preparation and prompt template helpers."""
+"""Tests for GSM8K-Platinum data preparation and prompt template helpers."""
 
 import json
 from pathlib import Path
@@ -38,7 +38,7 @@ def test_select_eval_subset_returns_expected_fields(sample_gsm8k: list[dict]) ->
 
     assert len(subset) == 10
     for index, record in enumerate(subset):
-        assert record["question_id"] == f"gsm8k_{index:04d}"
+        assert record["question_id"] == f"gsm8k_platinum_{index:04d}"
         assert isinstance(record["question_text"], str)
         assert isinstance(record["gold_answer"], float)
 
@@ -65,7 +65,7 @@ def test_save_eval_subset_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> No
         assert metadata["hash_seed"] == 42
         assert metadata["start_idx"] == 0
         assert metadata["total_questions"] == 50
-        assert metadata["dataset"] == "gsm8k"
+        assert metadata["dataset"] == "madrylab/gsm8k-platinum"
         assert metadata["split"] == "test"
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -76,11 +76,11 @@ def test_select_eval_subset_supports_start_idx_with_global_question_ids(sample_g
 
     assert len(subset) == 5
     assert [record["question_id"] for record in subset] == [
-        "gsm8k_0010",
-        "gsm8k_0011",
-        "gsm8k_0012",
-        "gsm8k_0013",
-        "gsm8k_0014",
+        "gsm8k_platinum_0010",
+        "gsm8k_platinum_0011",
+        "gsm8k_platinum_0012",
+        "gsm8k_platinum_0013",
+        "gsm8k_platinum_0014",
     ]
 
 

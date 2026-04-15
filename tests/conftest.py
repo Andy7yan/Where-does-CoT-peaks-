@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture
 def sample_gsm8k() -> list[dict]:
-    """Load the bundled GSM8K sample records."""
+    """Load the bundled sample records."""
 
     sample_path = Path(__file__).resolve().parents[1] / "data" / "gsm8k_sample.json"
     return json.loads(sample_path.read_text(encoding="utf-8"))
@@ -16,6 +16,6 @@ def sample_gsm8k() -> list[dict]:
 
 @pytest.fixture
 def sample_question(sample_gsm8k: list[dict]) -> dict:
-    """Return the first bundled GSM8K sample question."""
+    """Return the first bundled sample question."""
 
     return sample_gsm8k[0]
