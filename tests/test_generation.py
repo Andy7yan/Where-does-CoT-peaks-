@@ -10,9 +10,8 @@ from scripts.run_generation import (
     build_run_metadata,
     discover_prompt_templates,
     resolve_prompt_sample_counts,
-    resolve_prompt_temperatures,
 )
-from src.generation import (
+from src.data_phase1.generation import (
     TRACE_SCHEMA_VERSION,
     GenerationOutput,
     LLMGenerator,
@@ -163,13 +162,12 @@ def test_write_run_metadata_writes_required_fields() -> None:
         "run_id": "stage-c-run",
         "model_name": "meta-llama/Llama-3.1-8B-Instruct",
         "dataset": "madrylab/gsm8k-platinum:test",
-        "temperature": None,
-        "icl_group_temperatures": {"icl_short": 0.3, "icl_medium": 0.5},
+        "temperature": 0.6,
         "max_new_tokens": 128,
-        "num_icl_groups": 3,
-        "samples_per_group": 4,
+        "num_icl_groups": 4,
+        "samples_per_group": 5,
         "seed": 42,
-        "prompt_ids": ["icl_short", "icl_medium", "icl_detailed"],
+        "prompt_ids": ["icl_short", "icl_medium", "icl_detailed", "icl_verbose"],
         "schema_version": TRACE_SCHEMA_VERSION,
         "timestamp": "2026-04-11T00:00:00Z",
     }
@@ -392,7 +390,7 @@ def test_discover_prompt_templates_uses_preferred_prompt_order() -> None:
     temp_dir = Path("tests") / f"_tmp_prompt_preferred_order_{uuid.uuid4().hex}"
     try:
         temp_dir.mkdir(parents=True, exist_ok=True)
-        for prompt_id in ("icl_verbose", "icl_short", "icl_minimal"):
+        for prompt_id in ("icl_verbose", "icl_short", "icl_medium"):
             (temp_dir / f"{prompt_id}.yaml").write_text(
                 f'prompt_id: "{prompt_id}"\nversion: 1\nsystem: "s"\nfew_shot: []\nuser_template: "{{question}}"\n',
                 encoding="utf-8",
@@ -401,11 +399,11 @@ def test_discover_prompt_templates_uses_preferred_prompt_order() -> None:
         templates = discover_prompt_templates(
             str(temp_dir),
             expected_count=3,
-            preferred_prompt_ids=["icl_minimal", "icl_short", "icl_verbose"],
+            preferred_prompt_ids=["icl_medium", "icl_short", "icl_verbose"],
         )
 
         assert [template["prompt_id"] for template in templates] == [
-            "icl_minimal",
+            "icl_medium",
             "icl_short",
             "icl_verbose",
         ]
@@ -422,32 +420,29 @@ def test_build_run_metadata_contains_required_stage_c_fields() -> None:
 
     metadata = build_run_metadata(
         config=config,
-        prompt_ids=["icl_short", "icl_medium"],
-        temperature=None,
-        icl_group_temperatures={"icl_short": 0.3, "icl_medium": 0.5},
-        icl_group_sample_counts={"icl_short": 3, "icl_medium": 5},
+        prompt_ids=["icl_short", "icl_medium", "icl_detailed", "icl_verbose"],
+        temperature=0.6,
+        icl_group_sample_counts={},
         max_new_tokens=96,
-        num_icl_groups=2,
-        samples_per_group=3,
+        num_icl_groups=4,
+        samples_per_group=5,
     )
 
     assert metadata["run_id"] == "stage-c-run"
     assert metadata["model_name"] == "meta-llama/Llama-3.1-8B-Instruct"
     assert metadata["dataset"] == "madrylab/gsm8k-platinum:test"
-    assert metadata["temperature"] is None
-    assert metadata["icl_group_temperatures"] == {
-        "icl_short": 0.3,
-        "icl_medium": 0.5,
-    }
-    assert metadata["icl_group_sample_counts"] == {
-        "icl_short": 3,
-        "icl_medium": 5,
-    }
+    assert metadata["temperature"] == 0.6
+    assert metadata["icl_group_sample_counts"] == {}
     assert metadata["max_new_tokens"] == 96
-    assert metadata["num_icl_groups"] == 2
-    assert metadata["samples_per_group"] == 3
+    assert metadata["num_icl_groups"] == 4
+    assert metadata["samples_per_group"] == 5
     assert metadata["seed"] == 42
-    assert metadata["prompt_ids"] == ["icl_short", "icl_medium"]
+    assert metadata["prompt_ids"] == [
+        "icl_short",
+        "icl_medium",
+        "icl_detailed",
+        "icl_verbose",
+    ]
     assert metadata["schema_version"] == TRACE_SCHEMA_VERSION
     assert "timestamp" in metadata
 
@@ -479,7 +474,7 @@ def test_generate_traces_for_question_batches_samples_with_generate_batch() -> N
     assert generator.batch_calls == [(4, 0.7), (1, 0.7)]
 
 
-def test_generate_traces_for_question_uses_prompt_specific_temperatures() -> None:
+def test_generate_traces_for_question_requires_global_temperature() -> None:
     generator = BatchFakeGenerator()
     prompt_templates = [
         {
@@ -496,44 +491,22 @@ def test_generate_traces_for_question_uses_prompt_specific_temperatures() -> Non
         },
     ]
 
-    traces = generate_traces_for_question(
-        generator=generator,
-        question_id="gsm8k_0001",
-        question_text="What is 2 + 2?",
-        gold_answer=4.0,
-        prompt_templates=prompt_templates,
-        samples_per_group=2,
-        max_new_tokens=64,
-        temperature=None,
-        prompt_temperatures={"icl_short": 0.3, "icl_medium": 0.5},
-        batch_size=4,
-    )
-
-    assert len(traces) == 4
-    assert generator.batch_calls == [(2, 0.3), (2, 0.5)]
-
-
-def test_resolve_prompt_temperatures_uses_group_values_and_default_fallback() -> None:
-    resolved = resolve_prompt_temperatures(
-        prompt_ids=["icl_short", "icl_medium"],
-        default_temperature=0.7,
-        configured_group_temperatures={"icl_short": 0.3},
-    )
-
-    assert resolved == {"icl_short": 0.3, "icl_medium": 0.7}
-
-
-def test_resolve_prompt_temperatures_requires_complete_coverage_without_default() -> None:
     try:
-        resolve_prompt_temperatures(
-            prompt_ids=["icl_short", "icl_medium"],
-            default_temperature=None,
-            configured_group_temperatures={"icl_short": 0.3},
+        generate_traces_for_question(
+            generator=generator,
+            question_id="gsm8k_0001",
+            question_text="What is 2 + 2?",
+            gold_answer=4.0,
+            prompt_templates=prompt_templates,
+            samples_per_group=2,
+            max_new_tokens=64,
+            temperature=None,
+            batch_size=4,
         )
     except ValueError as exc:
-        assert "icl_medium" in str(exc)
+        assert "global generation temperature" in str(exc)
     else:
-        raise AssertionError("resolve_prompt_temperatures should reject uncovered prompts")
+        raise AssertionError("generate_traces_for_question should reject a missing global temperature")
 
 
 def test_resolve_prompt_sample_counts_uses_group_values_and_default_fallback() -> None:

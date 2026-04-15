@@ -11,9 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.generation import _load_tokenizer_with_fallback, ensure_model_available
-from src.pilot import build_token_counter, diagnose_corruption_failures, load_jsonl_records
-from src.settings import ExperimentConfig
+from src.data_phase1.generation import _load_tokenizer_with_fallback, ensure_model_available
+from src.data_phase1.pilot import build_token_counter, diagnose_corruption_failures, load_jsonl_records
+from src.common.settings import ExperimentConfig
 
 
 def main() -> None:

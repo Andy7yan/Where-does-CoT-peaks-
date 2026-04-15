@@ -9,7 +9,7 @@ import sys
 from types import SimpleNamespace
 import uuid
 
-from src.nldd import (
+from src.analysis_phase.nldd import (
     build_correct_token_ids,
     compute_logit_margin,
     extract_trace_horizon,
@@ -17,7 +17,7 @@ from src.nldd import (
     measure_trace_profile,
     validate_nldd_full_records,
 )
-from src.reports import aggregate_stage1_outputs
+from src.data_phase2.aggregation import aggregate_stage1_outputs
 
 
 class FakeTokenizer:

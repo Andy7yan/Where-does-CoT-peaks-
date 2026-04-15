@@ -7,9 +7,9 @@ from pathlib import Path
 import shutil
 import uuid
 
-from src.data_phase import curate_data_phase
-from src.nldd import summarize_corruption_records
-from src.reports import aggregate_stage1_outputs
+from src.data_phase2.curation import curate_data_phase
+from src.analysis_phase.nldd import summarize_corruption_records
+from src.data_phase2.aggregation import aggregate_stage1_outputs
 
 
 def test_curate_data_phase_restructures_canonical_run(monkeypatch) -> None:
@@ -41,8 +41,8 @@ def test_curate_data_phase_restructures_canonical_run(monkeypatch) -> None:
         assert artifacts["traces.jsonl"]["role"] == "canonical"
         assert artifacts["traces.jsonl"]["default_for_analysis"] is True
         assert artifacts["legacy/failed_corruptions.jsonl"]["role"] == "legacy"
-        assert artifacts["../full_run_diff-temperature/traces.jsonl"]["role"] == "legacy"
-        assert artifacts["../full_run_diff-temperature/traces.jsonl"]["default_for_analysis"] is False
+        assert artifacts["full_run_diff-temperature/traces.jsonl"]["role"] == "legacy"
+        assert artifacts["full_run_diff-temperature/traces.jsonl"]["default_for_analysis"] is False
 
         readme = (canonical / "README.md").read_text(encoding="utf-8")
         assert "唯一的正式 data-phase 入口" in readme
@@ -99,11 +99,10 @@ def _build_valid_run(run_dir: Path, *, dedup: bool) -> None:
                 "run_id": "peak-cot-stage1-gsm8k-platinum-llama31",
                 "max_new_tokens": 512,
                 "icl_group_sample_counts": {
-                    "icl_minimal": 3,
-                    "icl_short": 3,
-                    "icl_medium": 3,
-                    "icl_detailed": 3,
-                    "icl_verbose": 3,
+                    "icl_short": 5,
+                    "icl_medium": 5,
+                    "icl_detailed": 5,
+                    "icl_verbose": 5,
                 },
                 "schema_version": "stage1_trace_v2",
             },

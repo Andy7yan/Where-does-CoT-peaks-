@@ -6,8 +6,7 @@ dataset:
   name: "madrylab/gsm8k-platinum"
   hf_config: "main"
   split: "test"
-  subset_size: 200
-  subset_hash_seed: 42
+  order_hash_seed: 42
 
 model:
   name: "meta-llama/Llama-3.1-8B-Instruct"
@@ -15,16 +14,15 @@ model:
   hf_cache: "${SCRATCH}/hf-home/hub"
 
 generation:
-  num_icl_groups: 5
-  samples_per_group: 3
-  temperature: 0.7
+  num_icl_groups: 4
+  samples_per_group: 5
+  temperature: 0.6
   icl_groups:
-    icl_minimal: { samples_per_group: 3 }
-    icl_short: { samples_per_group: 3 }
-    icl_medium: { samples_per_group: 3 }
-    icl_detailed: { samples_per_group: 5 }
-    icl_verbose: { samples_per_group: 5 }
-  max_new_tokens: 544
+    icl_short: {}
+    icl_medium: {}
+    icl_detailed: {}
+    icl_verbose: {}
+  max_new_tokens: 1024
 
 step_segmentation:
   method: "newline"
@@ -45,9 +43,9 @@ nldd:
 
 pilot:
   num_questions: 50
-  num_icl_groups: 5
-  samples_per_group: 15
-  temperature: 0.7
+  num_icl_groups: 4
+  samples_per_group: 5
+  temperature: 0.6
   max_new_tokens: 512
   max_extraction_fail_rate: 0.05
 

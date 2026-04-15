@@ -10,9 +10,9 @@ from pathlib import Path
 import time
 from typing import Any
 
-from src.prompting import build_generation_messages
-from src.reasoning import extract_answer, judge, segment_steps
-from src.runtime_env import select_runtime_device
+from src.data_phase1.prompting import build_generation_messages
+from src.common.reasoning import extract_answer, judge, segment_steps
+from src.common.runtime_env import select_runtime_device
 
 
 @dataclass(frozen=True)
@@ -364,7 +364,6 @@ def generate_traces_for_question(
     samples_per_group: int | None,
     max_new_tokens: int,
     temperature: float | None = None,
-    prompt_temperatures: Mapping[str, float] | None = None,
     prompt_sample_counts: Mapping[str, int] | None = None,
     batch_size: int = DEFAULT_GENERATION_BATCH_SIZE,
 ) -> list[dict]:
@@ -380,11 +379,8 @@ def generate_traces_for_question(
             question=question_text,
             prompt_template=prompt_template,
         )
-        effective_temperature = _resolve_prompt_temperature(
-            prompt_id=prompt_id,
-            temperature=temperature,
-            prompt_temperatures=prompt_temperatures,
-        )
+        if temperature is None:
+            raise ValueError("No global generation temperature configured.")
         effective_samples_per_group = _resolve_prompt_sample_count(
             prompt_id=prompt_id,
             samples_per_group=samples_per_group,
@@ -401,19 +397,19 @@ def generate_traces_for_question(
             _debug_log(
                 "samples="
                 f"{batch_sample_indices[0]}-{batch_sample_indices[-1]}/{effective_samples_per_group} "
-                f"generating prompt_id={prompt_id} temperature={effective_temperature}"
+                f"generating prompt_id={prompt_id} temperature={temperature}"
             )
             if hasattr(generator, "generate_batch"):
                 generations = generator.generate_batch(
                     messages_batch=[messages for _ in batch_sample_indices],
-                    temperature=effective_temperature,
+                    temperature=temperature,
                     max_new_tokens=max_new_tokens,
                 )
             else:
                 generations = [
                     generator.generate(
                         messages=messages,
-                        temperature=effective_temperature,
+                        temperature=temperature,
                         max_new_tokens=max_new_tokens,
                     )
                     for _ in batch_sample_indices
@@ -451,23 +447,6 @@ def generate_traces_for_question(
             sample_idx = batch_sample_end + 1
 
     return traces
-
-
-def _resolve_prompt_temperature(
-    *,
-    prompt_id: str,
-    temperature: float | None,
-    prompt_temperatures: Mapping[str, float] | None,
-) -> float:
-    """Resolve the effective temperature for a prompt group."""
-
-    if prompt_temperatures is not None and prompt_id in prompt_temperatures:
-        return prompt_temperatures[prompt_id]
-    if temperature is None:
-        raise ValueError(
-            f"No generation temperature configured for prompt group '{prompt_id}'."
-        )
-    return temperature
 
 
 def _resolve_prompt_sample_count(

@@ -21,13 +21,12 @@ class ExperimentMetadataConfig:
 
 @dataclass
 class DatasetConfig:
-    """Dataset selection and subset controls."""
+    """Dataset selection and ranking controls."""
 
     name: str
     hf_config: str | None
     split: str
-    subset_size: int | None
-    subset_hash_seed: int
+    order_hash_seed: int
 
 
 @dataclass
@@ -47,7 +46,6 @@ class GenerationConfig:
     samples_per_group: int | None
     temperature: float | None
     icl_group_prompt_ids: list[str]
-    icl_group_temperatures: dict[str, float]
     icl_group_sample_counts: dict[str, int]
     max_new_tokens: int | None
 
@@ -167,8 +165,7 @@ class ExperimentConfig:
                 name=_require_string(dataset, "name"),
                 hf_config=_optional_string(dataset, "hf_config"),
                 split=_require_string(dataset, "split"),
-                subset_size=_optional_int(dataset, "subset_size"),
-                subset_hash_seed=_require_int(dataset, "subset_hash_seed"),
+                order_hash_seed=_require_int(dataset, "order_hash_seed"),
             ),
             model=ModelConfig(
                 name=_require_string(model, "name"),
@@ -180,7 +177,6 @@ class ExperimentConfig:
                 samples_per_group=_optional_int(generation, "samples_per_group"),
                 temperature=_optional_float(generation, "temperature"),
                 icl_group_prompt_ids=icl_group_prompt_ids,
-                icl_group_temperatures=_parse_icl_group_temperatures(generation),
                 icl_group_sample_counts=_parse_icl_group_sample_counts(generation),
                 max_new_tokens=_optional_int(generation, "max_new_tokens"),
             ),
@@ -372,16 +368,6 @@ def _optional_float(data: dict[str, Any], key: str) -> float | None:
     if value is None:
         return None
     return _coerce_float(value, key, allow_null=True)
-
-
-def _parse_icl_group_temperatures(data: dict[str, Any]) -> dict[str, float]:
-    raw_groups = _require_icl_groups_mapping(data)
-
-    temperatures: dict[str, float] = {}
-    for prompt_id, group_config in raw_groups.items():
-        if "temperature" in group_config:
-            temperatures[prompt_id] = _require_float(group_config, "temperature")
-    return temperatures
 
 
 def _parse_icl_group_prompt_ids(data: dict[str, Any]) -> list[str]:

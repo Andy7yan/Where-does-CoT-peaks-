@@ -1,6 +1,6 @@
 """Tests for runtime device selection across heterogeneous accelerators."""
 
-from src.runtime_env import (
+from src.common.runtime_env import (
     build_unsupported_cuda_message,
     get_supported_cuda_arches,
     is_device_capability_supported,

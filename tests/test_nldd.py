@@ -1,6 +1,6 @@
 """Tests for corruption-regeneration helpers."""
 
-from src.nldd import (
+from src.analysis_phase.nldd import (
     CorruptionSelectionConfig,
     build_corruption_records,
     sample_step_indices_for_trace,

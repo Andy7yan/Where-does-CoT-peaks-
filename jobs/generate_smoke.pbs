@@ -34,7 +34,8 @@ set -u
 : "${END_IDX:=1}"
 : "${SHARD_ID:=smoke_${START_IDX}_${END_IDX}}"
 : "${DEBUG:=1}"
-: "${SUBSET_PATH:=${SCRATCH}/data/eval_subset.jsonl}"
+: "${SOURCE:=huggingface}"
+: "${LOCAL_PATH:=}"
 
 export RUN_NAME
 RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
@@ -47,7 +48,8 @@ exec > >(tee -a "${LOG_PATH}") 2>&1
 echo "project_home=${PROJECT_HOME}"
 echo "scratch_root=${SCRATCH_ROOT}"
 echo "venv_dir=${VENV_DIR}"
-echo "subset_path=${SUBSET_PATH}"
+echo "source=${SOURCE}"
+echo "local_path=${LOCAL_PATH}"
 echo "run_dir=${RUN_DIR}"
 echo "log_path=${LOG_PATH}"
 echo "shard_id=${SHARD_ID}"
@@ -59,12 +61,17 @@ echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK:-0}"
 cmd=(
   python scripts/run_generation.py
   --config "${CONFIG_PATH}"
-  --subset-path "${SUBSET_PATH}"
   --output-dir "${RUN_DIR}"
+  --source "${SOURCE}"
+  --cache-dir "${HF_DATASETS_CACHE}"
   --shard-id "${SHARD_ID}"
   --start-idx "${START_IDX}"
   --end-idx "${END_IDX}"
 )
+
+if [[ -n "${LOCAL_PATH}" ]]; then
+  cmd+=(--local-path "${LOCAL_PATH}")
+fi
 
 if [[ "${DEBUG}" == "1" ]]; then
   cmd+=(--debug)

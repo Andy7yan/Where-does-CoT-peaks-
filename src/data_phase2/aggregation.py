@@ -10,14 +10,14 @@ import math
 from pathlib import Path
 from typing import Any
 
-from src.coarse_analysis import (
+from src.data_phase2.coarse_analysis import (
     DIFFICULTY_ORDER,
     build_accuracy_buckets_by_difficulty,
     build_coarse_analysis,
     build_question_metadata_v4,
     dedupe_traces_for_analysis,
 )
-from src.settings import ExperimentConfig, require_config_value
+from src.common.settings import ExperimentConfig, require_config_value
 
 
 @dataclass

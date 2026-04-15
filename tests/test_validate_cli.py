@@ -9,8 +9,8 @@ import subprocess
 import sys
 import uuid
 
-from src.nldd import summarize_corruption_records
-from src.reports import aggregate_stage1_outputs
+from src.analysis_phase.nldd import summarize_corruption_records
+from src.data_phase2.aggregation import aggregate_stage1_outputs
 
 
 def test_validate_cli_emits_json(monkeypatch) -> None:
@@ -96,11 +96,10 @@ def _build_valid_run(run_dir: Path) -> None:
                 "run_id": "peak-cot-stage1-gsm8k-platinum-llama31",
                 "max_new_tokens": 512,
                 "icl_group_sample_counts": {
-                    "icl_minimal": 3,
-                    "icl_short": 3,
-                    "icl_medium": 3,
-                    "icl_detailed": 3,
-                    "icl_verbose": 3,
+                    "icl_short": 5,
+                    "icl_medium": 5,
+                    "icl_detailed": 5,
+                    "icl_verbose": 5,
                 },
                 "schema_version": "stage1_trace_v2",
             },

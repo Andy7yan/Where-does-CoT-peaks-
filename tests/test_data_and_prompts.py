@@ -1,18 +1,19 @@
-"""Tests for GSM8K-Platinum data preparation and prompt template helpers."""
+"""Tests for GSM8K data preparation and prompt template helpers."""
 
 import json
 from pathlib import Path
 import shutil
 import uuid
 
-from src.gsm8k import (
+from src.data_phase1.gsm8k import (
+    build_ranked_questions,
     load_gsm8k_test,
     parse_gold_answer,
-    save_eval_subset,
     save_gsm8k_corpus,
-    select_eval_subset,
+    save_question_slice,
+    slice_question_records,
 )
-from src.prompting import (
+from src.data_phase1.prompting import (
     build_generation_messages,
     build_nldd_clean_prompt,
     build_nldd_corrupt_prompt,
@@ -21,10 +22,27 @@ from src.prompting import (
 
 
 def test_load_gsm8k_test_local_returns_50_records() -> None:
-    records = load_gsm8k_test(source="local", local_path="data/gsm8k_sample.json")
+    temp_dir = Path("tests") / f"_tmp_local_gsm8k_{uuid.uuid4().hex}"
+    local_path = temp_dir / "gsm8k_sample.json"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        local_path.write_text(
+            json.dumps(
+                [
+                    {"question": f"Question {index}", "answer": f"Work it out.\n#### {index}"}
+                    for index in range(50)
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
-    assert len(records) == 50
-    assert set(records[0]) == {"question", "answer"}
+        records = load_gsm8k_test(source="local", local_path=str(local_path))
+
+        assert len(records) == 50
+        assert set(records[0]) == {"question", "answer"}
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def test_parse_gold_answer_matches_sample_answers(sample_gsm8k: list[dict]) -> None:
@@ -33,29 +51,31 @@ def test_parse_gold_answer_matches_sample_answers(sample_gsm8k: list[dict]) -> N
         assert parse_gold_answer(item["answer"]) == expected
 
 
-def test_select_eval_subset_returns_expected_fields(sample_gsm8k: list[dict]) -> None:
-    subset = select_eval_subset(sample_gsm8k, n=10, hash_seed=42)
+def test_build_ranked_questions_returns_expected_fields(sample_gsm8k: list[dict]) -> None:
+    ranked_questions = build_ranked_questions(sample_gsm8k, hash_seed=42)
+    question_slice = slice_question_records(ranked_questions, start_idx=0, end_idx=10)
 
-    assert len(subset) == 10
-    for index, record in enumerate(subset):
+    assert len(question_slice) == 10
+    for index, record in enumerate(question_slice):
         assert record["question_id"] == f"gsm8k_platinum_{index:04d}"
         assert isinstance(record["question_text"], str)
         assert isinstance(record["gold_answer"], float)
 
 
-def test_select_eval_subset_is_deterministic(sample_gsm8k: list[dict]) -> None:
-    first = select_eval_subset(sample_gsm8k, n=10, hash_seed=42)
-    second = select_eval_subset(sample_gsm8k, n=10, hash_seed=42)
+def test_build_ranked_questions_is_deterministic(sample_gsm8k: list[dict]) -> None:
+    first = build_ranked_questions(sample_gsm8k, hash_seed=42)
+    second = build_ranked_questions(sample_gsm8k, hash_seed=42)
 
     assert list(first) == list(second)
 
 
-def test_save_eval_subset_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> None:
-    subset = select_eval_subset(sample_gsm8k, n=10, hash_seed=42)
+def test_save_question_slice_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> None:
+    ranked_questions = build_ranked_questions(sample_gsm8k, hash_seed=42)
+    question_slice = slice_question_records(ranked_questions, start_idx=0, end_idx=10)
 
-    temp_dir = Path("tests") / f"_tmp_save_eval_subset_{uuid.uuid4().hex}"
+    temp_dir = Path("tests") / f"_tmp_save_question_slice_{uuid.uuid4().hex}"
     try:
-        jsonl_path, meta_path = save_eval_subset(subset, str(temp_dir))
+        jsonl_path, meta_path = save_question_slice(question_slice, str(temp_dir))
         lines = Path(jsonl_path).read_text(encoding="utf-8").splitlines()
         parsed = [json.loads(line) for line in lines]
         metadata = json.loads(Path(meta_path).read_text(encoding="utf-8"))
@@ -71,11 +91,12 @@ def test_save_eval_subset_writes_parseable_jsonl(sample_gsm8k: list[dict]) -> No
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_select_eval_subset_supports_start_idx_with_global_question_ids(sample_gsm8k: list[dict]) -> None:
-    subset = select_eval_subset(sample_gsm8k, n=5, hash_seed=42, start_idx=10)
+def test_slice_question_records_supports_start_idx_with_global_question_ids(sample_gsm8k: list[dict]) -> None:
+    ranked_questions = build_ranked_questions(sample_gsm8k, hash_seed=42)
+    question_slice = slice_question_records(ranked_questions, start_idx=10, end_idx=15)
 
-    assert len(subset) == 5
-    assert [record["question_id"] for record in subset] == [
+    assert len(question_slice) == 5
+    assert [record["question_id"] for record in question_slice] == [
         "gsm8k_platinum_0010",
         "gsm8k_platinum_0011",
         "gsm8k_platinum_0012",
@@ -84,19 +105,20 @@ def test_select_eval_subset_supports_start_idx_with_global_question_ids(sample_g
     ]
 
 
-def test_save_eval_subset_supports_custom_filename(sample_gsm8k: list[dict]) -> None:
-    subset = select_eval_subset(sample_gsm8k, n=5, hash_seed=42)
+def test_save_question_slice_supports_custom_filename(sample_gsm8k: list[dict]) -> None:
+    ranked_questions = build_ranked_questions(sample_gsm8k, hash_seed=42)
+    question_slice = slice_question_records(ranked_questions, start_idx=0, end_idx=5)
 
-    temp_dir = Path("tests") / f"_tmp_save_eval_subset_named_{uuid.uuid4().hex}"
+    temp_dir = Path("tests") / f"_tmp_save_question_slice_named_{uuid.uuid4().hex}"
     try:
-        jsonl_path, meta_path = save_eval_subset(
-            subset,
+        jsonl_path, meta_path = save_question_slice(
+            question_slice,
             str(temp_dir),
-            jsonl_filename="eval_subset_full.jsonl",
+            jsonl_filename="gsm8k_full_ranked.jsonl",
         )
 
-        assert Path(jsonl_path).name == "eval_subset_full.jsonl"
-        assert Path(meta_path).name == "eval_subset_full_meta.json"
+        assert Path(jsonl_path).name == "gsm8k_full_ranked.jsonl"
+        assert Path(meta_path).name == "gsm8k_full_ranked_meta.json"
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -117,7 +139,6 @@ def test_save_gsm8k_corpus_writes_raw_jsonl(sample_gsm8k: list[dict]) -> None:
 
 def test_load_icl_prompt_templates_have_expected_schema() -> None:
     for prompt_id in (
-        "icl_minimal",
         "icl_short",
         "icl_medium",
         "icl_detailed",

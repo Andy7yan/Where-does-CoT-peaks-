@@ -3,7 +3,7 @@
 import random
 import re
 
-from src.reasoning import (
+from src.common.reasoning import (
     corrupt_arithmetic,
     corrupt_step_text_with_fallbacks,
     extract_answer,
@@ -11,7 +11,7 @@ from src.reasoning import (
     normalize_numeric,
     segment_steps,
 )
-from src.settings import ExperimentConfig, load_settings, require_config_value
+from src.common.settings import ExperimentConfig, load_settings, require_config_value
 
 
 def test_sample_question_fixture(sample_question: dict) -> None:
@@ -32,27 +32,18 @@ def test_config_can_be_loaded(monkeypatch) -> None:
     assert config.experiment.run_id == "peak-cot-stage1-gsm8k-platinum-llama31"
     assert config.model.hf_cache == "/tmp/hf-home/hub"
     assert config.answer_extraction.numeric_tolerance == 1e-3
-    assert config.output.base_dir == "/tmp/runs/test"
-    assert config.dataset.subset_size == 200
-    assert config.generation.num_icl_groups == 5
-    assert config.generation.samples_per_group == 3
-    assert config.generation.temperature == 0.7
+    assert config.dataset.order_hash_seed == 42
+    assert config.generation.num_icl_groups == 4
+    assert config.generation.samples_per_group == 5
+    assert config.generation.temperature == 0.6
     assert config.generation.icl_group_prompt_ids == [
-        "icl_minimal",
         "icl_short",
         "icl_medium",
         "icl_detailed",
         "icl_verbose",
     ]
-    assert config.generation.icl_group_temperatures == {}
-    assert config.generation.icl_group_sample_counts == {
-        "icl_minimal": 3,
-        "icl_short": 3,
-        "icl_medium": 3,
-        "icl_detailed": 5,
-        "icl_verbose": 5,
-    }
-    assert config.generation.max_new_tokens == 544
+    assert config.generation.icl_group_sample_counts == {}
+    assert config.generation.max_new_tokens == 1024
     assert config.pilot.num_questions == 50
     assert config.tas.layer == "middle"
     assert config.tas.plateau_threshold == 0.05
@@ -69,24 +60,22 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     settings = load_settings("configs/stage1.yaml")
 
     assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-platinum-llama31"
-    assert settings["dataset"]["subset_size"] == 200
-    assert settings["generation"]["num_icl_groups"] == 5
-    assert settings["generation"]["samples_per_group"] == 3
-    assert settings["generation"]["temperature"] == 0.7
+    assert settings["dataset"]["order_hash_seed"] == 42
+    assert settings["generation"]["num_icl_groups"] == 4
+    assert settings["generation"]["samples_per_group"] == 5
+    assert settings["generation"]["temperature"] == 0.6
     assert settings["generation"]["icl_groups"] == {
-        "icl_minimal": {"samples_per_group": 3},
-        "icl_short": {"samples_per_group": 3},
-        "icl_medium": {"samples_per_group": 3},
-        "icl_detailed": {"samples_per_group": 5},
-        "icl_verbose": {"samples_per_group": 5},
+        "icl_short": {},
+        "icl_medium": {},
+        "icl_detailed": {},
+        "icl_verbose": {},
     }
-    assert settings["generation"]["max_new_tokens"] == 544
+    assert settings["generation"]["max_new_tokens"] == 1024
     assert settings["tas"]["plateau_threshold"] == 0.05
     assert settings["analysis"]["min_bin_size"] == 5
     assert settings["analysis"]["num_full_analysis_questions"] == 25
     assert settings["analysis"]["num_spot_checks"] == 3
     assert settings["analysis"]["max_extraction_fail_rate"] == 0.05
-    assert settings["output"]["base_dir"] == "/tmp/runs/stage-a"
 
 
 def test_require_config_value_returns_value() -> None:

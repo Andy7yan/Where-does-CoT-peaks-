@@ -1,58 +1,79 @@
-prompt_id: "icl_short"
-version: 2
-system: |
-  You are a careful math tutor.
-  Solve the user's problem clearly and finish with a new line in the form "#### <number>".
+prompt_id: icl_short
+version: 1
+system: 'You are a careful math tutor.
+
+  Solve the user''s problem clearly and finish with a new line in the form "#### <number>".'
 few_shot:
-  - user: "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"
-    assistant: |
-      Janet has 16 - 3 - 4 = <<16-3-4=9>>9 eggs left to sell each day.
-      She sells them for 9 * 2 = <<9*2=18>>18 dollars.
-      #### 18
+- user: In a yard, the number of tanks is five times the number of trucks. If there are 20 trucks in the yard, calculate the total number of tanks and trucks in the yard.
+  assistant: 'There are 20 trucks in the yard.
 
-  - user: "A bus has a capacity of 200 people. When it departed Chengli city, it had 20 people. On the first stop, 40 people entered the bus. On the second station, 3/4 of the total number of people who entered the bus at the first station entered the bus. If the number of passengers on the bus doubled at the third station, calculate the total number of people required to fill the remaining spaces on the bus."
-    assistant: |
-      After the first stop, the bus has 20 + 40 = <<20+40=60>>60 people.
-      At the second stop, 3/4 * 40 = <<3/4*40=30>>30 more people enter, so there are 60 + 30 = <<60+30=90>>90 people.
-      The number doubles at the third stop, so the bus has 90 * 2 = <<90*2=180>>180 people and needs 200 - 180 = <<200-180=20>>20 more people.
-      #### 20
+    The number of tanks is 5 * 20 = 100.
 
-  - user: "The rug is 5 feet wider than the chair. The couch is 2 feet longer than twice the width of the rug. If the chair is 3 feet wide. How many feet long is the couch?"
-    assistant: |
-      The rug is 3 + 5 = <<3+5=8>>8 feet wide.
-      Twice the rug's width is 2 * 8 = <<2*8=16>>16 feet, so the couch is 16 + 2 = <<16+2=18>>18 feet long.
-      #### 18
+    So the total number of tanks and trucks is 100 + 20 = 120.
 
-  - user: "Jordan wanted to surprise her mom with a homemade birthday cake. From reading the instructions, she knew it would take 20 minutes to make the cake batter and 30 minutes to bake the cake. The cake would require 2 hours to cool and an additional 10 minutes to frost the cake. If she plans to make the cake all on the same day, what is the latest time of day that Jordan can start making the cake to be ready to serve it at 5:00 pm?"
-    assistant: |
-      The cake needs 20 + 30 + 120 + 10 = <<20+30+120+10=180>>180 minutes, which is 3 hours.
-      Three hours before 5:00 pm is 2:00 pm.
-      #### 2
+    #### 120'
+- user: A fruit basket consists of 4 bananas, 3 apples, 24 strawberries, 2 avocados, and a bunch of grapes. One banana costs $1. An apple costs $2. 12 strawberries cost $4. An avocado costs $3, and half a bunch of grapes costs $2. What is the total cost of the fruit basket?
+  assistant: 'The bananas and apples cost 4 * 1 + 3 * 2 = 10 dollars.
 
-  - user: "A football team has 105 members. There are twice as many players on the offense as there is on the defense. There is half the number of players on the special teams as there is on the defense. How many players are on the defense?"
-    assistant: |
-      Let the number of defense players be d. Then the offense has 2d players and the special teams have d / 2 players.
-      So 2d + d + d / 2 = 105, which means 3.5d = 105 and d = <<105/3.5=30>>30.
-      #### 30
+    The strawberries cost 24 / 12 * 4 = 8 dollars.
 
-  - user: "Maria invited 4 of her friends over for a water balloon fight in the backyard. At the start of the game, Maria gave each of her friends 2 water balloons. She had one water balloon for herself. Then her mom came out and gave each person 3 more balloons. How many total balloons did the girls have?"
-    assistant: |
-      Maria and her 4 friends make 5 girls total.
-      They start with 4 * 2 + 1 = <<4*2+1=9>>9 balloons, and then get 5 * 3 = <<5*3=15>>15 more balloons.
-      Altogether they have 9 + 15 = <<9+15=24>>24 balloons.
-      #### 24
+    The avocados and grapes cost 2 * 3 + 2 * 2 = 10 dollars.
 
-  - user: "A nurses' station orders bandages in bulk packs of 50. On the first day, the nurses used 38 bandages and ordered one bulk pack of bandages. On the second day, they used ten fewer bandages. On the third day, they ordered two bulk packs of bandages and only used half a pack. They had 78 bandages left at the end of the third day. How many bandages did they start with on the first day?"
-    assistant: |
-      The nurses used 38 bandages on the first day, 38 - 10 = <<38-10=28>>28 on the second day, and 50 / 2 = <<50/2=25>>25 on the third day.
-      They ordered 50 + 100 = <<50+100=150>>150 new bandages and used 38 + 28 + 25 = <<38+28+25=91>>91 bandages total.
-      So the starting amount was 78 - 150 + 91 = <<78-150+91=19>>19 bandages.
-      #### 19
+    So the whole basket costs 10 + 8 + 10 = 28 dollars.
 
-  - user: "The girls are trying to raise money for a carnival. Kim raises $320 more than Alexandra, who raises $430, and Maryam raises $400 more than Sarah, who raises $300. How much money, in dollars, did they all raise in total?"
-    assistant: |
-      Kim raises 430 + 320 = <<430+320=750>>750 dollars, and Maryam raises 300 + 400 = <<300+400=700>>700 dollars.
-      Together they raise 430 + 750 + 300 + 700 = <<430+750+300+700=2180>>2180 dollars.
-      #### 2180
+    #### 28'
+- user: Carl is figuring out how much he'll need to spend on gas for his upcoming road trip to the Grand Canyon. His car gets 30 miles per gallon in cities and 40 miles per gallon on the highway. The distance from his house to the Grand Canyon, one way, is 60 city miles and 200 highway miles. If gas costs $3.00 per gallon, how much will Carl need to spend?
+  assistant: 'For one way, Carl uses 60 / 30 + 200 / 40 = 2 + 5 = 7 gallons.
 
-user_template: "{question}"
+    Since the trip is there and back, he needs 7 * 2 = 14 gallons.
+
+    At 3 dollars per gallon, the cost is 14 * 3 = 42 dollars.
+
+    #### 42'
+- user: You can lower the price by 20% if you buy more than fifteen units of iPhone cases. If you pay $500 to buy 18 units, what is the original price?
+  assistant: 'A 20% discount means the paid price is 80% of the original price.
+
+    So 0.8 * original = 500.
+
+    That gives original = 500 / 0.8 = 625.
+
+    #### 625'
+- user: The first tree grows 1 meter/day, the second grows the same amount in half the time, the third grows 2 meters/day, and the fourth tree grows a meter more than the third each day. How many meters did the trees grow in total in 4 days?
+  assistant: 'In 4 days, the 1st tree grows 1 * 4 = 4 meters, and the 2nd tree grows 2 * 4 = 8 meters.
+
+    In 4 days, the 3rd tree grows 2 * 4 = 8 meters, and the 4th tree grows 3 * 4 = 12 meters.
+
+    The total growth is 4 + 8 + 8 + 12 = 32 meters.
+
+    So the trees grow 32 meters in total.
+
+    #### 32'
+- user: 'Big Dig Mining Company mines three different types of ore: copper, iron, and nickel. Across all their mines, 10% of their output is nickel, 60% is iron, and the rest is copper. They mine 720 tons of nickel a day. How many tons of copper does Big Dig Mining Company mine daily?'
+  assistant: 'Nickel is 10% of the total, so the total output is 720 / 0.1 = 7200 tons.
+
+    Copper is 100% - 10% - 60% = 30% of the total.
+
+    So 30% of the total is the copper output.
+
+    That gives 0.3 * 7200 = 2160 tons of copper.
+
+    #### 2160'
+- user: Colston knows that his teacher loves drinking coffee and one day wants to see how much she drinks each week. He sees that she has a 20-ounce thermos and when she makes her coffee she pours a 1/2 cup of milk in, and then fills the coffee to the top. She does this twice a day. After the five-day school week, he decides to tell her, and when she hears how much coffee she drinks, she decides to drink 1/4 of what she normally drinks. How many ounces of coffee does she now drink a week?
+  assistant: 'Since 1 cup = 8 ounces, 1/2 cup of milk is 4 ounces.
+
+    Each 20-ounce thermos has 20 - 4 = 16 ounces of coffee.
+
+    She normally drinks 16 * 2 * 5 = 160 ounces of coffee per week.
+
+    Now she drinks 160 / 4 = 40 ounces of coffee per week.
+
+    #### 40'
+- user: Under optimal wind conditions, the use of two sails brings the ship to the speed of 50 knots, whereas under the same conditions, the use of one sail brings her ship to the speed of 25 knots. A knot is a nautical term for speed equal to 1 nautical mile per hour, and one nautical mile equals 1.15 land miles. If she travels in her sailboat under optimal wind conditions for 4 hours with one sail and then for another 4 hours with two sails, what is the total distance, in land miles, that she will travel?
+  assistant: 'With one sail, she travels 25 * 4 = 100 nautical miles, and with two sails, she travels 50 * 4 = 200 nautical miles.
+
+    The full trip is 100 + 200 = 300 nautical miles.
+
+    Then 300 * 1.15 = 345 land miles.
+
+    #### 345'
+user_template: '{question}'

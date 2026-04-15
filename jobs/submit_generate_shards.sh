@@ -16,10 +16,12 @@ fi
 : "${RUN_NAME:=generate-$(date +%m%d_%H%M%S)}"
 : "${START_IDX:=0}"
 : "${END_IDX:=}"
-: "${QUESTIONS_PER_SHARD:=160}"
-: "${SUBSET_PATH:=${SCRATCH:-${PROJECT_ROOT}}/data/eval_subset_full.jsonl}"
+: "${QUESTIONS_PER_SHARD:=300}"
 : "${JOB_SCRIPT:=jobs/generate.pbs}"
 : "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${SOURCE:=huggingface}"
+: "${LOCAL_PATH:=}"
+: "${CACHE_DIR:=${HF_DATASETS_CACHE:-}}"
 
 if (( START_IDX < 0 )); then
   echo "START_IDX must be non-negative"
@@ -31,20 +33,31 @@ if (( QUESTIONS_PER_SHARD <= 0 )); then
   exit 1
 fi
 
-if [[ ! -f "${SUBSET_PATH}" ]]; then
-  project_subset_path="${PROJECT_ROOT}/data/eval_subset_full.jsonl"
-  if [[ -f "${project_subset_path}" ]]; then
-    SUBSET_PATH="${project_subset_path}"
-  else
-    echo "subset path not found: ${SUBSET_PATH}"
-    echo "also checked project path: ${project_subset_path}"
-    exit 1
-  fi
+python scripts/check_generation_preflight.py --config "${CONFIG_PATH}"
+
+dataset_size_cmd=(
+  python
+  scripts/print_dataset_size.py
+  --config "${CONFIG_PATH}"
+  --source "${SOURCE}"
+)
+
+if [[ -n "${CACHE_DIR}" ]]; then
+  dataset_size_cmd+=(--cache-dir "${CACHE_DIR}")
 fi
 
-subset_size=$(wc -l < "${SUBSET_PATH}")
+if [[ -n "${LOCAL_PATH}" ]]; then
+  dataset_size_cmd+=(--local-path "${LOCAL_PATH}")
+fi
+
+dataset_size="$("${dataset_size_cmd[@]}")"
+if ! [[ "${dataset_size}" =~ ^[0-9]+$ ]]; then
+  echo "failed to resolve dataset size: ${dataset_size}"
+  exit 1
+fi
+
 if [[ -z "${END_IDX}" ]]; then
-  END_IDX=${subset_size}
+  END_IDX=${dataset_size}
 fi
 
 if (( END_IDX <= START_IDX )); then
@@ -52,8 +65,8 @@ if (( END_IDX <= START_IDX )); then
   exit 1
 fi
 
-if (( END_IDX > subset_size )); then
-  echo "END_IDX=${END_IDX} exceeds subset size ${subset_size}"
+if (( END_IDX > dataset_size )); then
+  echo "END_IDX=${END_IDX} exceeds dataset size ${dataset_size}"
   exit 1
 fi
 
@@ -62,8 +75,10 @@ num_shards=$(( (total_questions + QUESTIONS_PER_SHARD - 1) / QUESTIONS_PER_SHARD
 start_idx=${START_IDX}
 
 echo "run_name=${RUN_NAME}"
-echo "subset_path=${SUBSET_PATH}"
 echo "config_path=${CONFIG_PATH}"
+echo "source=${SOURCE}"
+echo "local_path=${LOCAL_PATH}"
+echo "dataset_size=${dataset_size}"
 echo "start_idx=${START_IDX}"
 echo "end_idx=${END_IDX}"
 echo "questions_per_shard=${QUESTIONS_PER_SHARD}"
@@ -79,7 +94,7 @@ for (( shard_index=0; shard_index<num_shards; shard_index++ )); do
   shard_id=$(printf 'q%04d_%04d' "${start_idx}" "${end_idx}")
 
   echo "submitting shard=$(( shard_index + 1 ))/${num_shards} start=${start_idx} end=${end_idx} shard_id=${shard_id}"
-  qsub -v RUN_NAME="${RUN_NAME}",CONFIG_PATH="${CONFIG_PATH}",SUBSET_PATH="${SUBSET_PATH}",START_IDX="${start_idx}",END_IDX="${end_idx}",SHARD_ID="${shard_id}" "${JOB_SCRIPT}"
+  qsub -v RUN_NAME="${RUN_NAME}",CONFIG_PATH="${CONFIG_PATH}",SOURCE="${SOURCE}",LOCAL_PATH="${LOCAL_PATH}",START_IDX="${start_idx}",END_IDX="${end_idx}",SHARD_ID="${shard_id}" "${JOB_SCRIPT}"
 
   start_idx=${end_idx}
 done

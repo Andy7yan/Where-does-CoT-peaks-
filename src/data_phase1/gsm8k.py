@@ -1,4 +1,4 @@
-"""Dataset loading and subset-selection utilities for GSM8K-family benchmarks."""
+"""Dataset loading and ranked question-record utilities for GSM8K-family benchmarks."""
 
 from datetime import datetime, timezone
 import hashlib
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.reasoning import extract_answer
+from src.common.reasoning import extract_answer
 
 
 DEFAULT_DATASET_NAME = "madrylab/gsm8k-platinum"
@@ -15,8 +15,8 @@ DEFAULT_DATASET_SPLIT = "test"
 DEFAULT_QUESTION_ID_PREFIX = "gsm8k_platinum"
 
 
-class EvalSubset(list[dict[str, Any]]):
-    """List-like container that carries subset metadata for serialization."""
+class QuestionSlice(list[dict[str, Any]]):
+    """List-like container that carries ranked-question metadata for serialization."""
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ def load_gsm8k_test(
     dataset_config: str | None = DEFAULT_DATASET_CONFIG,
     split: str = DEFAULT_DATASET_SPLIT,
 ) -> list[dict]:
-    """Load GSM8K-Platinum or a compatible local JSON file."""
+    """Load GSM8K-Platinum or a compatible local JSON/JSONL file."""
 
     if source == "local":
         if local_path is None:
@@ -71,16 +71,15 @@ def parse_gold_answer(raw_answer: str) -> float:
     return result.value
 
 
-def select_eval_subset(
+def build_ranked_questions(
     questions: list[dict],
-    n: int | None = 200,
+    *,
     hash_seed: int = 42,
-    start_idx: int = 0,
     dataset_name: str = DEFAULT_DATASET_NAME,
     split: str = DEFAULT_DATASET_SPLIT,
     question_id_prefix: str | None = None,
-) -> list[dict]:
-    """Select a deterministic evaluation subset using salted SHA-256 sorting."""
+) -> QuestionSlice:
+    """Build the full ranked question table used by formal generation and pilot slicing."""
 
     effective_question_id_prefix = (
         DEFAULT_QUESTION_ID_PREFIX
@@ -97,19 +96,10 @@ def select_eval_subset(
         ranked_records.append((rank, record))
 
     ranked_records.sort(key=lambda item: item[0])
-    if start_idx < 0:
-        raise ValueError("start_idx must be non-negative.")
-    if start_idx > len(ranked_records):
-        raise ValueError(
-            f"start_idx {start_idx} exceeds the ranked corpus size {len(ranked_records)}."
-        )
-    end_idx = len(ranked_records) if n is None else min(start_idx + n, len(ranked_records))
-    subset_records: list[dict[str, Any]] = []
-    for global_index, (_, record) in enumerate(
-        ranked_records[start_idx:end_idx],
-        start=start_idx,
-    ):
-        subset_records.append(
+
+    output_records: list[dict[str, Any]] = []
+    for global_index, (_, record) in enumerate(ranked_records):
+        output_records.append(
             {
                 "question_id": f"{effective_question_id_prefix}_{global_index:04d}",
                 "question_text": _require_text_field(record, "question"),
@@ -117,24 +107,58 @@ def select_eval_subset(
             }
         )
 
-    return EvalSubset(
-        subset_records,
+    return QuestionSlice(
+        output_records,
         hash_seed=hash_seed,
-        start_idx=start_idx,
+        start_idx=0,
         total_questions=len(ranked_records),
         dataset=dataset_name,
         split=split,
     )
 
 
-def save_eval_subset(
-    subset: list[dict],
+def slice_question_records(
+    question_records: list[dict[str, Any]],
+    *,
+    start_idx: int = 0,
+    end_idx: int | None = None,
+) -> QuestionSlice:
+    """Take a deterministic slice from the ranked full question table."""
+
+    total_questions = len(question_records)
+    if start_idx < 0:
+        raise ValueError("start_idx must be non-negative.")
+    if start_idx > total_questions:
+        raise ValueError(
+            f"start_idx {start_idx} exceeds the ranked corpus size {total_questions}."
+        )
+    effective_end_idx = total_questions if end_idx is None else end_idx
+    if effective_end_idx < start_idx:
+        raise ValueError("end_idx must be greater than or equal to start_idx.")
+    if effective_end_idx > total_questions:
+        raise ValueError(
+            f"end_idx {effective_end_idx} exceeds the ranked corpus size {total_questions}."
+        )
+
+    source_slice = question_records[start_idx:effective_end_idx]
+    return QuestionSlice(
+        list(source_slice),
+        hash_seed=getattr(question_records, "hash_seed", 42),
+        start_idx=start_idx,
+        total_questions=getattr(question_records, "total_questions", total_questions),
+        dataset=getattr(question_records, "dataset", DEFAULT_DATASET_NAME),
+        split=getattr(question_records, "split", DEFAULT_DATASET_SPLIT),
+    )
+
+
+def save_question_slice(
+    question_records: list[dict[str, Any]],
     output_dir: str,
     *,
-    jsonl_filename: str = "eval_subset.jsonl",
+    jsonl_filename: str = "gsm8k_ranked_questions.jsonl",
     meta_filename: str | None = None,
 ) -> tuple[str, str]:
-    """Write the evaluation subset JSONL and metadata JSON files."""
+    """Write ranked question records and metadata JSON files."""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -146,16 +170,16 @@ def save_eval_subset(
     meta_path = output_path / meta_filename
 
     with jsonl_path.open("w", encoding="utf-8") as handle:
-        for record in subset:
+        for record in question_records:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     metadata = {
-        "n": len(subset),
-        "hash_seed": getattr(subset, "hash_seed", None),
-        "start_idx": getattr(subset, "start_idx", 0),
-        "total_questions": getattr(subset, "total_questions", None),
-        "dataset": getattr(subset, "dataset", DEFAULT_DATASET_NAME),
-        "split": getattr(subset, "split", DEFAULT_DATASET_SPLIT),
+        "n": len(question_records),
+        "hash_seed": getattr(question_records, "hash_seed", None),
+        "start_idx": getattr(question_records, "start_idx", 0),
+        "total_questions": getattr(question_records, "total_questions", None),
+        "dataset": getattr(question_records, "dataset", DEFAULT_DATASET_NAME),
+        "split": getattr(question_records, "split", DEFAULT_DATASET_SPLIT),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     meta_path.write_text(
@@ -189,6 +213,15 @@ def _load_local_records(local_path: str) -> list[dict[str, str]]:
     path = Path(local_path)
     if not path.exists():
         raise FileNotFoundError(f"Local dataset file not found: {path}")
+
+    if path.suffix.lower() == ".jsonl":
+        rows: list[dict[str, str]] = []
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if stripped:
+                    rows.append(_normalize_record(json.loads(stripped)))
+        return rows
 
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, list):

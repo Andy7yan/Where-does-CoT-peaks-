@@ -13,17 +13,17 @@ import shutil
 import time
 from typing import Any
 
-from src.canonical_artifacts import resolve_corruption_artifact_path
-from src.coarse_analysis import (
+from src.data_phase2.corruption_layout import resolve_corruption_artifact_path
+from src.data_phase2.coarse_analysis import (
     DIFFICULTY_ORDER,
     build_accuracy_buckets_by_difficulty,
     build_coarse_analysis,
     build_question_metadata_v4,
     dedupe_traces_for_analysis,
 )
-from src.nldd import summarize_corruption_records
-from src.reports import build_accuracy_buckets, load_stage1_traces, select_l_star
-from src.settings import ExperimentConfig, require_config_value
+from src.analysis_phase.nldd import summarize_corruption_records
+from src.data_phase2.aggregation import build_accuracy_buckets, load_stage1_traces, select_l_star
+from src.common.settings import ExperimentConfig, require_config_value
 
 
 CANONICAL_ROOT_ITEMS = {
@@ -611,13 +611,6 @@ def _build_run_meta_notes(
     notes = [
         "当前 `run_meta.json` 被视为生成时配置快照，analysis 应以该文件解释正式 run 的生成参数。",
     ]
-    if config.dataset.subset_size is not None:
-        actual_questions = len({str(trace["question_id"]) for trace in traces})
-        if actual_questions != config.dataset.subset_size:
-            notes.append(
-                f"当前 config 的 `dataset.subset_size={config.dataset.subset_size}`，"
-                f"但 canonical traces 实际覆盖 `{actual_questions}` 题。"
-            )
 
     configured_max_new_tokens = config.generation.max_new_tokens
     run_meta_max_new_tokens = run_meta.get("max_new_tokens")

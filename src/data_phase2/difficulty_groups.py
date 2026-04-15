@@ -7,8 +7,12 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-from src.coarse_analysis import DIFFICULTY_ORDER, dedupe_traces_for_analysis, interpolated_quantile
-from src.reports import load_stage1_traces
+from src.data_phase2.coarse_analysis import (
+    DIFFICULTY_ORDER,
+    dedupe_traces_for_analysis,
+    interpolated_quantile,
+)
+from src.data_phase2.aggregation import load_stage1_traces
 
 
 LENGTH_GROUP_ORDER = ("short", "medium", "detailed", "verbose")

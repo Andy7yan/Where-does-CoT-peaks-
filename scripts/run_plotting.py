@@ -1,6 +1,6 @@
 """Placeholder CLI for plotting."""
 
-from src.reports import plot_stage1_figures
+from src.data_phase2.aggregation import plot_stage1_figures
 
 
 def main() -> None:

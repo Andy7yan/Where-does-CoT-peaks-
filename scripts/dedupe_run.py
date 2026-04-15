@@ -12,9 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.canonical_artifacts import resolve_corruption_artifact_dir, resolve_corruption_artifact_path
-from src.nldd import summarize_corruption_records
-from src.reports import (
+from src.data_phase2.corruption_layout import (
+    resolve_corruption_artifact_dir,
+    resolve_corruption_artifact_path,
+)
+from src.analysis_phase.nldd import summarize_corruption_records
+from src.data_phase2.aggregation import (
     aggregate_stage1_outputs,
     discover_stage1_shard_paths,
     ensure_root_run_metadata,

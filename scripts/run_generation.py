@@ -12,35 +12,52 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.generation import (
+from src.data_phase1.generation import (
     TRACE_SCHEMA_VERSION,
     LLMGenerator,
     append_traces_to_jsonl,
     generate_traces_for_question,
-    load_existing_trace_ids,
     validate_output_dir_schema,
     write_run_metadata,
 )
-from src.prompting import load_prompt_template
-from src.settings import ExperimentConfig
+from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test, slice_question_records
+from src.data_phase1.prompting import load_prompt_template
+from src.common.settings import ExperimentConfig
 
 
 def main() -> None:
-    """Run Stage 1 trace generation over an evaluation subset."""
+    """Run Stage 1 trace generation over the full ranked GSM8K test split."""
 
     args = parse_args()
     if args.debug:
         os.environ["PEAK_COT_DEBUG"] = "1"
     config = ExperimentConfig.from_yaml(args.config)
-    subset = load_subset(args.subset_path)
-    selected_subset = subset[args.start_idx : args.end_idx]
+    records = load_gsm8k_test(
+        source=args.source,
+        local_path=args.local_path,
+        cache_dir=args.cache_dir,
+        dataset_name=config.dataset.name,
+        dataset_config=config.dataset.hf_config,
+        split=config.dataset.split,
+    )
+    ranked_questions = build_ranked_questions(
+        records,
+        hash_seed=config.dataset.order_hash_seed,
+        dataset_name=config.dataset.name,
+        split=config.dataset.split,
+    )
+    selected_questions = slice_question_records(
+        ranked_questions,
+        start_idx=args.start_idx,
+        end_idx=args.end_idx,
+    )
 
     root_output_dir = Path(args.output_dir)
     root_output_dir.mkdir(parents=True, exist_ok=True)
     shard_id = args.shard_id or build_default_shard_id(
         start_idx=args.start_idx,
         end_idx=args.end_idx,
-        subset_size=len(subset),
+        total_questions=len(ranked_questions),
     )
     shard_dir = root_output_dir / "shards" / shard_id
     shard_dir.mkdir(parents=True, exist_ok=True)
@@ -66,11 +83,6 @@ def main() -> None:
         "generation.samples_per_group",
         config.generation.samples_per_group,
     )
-    prompt_temperatures = resolve_prompt_temperatures(
-        prompt_ids=[template["prompt_id"] for template in prompt_templates],
-        default_temperature=config.generation.temperature,
-        configured_group_temperatures=config.generation.icl_group_temperatures,
-    )
     prompt_sample_counts = resolve_prompt_sample_counts(
         prompt_ids=[template["prompt_id"] for template in prompt_templates],
         default_samples_per_group=samples_per_group,
@@ -86,7 +98,6 @@ def main() -> None:
         config=config,
         prompt_ids=prompt_ids,
         temperature=temperature,
-        icl_group_temperatures=prompt_temperatures,
         icl_group_sample_counts=prompt_sample_counts,
         max_new_tokens=max_new_tokens,
         num_icl_groups=num_icl_groups,
@@ -98,12 +109,9 @@ def main() -> None:
         shard_id=shard_id,
         start_idx=args.start_idx,
         end_idx=args.end_idx,
-        selected_questions=len(selected_subset),
+        selected_questions=len(selected_questions),
     )
-    existing_trace_ids = load_existing_trace_ids(str(output_path))
-
     written_traces = 0
-    skipped_traces = 0
     extraction_failed_count = 0
 
     print(
@@ -111,7 +119,8 @@ def main() -> None:
         {
             "output_dir": str(root_output_dir),
             "shard_id": shard_id,
-            "selected_questions": len(selected_subset),
+            "selected_questions": len(selected_questions),
+            "total_questions": len(ranked_questions),
             "prompt_ids": prompt_ids,
             "samples_per_group": samples_per_group,
             "icl_group_sample_counts": prompt_sample_counts,
@@ -124,12 +133,13 @@ def main() -> None:
             "run_config_details:",
             {
                 "shard_dir": str(shard_dir),
-                "icl_group_temperatures": prompt_temperatures,
+                "temperature": temperature,
+                "icl_group_sample_counts": prompt_sample_counts,
             },
         )
 
-    total_questions = len(selected_subset)
-    for index, record in enumerate(selected_subset, start=1):
+    total_questions = len(selected_questions)
+    for index, record in enumerate(selected_questions, start=1):
         question_start = time.perf_counter()
         traces = generate_traces_for_question(
             generator=generator,
@@ -140,19 +150,13 @@ def main() -> None:
             samples_per_group=samples_per_group,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
-            prompt_temperatures=prompt_temperatures,
             prompt_sample_counts=prompt_sample_counts,
         )
 
-        new_traces = [trace for trace in traces if trace["trace_id"] not in existing_trace_ids]
-        if new_traces:
-            append_traces_to_jsonl(new_traces, str(output_path))
-            for trace in new_traces:
-                existing_trace_ids.add(trace["trace_id"])
+        append_traces_to_jsonl(traces, str(output_path))
 
-        written_traces += len(new_traces)
-        skipped_traces += len(traces) - len(new_traces)
-        extraction_failed_count += sum(1 for trace in new_traces if trace["extraction_failed"])
+        written_traces += len(traces)
+        extraction_failed_count += sum(1 for trace in traces if trace["extraction_failed"])
 
         should_log_question = (
             os.getenv("PEAK_COT_DEBUG") == "1"
@@ -205,7 +209,6 @@ def main() -> None:
         )
 
     print(f"total_written_traces: {written_traces}")
-    print(f"total_skipped_existing_traces: {skipped_traces}")
     print(f"extraction_failed_traces: {final_extraction_failed_count}")
     print(f"total_traces: {total_traces}")
     print(f"extraction_failed_rate: {extraction_failed_rate:.2%}")
@@ -219,8 +222,23 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Path to the experiment config YAML.")
-    parser.add_argument("--subset-path", required=True, help="Path to eval_subset.jsonl.")
     parser.add_argument("--output-dir", required=True, help="Directory for generated run outputs.")
+    parser.add_argument(
+        "--source",
+        choices=("huggingface", "local"),
+        default="huggingface",
+        help="Where to load the configured dataset from.",
+    )
+    parser.add_argument(
+        "--local-path",
+        default=None,
+        help="Path to a local GSM8K-compatible JSON or JSONL file when using --source local.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional datasets cache directory for Hugging Face loading.",
+    )
     parser.add_argument(
         "--shard-id",
         default=None,
@@ -274,7 +292,6 @@ def build_run_metadata(
     config: ExperimentConfig,
     prompt_ids: list[str],
     temperature: float | None,
-    icl_group_temperatures: dict[str, float],
     icl_group_sample_counts: dict[str, int],
     max_new_tokens: int,
     num_icl_groups: int,
@@ -287,7 +304,6 @@ def build_run_metadata(
         "model_name": config.model.name,
         "dataset": f"{config.dataset.name}:{config.dataset.split}",
         "temperature": temperature,
-        "icl_group_temperatures": icl_group_temperatures,
         "icl_group_sample_counts": icl_group_sample_counts,
         "max_new_tokens": max_new_tokens,
         "num_icl_groups": num_icl_groups,
@@ -299,10 +315,10 @@ def build_run_metadata(
     }
 
 
-def build_default_shard_id(*, start_idx: int, end_idx: int | None, subset_size: int) -> str:
+def build_default_shard_id(*, start_idx: int, end_idx: int | None, total_questions: int) -> str:
     """Build a stable shard label from the selected question range."""
 
-    effective_end = subset_size if end_idx is None else end_idx
+    effective_end = total_questions if end_idx is None else end_idx
     return f"q{start_idx:04d}_{effective_end:04d}"
 
 
@@ -330,18 +346,6 @@ def write_shard_metadata(
     return str(shard_meta_path)
 
 
-def load_subset(subset_path: str) -> list[dict]:
-    """Load eval_subset JSONL records."""
-
-    records: list[dict] = []
-    with Path(subset_path).open("r", encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if stripped:
-                records.append(json.loads(stripped))
-    return records
-
-
 def summarize_trace_file(trace_path: Path) -> tuple[int, int]:
     """Count final traces and extraction failures from the written trace file."""
 
@@ -365,34 +369,6 @@ def require_config_value(field_path: str, value: Any) -> Any:
     if value is None:
         raise ValueError(f"{field_path} is required before Stage 1 generation can run.")
     return value
-
-
-def resolve_prompt_temperatures(
-    *,
-    prompt_ids: list[str],
-    default_temperature: float | None,
-    configured_group_temperatures: dict[str, float],
-) -> dict[str, float]:
-    """Resolve the effective temperature for each discovered prompt group."""
-
-    resolved: dict[str, float] = {}
-    missing_prompt_ids: list[str] = []
-    for prompt_id in prompt_ids:
-        if prompt_id in configured_group_temperatures:
-            resolved[prompt_id] = configured_group_temperatures[prompt_id]
-        elif default_temperature is not None:
-            resolved[prompt_id] = default_temperature
-        else:
-            missing_prompt_ids.append(prompt_id)
-
-    if missing_prompt_ids:
-        missing = ", ".join(sorted(missing_prompt_ids))
-        raise ValueError(
-            "Missing temperatures for prompt groups with no default fallback: "
-            f"{missing}"
-        )
-
-    return resolved
 
 
 def resolve_prompt_sample_counts(

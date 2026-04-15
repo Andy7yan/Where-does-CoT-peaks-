@@ -1,4 +1,4 @@
-"""NLDD helpers for corruption regeneration, v4 trace selection, and D2 scoring."""
+﻿"""NLDD helpers for corruption regeneration, v4 trace selection, and D2 scoring."""
 
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ from pathlib import Path
 import random
 from typing import Any, Callable, Iterable, Sequence
 
-from src.coarse_analysis import DIFFICULTY_ORDER, assign_length_bin, dedupe_traces_for_analysis
-from src.prompting import build_nldd_clean_prompt, build_nldd_corrupt_prompt
-from src.reasoning import (
+from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER, assign_length_bin, dedupe_traces_for_analysis
+from src.data_phase1.prompting import build_nldd_clean_prompt, build_nldd_corrupt_prompt
+from src.common.reasoning import (
     CorruptionResult,
     DEFAULT_FLOAT_PERTURBATION_RANGE,
     corrupt_step_text_with_fallbacks,
 )
-from src.reports import discover_stage1_shard_paths, load_stage1_traces
+from src.data_phase2.aggregation import discover_stage1_shard_paths, load_stage1_traces
 
 
 TRACE_SELECTION_REQUIRED_COLUMNS = (

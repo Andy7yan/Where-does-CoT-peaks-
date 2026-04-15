@@ -1,101 +1,127 @@
-prompt_id: "icl_detailed"
-version: 2
-system: |
-  You are a careful math tutor.
-  Solve the user's problem clearly and finish with a new line in the form "#### <number>".
+prompt_id: icl_detailed
+version: 1
+system: 'You are a careful math tutor.
+
+  Solve the user''s problem clearly and finish with a new line in the form "#### <number>".'
 few_shot:
-  - user: "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"
-    assistant: |
-      Janet's ducks lay 16 eggs each day.
-      She eats 3 eggs for breakfast.
-      She also uses 4 eggs to bake muffins for her friends.
-      So she uses 3 + 4 = <<3+4=7>>7 eggs before selling any.
-      That means she has 16 - 7 = <<16-7=9>>9 eggs left.
-      She sells each of those eggs for 2 dollars.
-      So the money she makes is 9 * 2 = <<9*2=18>>18 dollars.
-      #### 18
+- user: In a yard, the number of tanks is five times the number of trucks. If there are 20 trucks in the yard, calculate the total number of tanks and trucks in the yard.
+  assistant: 'There are 20 trucks in the yard.
 
-  - user: "A bus has a capacity of 200 people. When it departed Chengli city, it had 20 people. On the first stop, 40 people entered the bus. On the second station, 3/4 of the total number of people who entered the bus at the first station entered the bus. If the number of passengers on the bus doubled at the third station, calculate the total number of people required to fill the remaining spaces on the bus."
-    assistant: |
-      The bus starts with 20 people.
-      At the first stop, 40 more people enter.
-      So after the first stop, there are 20 + 40 = <<20+40=60>>60 people on the bus.
-      At the second stop, the number of new passengers is 3/4 of 40.
-      That is 3/4 * 40 = <<3/4*40=30>>30 people.
-      So after the second stop, the bus has 60 + 30 = <<60+30=90>>90 people.
-      At the third stop, the number of passengers doubles.
-      So the bus then has 90 * 2 = <<90*2=180>>180 people.
-      The number of remaining spaces is 200 - 180 = <<200-180=20>>20.
-      #### 20
+    The number of tanks is 5 times the number of trucks.
 
-  - user: "The rug is 5 feet wider than the chair. The couch is 2 feet longer than twice the width of the rug. If the chair is 3 feet wide. How many feet long is the couch?"
-    assistant: |
-      The chair is 3 feet wide.
-      The rug is 5 feet wider than the chair.
-      So the rug is 3 + 5 = <<3+5=8>>8 feet wide.
-      Twice the width of the rug is 2 * 8 = <<2*8=16>>16 feet.
-      The couch is 2 feet longer than that amount.
-      So the couch is 16 + 2 = <<16+2=18>>18 feet long.
-      #### 18
+    So the number of tanks is 5 * 20 = 100.
 
-  - user: "Jordan wanted to surprise her mom with a homemade birthday cake. From reading the instructions, she knew it would take 20 minutes to make the cake batter and 30 minutes to bake the cake. The cake would require 2 hours to cool and an additional 10 minutes to frost the cake. If she plans to make the cake all on the same day, what is the latest time of day that Jordan can start making the cake to be ready to serve it at 5:00 pm?"
-    assistant: |
-      It takes 20 minutes to make the batter.
-      It takes 30 minutes to bake the cake.
-      The cake then needs 2 hours to cool, which is 120 minutes.
-      After that, frosting the cake takes 10 more minutes.
-      So the total time needed is 20 + 30 + 120 + 10 = <<20+30+120+10=180>>180 minutes.
-      180 minutes is 3 hours.
-      To be ready at 5:00 pm, Jordan must start 3 hours earlier.
-      5:00 pm - 3 hours = 2:00 pm.
-      #### 2
+    Now add the 100 tanks and the 20 trucks.
 
-  - user: "A football team has 105 members. There are twice as many players on the offense as there is on the defense. There is half the number of players on the special teams as there is on the defense. How many players are on the defense?"
-    assistant: |
-      Let the number of defense players be d.
-      Then the number of offense players is 2d.
-      The number of special teams players is d / 2.
-      The whole team has 105 members, so 2d + d + d / 2 = 105.
-      Adding the first two parts gives 3d + d / 2 = 105.
-      That is 3.5d = 105.
-      Dividing by 3.5 gives d = <<105/3.5=30>>30.
-      So there are 30 players on the defense.
-      #### 30
+    That gives 100 + 20 = 120 total vehicles.
 
-  - user: "Maria invited 4 of her friends over for a water balloon fight in the backyard. At the start of the game, Maria gave each of her friends 2 water balloons. She had one water balloon for herself. Then her mom came out and gave each person 3 more balloons. How many total balloons did the girls have?"
-    assistant: |
-      Maria invited 4 friends.
-      Including Maria, that means there are 4 + 1 = <<4+1=5>>5 girls.
-      At the start, each of the 4 friends gets 2 balloons.
-      So the friends have 4 * 2 = <<4*2=8>>8 balloons.
-      Maria has 1 balloon for herself, so the starting total is 8 + 1 = <<8+1=9>>9 balloons.
-      Then each of the 5 girls gets 3 more balloons.
-      That adds 5 * 3 = <<5*3=15>>15 balloons.
-      The total number of balloons is 9 + 15 = <<9+15=24>>24.
-      #### 24
+    So the yard has 120 tanks and trucks altogether.
 
-  - user: "A nurses' station orders bandages in bulk packs of 50. On the first day, the nurses used 38 bandages and ordered one bulk pack of bandages. On the second day, they used ten fewer bandages. On the third day, they ordered two bulk packs of bandages and only used half a pack. They had 78 bandages left at the end of the third day. How many bandages did they start with on the first day?"
-    assistant: |
-      On the first day, the nurses used 38 bandages.
-      On the second day, they used 10 fewer, so they used 38 - 10 = <<38-10=28>>28 bandages.
-      On the third day, they used half a pack of 50 bandages, so they used 50 / 2 = <<50/2=25>>25 bandages.
-      Altogether they used 38 + 28 + 25 = <<38+28+25=91>>91 bandages.
-      They ordered 1 pack on the first day and 2 packs on the third day.
-      That means they ordered 50 + 2 * 50 = <<50+2*50=150>>150 bandages total.
-      Let the starting number of bandages be x.
-      Then x + 150 - 91 = 78.
-      So x = 78 - 150 + 91 = <<78-150+91=19>>19.
-      #### 19
+    #### 120'
+- user: A fruit basket consists of 4 bananas, 3 apples, 24 strawberries, 2 avocados, and a bunch of grapes. One banana costs $1. An apple costs $2. 12 strawberries cost $4. An avocado costs $3, and half a bunch of grapes costs $2. What is the total cost of the fruit basket?
+  assistant: 'The bananas cost 4 * 1 = 4 dollars.
 
-  - user: "The girls are trying to raise money for a carnival. Kim raises $320 more than Alexandra, who raises $430, and Maryam raises $400 more than Sarah, who raises $300. How much money, in dollars, did they all raise in total?"
-    assistant: |
-      Alexandra raises 430 dollars.
-      Kim raises 320 dollars more than Alexandra, so Kim raises 430 + 320 = <<430+320=750>>750 dollars.
-      Sarah raises 300 dollars.
-      Maryam raises 400 dollars more than Sarah, so Maryam raises 300 + 400 = <<300+400=700>>700 dollars.
-      Alexandra and Kim together raise 430 + 750 = <<430+750=1180>>1180 dollars.
-      Sarah and Maryam together raise 300 + 700 = <<300+700=1000>>1000 dollars.
-      Altogether the girls raise 1180 + 1000 = <<1180+1000=2180>>2180 dollars.
-      #### 2180
+    The apples cost 3 * 2 = 6 dollars.
 
-user_template: "{question}"
+    Since 12 strawberries cost 4 dollars, 24 strawberries cost 2 * 4 = 8 dollars.
+
+    The avocados cost 2 * 3 = 6 dollars.
+
+    Half a bunch of grapes costs 2 dollars, so a full bunch costs 2 * 2 = 4 dollars.
+
+    Now add everything: 4 + 6 + 8 + 6 + 4 = 28 dollars.
+
+    So the fruit basket costs 28 dollars.
+
+    #### 28'
+- user: Carl is figuring out how much he'll need to spend on gas for his upcoming road trip to the Grand Canyon. His car gets 30 miles per gallon in cities and 40 miles per gallon on the highway. The distance from his house to the Grand Canyon, one way, is 60 city miles and 200 highway miles. If gas costs $3.00 per gallon, how much will Carl need to spend?
+  assistant: 'Carl uses 60 / 30 = 2 gallons for the city miles on one trip.
+
+    Carl uses 200 / 40 = 5 gallons for the highway miles on one trip.
+
+    So one trip to the Grand Canyon uses 2 + 5 = 7 gallons.
+
+    The distance is one way, so the full road trip uses 7 * 2 = 14 gallons.
+
+    So the total cost is 14 * 3 = 42 dollars.
+
+    Carl will need 42 dollars for gas.
+
+    #### 42'
+- user: You can lower the price by 20% if you buy more than fifteen units of iPhone cases. If you pay $500 to buy 18 units, what is the original price?
+  assistant: 'Because 18 is more than 15, the 20% discount applies.
+
+    After a 20% discount, the buyer pays 100% - 20% = 80% of the original total.
+
+    So 0.8 * original total = 500.
+
+    Divide both sides by 0.8 to get original total = 500 / 0.8.
+
+    That gives original total = 625.
+
+    So the original price is 625 dollars.
+
+    #### 625'
+- user: The first tree grows 1 meter/day, the second grows the same amount in half the time, the third grows 2 meters/day, and the fourth tree grows a meter more than the third each day. How many meters did the trees grow in total in 4 days?
+  assistant: 'The 1st tree grows 1 meter each day.
+
+    In 4 days, it grows 1 * 4 = 4 meters.
+
+    The 2nd tree grows the same amount in half the time, so its daily rate is 2 meters.
+
+    In 4 days, the 2nd tree grows 2 * 4 = 8 meters.
+
+    The 3rd tree grows 2 * 4 = 8 meters in 4 days.
+
+    The 4th tree grows 1 meter more per day than the 3rd, so it grows 3 * 4 = 12 meters.
+
+    The total growth is 4 + 8 + 8 + 12 = 32 meters.
+
+    #### 32'
+- user: 'Big Dig Mining Company mines three different types of ore: copper, iron, and nickel. Across all their mines, 10% of their output is nickel, 60% is iron, and the rest is copper. They mine 720 tons of nickel a day. How many tons of copper does Big Dig Mining Company mine daily?'
+  assistant: 'Nickel is 10% of the company''s total daily output.
+
+    The company mines 720 tons of nickel, so 10% = 720 tons.
+
+    That means 100% of the output is 720 / 0.1 = 7200 tons.
+
+    Iron is 60% and nickel is 10%, so copper is 100% - 60% - 10% = 30%.
+
+    Now find 30% of 7200: 0.3 * 7200 = 2160.
+
+    So Big Dig mines 2160 tons of copper daily.
+
+    #### 2160'
+- user: Colston knows that his teacher loves drinking coffee and one day wants to see how much she drinks each week. He sees that she has a 20-ounce thermos and when she makes her coffee she pours a 1/2 cup of milk in, and then fills the coffee to the top. She does this twice a day. After the five-day school week, he decides to tell her, and when she hears how much coffee she drinks, she decides to drink 1/4 of what she normally drinks. How many ounces of coffee does she now drink a week?
+  assistant: 'A full cup is 8 ounces, so 1/2 cup of milk is 8 / 2 = 4 ounces.
+
+    Her thermos holds 20 ounces, so each thermos has 20 - 4 = 16 ounces of coffee.
+
+    She does this 2 times each day, so she drinks 16 * 2 = 32 ounces of coffee per day.
+
+    She works for 5 days in the school week, so she normally drinks 32 * 5 = 160 ounces per week.
+
+    Now she chooses to drink 1/4 of her normal weekly amount.
+
+    That means she now drinks 160 / 4 = 40 ounces per week.
+
+    So she now drinks 40 ounces of coffee in a week.
+
+    #### 40'
+- user: Under optimal wind conditions, the use of two sails brings the ship to the speed of 50 knots, whereas under the same conditions, the use of one sail brings her ship to the speed of 25 knots. A knot is a nautical term for speed equal to 1 nautical mile per hour, and one nautical mile equals 1.15 land miles. If she travels in her sailboat under optimal wind conditions for 4 hours with one sail and then for another 4 hours with two sails, what is the total distance, in land miles, that she will travel?
+  assistant: 'With one sail, the ship travels at 25 knots, which means 25 nautical miles per hour.
+
+    So in 4 hours with one sail, the ship travels 25 * 4 = 100 nautical miles.
+
+    With two sails, the ship travels at 50 knots.
+
+    So in 4 hours with two sails, the ship travels 50 * 4 = 200 nautical miles.
+
+    The full trip is 100 + 200 = 300 nautical miles.
+
+    Since 1 nautical mile = 1.15 land miles, the total is 300 * 1.15 = 345 land miles.
+
+    So she travels 345 land miles altogether.
+
+    #### 345'
+user_template: '{question}'

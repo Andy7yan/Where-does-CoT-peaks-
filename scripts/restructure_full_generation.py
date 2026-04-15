@@ -12,8 +12,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.canonical_artifacts import CORRUPTION_ARTIFACT_FILENAMES
-from src.difficulty_groups import export_difficulty_length_groups
+from src.data_phase2.corruption_layout import CORRUPTION_ARTIFACT_FILENAMES
+from src.data_phase2.difficulty_groups import export_difficulty_length_groups
 
 
 def main() -> None:

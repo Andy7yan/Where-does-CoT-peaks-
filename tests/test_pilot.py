@@ -7,15 +7,15 @@ import uuid
 
 import yaml
 
-from src.generation import TRACE_SCHEMA_VERSION
-from src.pilot import (
+from src.data_phase1.generation import TRACE_SCHEMA_VERSION
+from src.data_phase1.pilot import (
     classify_corruption_failure,
     discover_prompt_templates,
     evaluate_check_b,
     parse_pilot_overrides,
     run_pilot,
 )
-from src.settings import load_settings
+from src.common.settings import load_settings
 
 
 def test_parse_pilot_overrides_from_raw_settings(monkeypatch) -> None:
@@ -26,9 +26,9 @@ def test_parse_pilot_overrides_from_raw_settings(monkeypatch) -> None:
     pilot = parse_pilot_overrides(settings)
 
     assert pilot.num_questions == 50
-    assert pilot.num_icl_groups == 5
-    assert pilot.samples_per_group == 15
-    assert pilot.temperature == 0.7
+    assert pilot.num_icl_groups == 4
+    assert pilot.samples_per_group == 5
+    assert pilot.temperature == 0.6
     assert pilot.max_new_tokens == 512
     assert pilot.max_extraction_fail_rate == 0.05
 
@@ -67,7 +67,7 @@ def test_discover_prompt_templates_prefers_configured_prompt_order() -> None:
     temp_dir = Path("tests") / f"_tmp_pilot_prompt_order_{uuid.uuid4().hex}"
     try:
         temp_dir.mkdir(parents=True, exist_ok=True)
-        for prompt_id in ("icl_verbose", "icl_short", "icl_minimal"):
+        for prompt_id in ("icl_verbose", "icl_short", "icl_medium"):
             (temp_dir / f"{prompt_id}.yaml").write_text(
                 f'prompt_id: "{prompt_id}"\nversion: 1\nsystem: "s"\nfew_shot: []\nuser_template: "{{question}}"\n',
                 encoding="utf-8",
@@ -76,11 +76,11 @@ def test_discover_prompt_templates_prefers_configured_prompt_order() -> None:
         templates = discover_prompt_templates(
             str(temp_dir),
             expected_count=3,
-            preferred_prompt_ids=["icl_minimal", "icl_short", "icl_verbose"],
+            preferred_prompt_ids=["icl_medium", "icl_short", "icl_verbose"],
         )
 
         assert [template["prompt_id"] for template in templates] == [
-            "icl_minimal",
+            "icl_medium",
             "icl_short",
             "icl_verbose",
         ]
@@ -97,10 +97,22 @@ def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
         temp_dir.mkdir(parents=True, exist_ok=True)
         config_path = temp_dir / "stage1_pilot_test.yaml"
         output_dir = temp_dir / "pilot-output"
+        data_path = temp_dir / "gsm8k_sample.json"
+
+        data_path.write_text(
+            json.dumps(
+                [
+                    {"question": f"What is {index} + {index + 1}?", "answer": f"Add them.\n#### {2 * index + 1}"}
+                    for index in range(50)
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
         base_config = yaml.safe_load(Path("configs/stage1.yaml").read_text(encoding="utf-8"))
         base_config["pilot"]["num_questions"] = 4
-        base_config["pilot"]["num_icl_groups"] = 5
+        base_config["pilot"]["num_icl_groups"] = 4
         base_config["pilot"]["samples_per_group"] = 2
         base_config["pilot"]["temperature"] = 0.0
         base_config["pilot"]["max_new_tokens"] = 64
@@ -114,7 +126,7 @@ def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
             config_path=str(config_path),
             output_dir=str(output_dir),
             mock=True,
-            data_path="data/gsm8k_sample.json",
+            data_path=str(data_path),
         )
 
         traces_path = Path(artifacts["pilot_traces_path"])
@@ -126,13 +138,13 @@ def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
         assert report_path.exists()
 
         trace_lines = traces_path.read_text(encoding="utf-8").splitlines()
-        assert len(trace_lines) == 40
+        assert len(trace_lines) == 32
 
         run_meta = json.loads(meta_path.read_text(encoding="utf-8"))
         assert run_meta["schema_version"] == TRACE_SCHEMA_VERSION
         assert run_meta["mode"] == "mock"
         assert run_meta["num_questions"] == 4
-        assert run_meta["num_icl_groups"] == 5
+        assert run_meta["num_icl_groups"] == 4
         assert run_meta["samples_per_group"] == 2
 
         report = report_path.read_text(encoding="utf-8")
@@ -144,7 +156,6 @@ def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
         assert "### E. NLDD Smoke" in report
         assert "Deferred to Stage F by stage-boundary decision." in report
         for field_name in (
-            "dataset.subset_size",
             "generation.num_icl_groups",
             "generation.samples_per_group",
             "generation.temperature",

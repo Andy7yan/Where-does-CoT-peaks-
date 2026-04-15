@@ -11,8 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.generation import _load_tokenizer_with_fallback, _resolve_torch_dtype, ensure_model_available
-from src.nldd import (
+from src.data_phase1.generation import _load_tokenizer_with_fallback, _resolve_torch_dtype, ensure_model_available
+from src.analysis_phase.nldd import (
     TraceSelectionConfig,
     build_prompt_logit_fn,
     compute_v4_measurement_artifacts,
@@ -20,10 +20,10 @@ from src.nldd import (
     load_or_build_trace_selection,
     load_question_metadata,
 )
-from src.pilot import build_token_counter
-from src.reports import load_stage1_traces
-from src.runtime_env import select_runtime_device
-from src.settings import ExperimentConfig, require_config_value
+from src.data_phase1.pilot import build_token_counter
+from src.data_phase2.aggregation import load_stage1_traces
+from src.common.runtime_env import select_runtime_device
+from src.common.settings import ExperimentConfig, require_config_value
 
 
 def main() -> None:

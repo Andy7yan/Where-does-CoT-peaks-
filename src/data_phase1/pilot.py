@@ -7,7 +7,7 @@ import json
 import statistics
 from typing import Any, Callable
 
-from src.generation import (
+from src.data_phase1.generation import (
     TRACE_SCHEMA_VERSION,
     GenerationOutput,
     append_traces_to_jsonl,
@@ -15,10 +15,10 @@ from src.generation import (
     load_existing_trace_ids,
     write_run_metadata,
 )
-from src.gsm8k import load_gsm8k_test, select_eval_subset
-from src.prompting import load_prompt_template
-from src.reasoning import DEFAULT_FLOAT_PERTURBATION_RANGE, corrupt_arithmetic
-from src.settings import ExperimentConfig, load_settings
+from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test, slice_question_records
+from src.data_phase1.prompting import load_prompt_template
+from src.common.reasoning import DEFAULT_FLOAT_PERTURBATION_RANGE, corrupt_arithmetic
+from src.common.settings import ExperimentConfig, load_settings
 
 
 @dataclass(frozen=True)
@@ -243,7 +243,7 @@ def build_pilot_subset(
     local_path: str | None,
     cache_dir: str | None,
 ) -> list[dict[str, Any]]:
-    """Select the Pilot subset from the configured dataset or a local compatible file."""
+    """Select the Pilot slice from the ranked full dataset or a local compatible file."""
 
     dataset = _require_mapping(settings, "dataset")
     records = load_gsm8k_test(
@@ -254,12 +254,16 @@ def build_pilot_subset(
         dataset_config=_optional_string(dataset, "hf_config"),
         split=_require_string(dataset, "split"),
     )
-    return select_eval_subset(
+    ranked_questions = build_ranked_questions(
         records,
-        n=pilot.num_questions,
-        hash_seed=_require_int(dataset, "subset_hash_seed"),
+        hash_seed=_require_int(dataset, "order_hash_seed"),
         dataset_name=_require_string(dataset, "name"),
         split=_require_string(dataset, "split"),
+    )
+    return slice_question_records(
+        ranked_questions,
+        start_idx=0,
+        end_idx=pilot.num_questions,
     )
 
 
@@ -697,18 +701,13 @@ def build_recommendation_rows(
     pilot: PilotOverrides,
     traces: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build the 9-field backfill recommendation table."""
+    """Build the Pilot backfill recommendation table."""
 
     check_b_failed = checks["B"].status == "FAIL"
     observed_max_token_count = max((trace["token_count"] for trace in traces), default=0)
     median_occupied_bin_count = checks["B"].metrics["median_occupied_bin_count"]
 
     return [
-        {
-            "field": "dataset.subset_size",
-            "value": 400 if check_b_failed else 200,
-            "basis": "Use 400 when check B fails; otherwise use 200.",
-        },
         {
             "field": "generation.num_icl_groups",
             "value": pilot.num_icl_groups,
@@ -807,7 +806,7 @@ def build_token_counter(
 
 
 def _build_real_generator(settings: dict[str, Any]) -> Any:
-    from src.generation import LLMGenerator
+    from src.data_phase1.generation import LLMGenerator
 
     model = _require_mapping(settings, "model")
     return LLMGenerator(
@@ -840,6 +839,15 @@ def _require_string(data: dict[str, Any], key: str) -> str:
     value = data.get(key)
     if not isinstance(value, str):
         raise TypeError(f"Pilot config field '{key}' must be a string.")
+    return value
+
+
+def _optional_string(data: dict[str, Any], key: str) -> str | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"Pilot config field '{key}' must be a string or null.")
     return value
 
 
