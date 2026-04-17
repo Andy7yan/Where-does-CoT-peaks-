@@ -148,7 +148,7 @@ def dedupe_corruption_artifacts(
 
     mode_rows: dict[str, list[dict[str, Any]]] = {}
     mode_stats: dict[str, dict[str, int]] = {}
-    for mode_name in ("all_steps", "sampled_steps"):
+    for mode_name in ("all_steps",):
         path = resolve_corruption_artifact_path(run_path, f"{mode_name}.jsonl")
         if not path.exists():
             continue

@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.data_phase2.corruption_layout import CORRUPTION_ARTIFACT_FILENAMES
 from src.data_phase2.difficulty_groups import export_difficulty_length_groups
+from src.data_phase2.difficulty_histogram import export_difficulty_histogram
 
 
 def main() -> None:
@@ -23,6 +24,10 @@ def main() -> None:
         raise FileNotFoundError(f"Run directory does not exist: {run_path}")
 
     moved = flatten_corruption_artifacts(run_path)
+    histogram_path = export_difficulty_histogram(
+        question_metadata_path=run_path / "question_metadata.jsonl",
+        output_path=run_path / "difficulty_histogram.csv",
+    )
     manifest = export_difficulty_length_groups(run_path)
 
     if args.delete_legacy and (run_path / "legacy").exists():
@@ -34,15 +39,13 @@ def main() -> None:
 
     print(f"run_dir: {run_path}")
     print(f"flattened_corruption_files: {moved}")
-    for difficulty, payload in manifest["difficulty_groups"].items():
-        counts = payload["counts"]
+    print(f"difficulty_histogram: {histogram_path}")
+    for difficulty, payload in manifest["difficulties"].items():
         print(
-            f"{difficulty}: all={counts['all']} "
-            f"lt3={counts['lt3_excluded']} "
-            f"short={counts['short']} medium={counts['medium']} "
-            f"detailed={counts['detailed']} verbose={counts['verbose']}"
+            f"{difficulty}: traces={payload['trace_count']} "
+            f"samples={payload['selected_sample_count']} "
+            f"bins={payload['kept_bin_count']}"
         )
-    print(f"excluded_from_difficulty: {manifest['excluded_from_difficulty_count']}")
 
 
 def parse_args() -> argparse.Namespace:

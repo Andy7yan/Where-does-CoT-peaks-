@@ -1,4 +1,4 @@
 difficulty,L_star,window_left,window_right,n_traces_near_lstar,window_status
-easy,16,15,17,77,primary
-medium,14,13,15,161,primary
-hard,16,14,18,49,fallback
+easy,17,16,18,123,primary
+medium,21,19,23,29,insufficient_after_fallback
+hard,16,14,18,48,insufficient_after_fallback

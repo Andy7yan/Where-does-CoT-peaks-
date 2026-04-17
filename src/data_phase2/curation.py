@@ -22,7 +22,12 @@ from src.data_phase2.coarse_analysis import (
     dedupe_traces_for_analysis,
 )
 from src.analysis_phase.nldd import summarize_corruption_records
-from src.data_phase2.aggregation import build_accuracy_buckets, load_stage1_traces, select_l_star
+from src.data_phase2.aggregation import (
+    aggregate_stage1_outputs,
+    build_accuracy_buckets,
+    load_stage1_traces,
+    select_l_star,
+)
 from src.common.settings import ExperimentConfig, require_config_value
 
 
@@ -30,10 +35,10 @@ CANONICAL_ROOT_ITEMS = {
     "accuracy_by_length.csv",
     "coarse_analysis.json",
     "all_steps.jsonl",
-    "sampled_steps.jsonl",
     "corruption_summary.json",
     "corruptted_traces",
-    "difficulty_groups",
+    "difficulty_histogram.csv",
+    "difficulty",
     "lstar_summary.csv",
     "question_metadata.jsonl",
     "run_meta.json",
@@ -44,7 +49,7 @@ GENERATED_ROOT_ITEMS = {
     "data_phase_manifest.json",
     "legacy",
 }
-CORRUPTION_MODES = ("all_steps", "sampled_steps")
+CORRUPTION_MODES = ("all_steps",)
 
 
 def curate_data_phase(
@@ -62,6 +67,7 @@ def curate_data_phase(
     if not external_legacy_path.exists():
         raise FileNotFoundError(f"Legacy run directory does not exist: {external_legacy_path}")
 
+    aggregate_stage1_outputs(str(run_path), config_path=config_path)
     validation = validate_canonical_data_phase(
         run_path,
         config_path=config_path,
@@ -151,6 +157,7 @@ def validate_canonical_data_phase(
         if not (run_path / filename).exists():
             raise FileNotFoundError(f"Canonical data phase is missing required coarse-analysis artifact: {filename}")
     corruption_validation = _validate_corruption_summary(run_path)
+    difficulty_validation = _validate_difficulty_exports(run_path, traces=traces)
     run_meta_notes = _build_run_meta_notes(
         run_path=run_path,
         traces=traces,
@@ -164,8 +171,10 @@ def validate_canonical_data_phase(
         "question_metadata_matches_traces": True,
         "accuracy_csv_matches_traces": True,
         "corruption_summary_matches_records": True,
+        "difficulty_exports_match_traces": True,
         "run_meta_notes": run_meta_notes,
         "corruption_validation": corruption_validation,
+        "difficulty_validation": difficulty_validation,
     }
 
 
@@ -219,10 +228,11 @@ def build_data_phase_manifest(
             "accuracy_by_length.csv",
             "coarse_analysis.json",
             "lstar_summary.csv",
+            "difficulty_histogram.csv",
             "run_meta.json",
             "all_steps.jsonl",
-            "sampled_steps.jsonl",
             "corruption_summary.json",
+            "difficulty",
         ],
         "legacy_sources": [
             str(run_path / "legacy"),
@@ -256,7 +266,6 @@ def build_overview_markdown(
         "- `accuracy_by_length.csv`: 基于 dedup trace 生成的长度-准确率聚合表\n"
         "- `run_meta.json`: 生成时配置快照，不保证与当前 `configs/stage1.yaml` 完全一致\n"
         "- `corruptted_traces/all_steps.jsonl`\n"
-        "- `corruptted_traces/sampled_steps.jsonl`\n"
         "- `corruptted_traces/corruption_summary.json`: corruption 正式统计口径\n\n"
         "## 不再默认读取\n\n"
         "- `legacy/failed_corruptions.jsonl` 是旧口径步骤失败记录，不代表当前正式 corruption 成败率\n"
@@ -269,7 +278,6 @@ def build_overview_markdown(
         "- `accuracy_by_length.csv` 与 dedup trace 一致性: 通过\n"
         "- `corruption_summary.json` 与 corruption records 一致性: 通过\n"
         f"- `all_steps` 记录数 / 失败数: `{corruption['all_steps']['records']}` / `{corruption['all_steps']['failures']}`\n"
-        f"- `sampled_steps` 记录数 / 失败数: `{corruption['sampled_steps']['records']}` / `{corruption['sampled_steps']['failures']}`\n\n"
         "## run_meta 说明\n\n"
         f"{notes}\n\n"
         "## 本次下沉到 legacy 的内容\n\n"
@@ -348,6 +356,15 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
+            path=run_path / "difficulty_histogram.csv",
+            role="canonical",
+            default_for_analysis=True,
+            join_keys=["bin_left", "bin_right"],
+            source="derived from question metadata",
+            notes="Root-level histogram over per-question difficulty scores.",
+        ),
+        _artifact_entry(
+            run_path=run_path,
             path=run_path / "run_meta.json",
             role="canonical",
             default_for_analysis=True,
@@ -366,15 +383,6 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
-            path=resolve_corruption_artifact_path(run_path, "sampled_steps.jsonl"),
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=["corruption_id", "trace_id"],
-            source="deduplicated corruption records",
-            notes="Sampled corruption records used for spot checks.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
             path=resolve_corruption_artifact_path(run_path, "corruption_summary.json"),
             role="canonical",
             default_for_analysis=True,
@@ -384,12 +392,12 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
         ),
         _artifact_entry(
             run_path=run_path,
-            path=run_path / "difficulty_groups",
-            role="derived",
-            default_for_analysis=False,
+            path=run_path / "difficulty",
+            role="canonical",
+            default_for_analysis=True,
             join_keys=[],
-            source="derived from canonical traces and coarse analysis",
-            notes="Per-difficulty jsonl exports with flat length groups for inspection.",
+            source="derived from canonical traces and question metadata",
+            notes="Primary analysis handoff directory with per-difficulty traces and length-bin sample inputs.",
         ),
         _artifact_entry(
             run_path=run_path,
@@ -453,10 +461,8 @@ def _build_external_legacy_entries(run_path: Path, external_legacy_path: Path) -
         "run_meta.json",
         "failed_corruptions.jsonl",
         "all_steps.jsonl",
-        "sampled_steps.jsonl",
         "corruption_summary.json",
         "corruptted_traces/all_steps.jsonl",
-        "corruptted_traces/sampled_steps.jsonl",
         "corruptted_traces/corruption_summary.json",
     ):
         path = external_legacy_path / relative
@@ -506,9 +512,11 @@ def _default_join_keys_for_path(path: Path) -> list[str]:
         return ["question_id"]
     if name == "accuracy_by_length.csv":
         return ["difficulty", "dedup_mode", "bucket_label"]
+    if name == "difficulty_histogram.csv":
+        return ["bin_left", "bin_right"]
     if name == "lstar_summary.csv":
         return ["difficulty"]
-    if name in {"all_steps.jsonl", "sampled_steps.jsonl"}:
+    if name == "all_steps.jsonl":
         return ["corruption_id", "trace_id"]
     if name == "failed_corruptions.jsonl":
         return ["trace_id", "question_id", "step_index"]
@@ -525,13 +533,13 @@ def _validate_accuracy_csv(run_path: Path, *, traces: list[dict[str, Any]], conf
     question_metadata = build_question_metadata_v4(
         traces=traces,
         deduped_traces=deduped_traces,
-        difficulty_quantiles=require_config_value(
-            "analysis.difficulty_quantiles",
-            config.analysis.difficulty_quantiles,
+        hard_accuracy_threshold=require_config_value(
+            "analysis.hard_accuracy_threshold",
+            config.analysis.hard_accuracy_threshold,
         ),
-        accuracy_exclusion_bounds=require_config_value(
-            "analysis.accuracy_exclusion_bounds",
-            config.analysis.accuracy_exclusion_bounds,
+        easy_accuracy_threshold=require_config_value(
+            "analysis.easy_accuracy_threshold",
+            config.analysis.easy_accuracy_threshold,
         ),
     )
     buckets_by_difficulty = build_accuracy_buckets_by_difficulty(
@@ -596,6 +604,60 @@ def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
     if recomputed != summary:
         raise ValueError("corruption_summary.json does not match the recomputed corruption summary.")
     return validation
+
+
+def _validate_difficulty_exports(
+    run_path: Path,
+    *,
+    traces: list[dict[str, Any]],
+) -> dict[str, Any]:
+    histogram_path = run_path / "difficulty_histogram.csv"
+    if not histogram_path.exists():
+        raise FileNotFoundError(f"Missing difficulty histogram: {histogram_path}")
+
+    groups_root = run_path / "difficulty"
+    if not groups_root.exists():
+        raise FileNotFoundError(f"Missing difficulty export root: {groups_root}")
+
+    total_group_traces = 0
+    difficulty_counts: dict[str, int] = {}
+    total_bin_samples = 0
+    for difficulty in DIFFICULTY_ORDER:
+        difficulty_dir = groups_root / difficulty
+        for filename in ("questions.jsonl", "traces.jsonl", "question_metadata.jsonl"):
+            path = difficulty_dir / filename
+            if not path.exists():
+                raise FileNotFoundError(f"Missing per-difficulty artifact: {path}")
+        trace_count = _record_count(difficulty_dir / "traces.jsonl") or 0
+        difficulty_counts[difficulty] = trace_count
+        total_group_traces += trace_count
+        bins_dir = difficulty_dir / "bins"
+        if bins_dir.exists():
+            for selection_path in bins_dir.glob("bin_*/selection.jsonl"):
+                total_bin_samples += _record_count(selection_path) or 0
+
+    if total_group_traces != len(traces):
+        raise ValueError(
+            "Per-difficulty trace exports do not cover the canonical trace table exactly once: "
+            f"expected={len(traces)}, got={total_group_traces}"
+        )
+
+    with histogram_path.open("r", encoding="utf-8", newline="") as handle:
+        histogram_rows = list(csv.DictReader(handle))
+    histogram_total = sum(int(row["count"]) for row in histogram_rows)
+    question_count = len({str(trace["question_id"]) for trace in traces})
+    if histogram_total != question_count:
+        raise ValueError(
+            "difficulty_histogram.csv does not sum to the number of unique questions: "
+            f"expected={question_count}, got={histogram_total}"
+        )
+
+    return {
+        "histogram_bins": len(histogram_rows),
+        "histogram_total_questions": histogram_total,
+        "difficulty_trace_counts": difficulty_counts,
+        "selected_sample_count": total_bin_samples,
+    }
 
 
 def _build_run_meta_notes(

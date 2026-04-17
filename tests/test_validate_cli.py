@@ -40,8 +40,8 @@ def test_validate_cli_emits_json(monkeypatch) -> None:
         assert payload["question_count"] == 2
         assert payload["accuracy_csv_matches_traces"] is True
         assert payload["corruption_summary_matches_records"] is True
+        assert payload["difficulty_exports_match_traces"] is True
         assert payload["corruption_validation"]["all_steps"]["records"] == 2
-        assert payload["corruption_validation"]["sampled_steps"]["records"] == 1
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -53,7 +53,7 @@ def test_validate_cli_accepts_flat_corruption_layout(monkeypatch) -> None:
     run_dir = workspace / "full_generation"
     try:
         _build_valid_run(run_dir)
-        for name in ("all_steps.jsonl", "sampled_steps.jsonl", "corruption_summary.json"):
+        for name in ("all_steps.jsonl", "corruption_summary.json"):
             payload = (run_dir / "corruptted_traces" / name).read_text(encoding="utf-8")
             (run_dir / name).write_text(payload, encoding="utf-8")
 
@@ -73,7 +73,7 @@ def test_validate_cli_accepts_flat_corruption_layout(monkeypatch) -> None:
 
         payload = json.loads(result.stdout)
         assert payload["corruption_validation"]["all_steps"]["records"] == 2
-        assert payload["corruption_validation"]["sampled_steps"]["records"] == 1
+        assert payload["difficulty_exports_match_traces"] is True
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -135,17 +135,7 @@ def _write_corruption_artifacts(run_dir: Path) -> None:
             "failure_tier": "uncorruptible",
         },
     ]
-    sampled_steps = [
-        {
-            "corruption_id": "q1_icl_medium_1_step1_sampled_steps",
-            "trace_id": "q1_icl_medium_1",
-            "corruption_failed": False,
-            "corruption_tier": 2,
-            "corruption_type": "operator_swap",
-            "failure_tier": None,
-        }
-    ]
-    for name, rows in (("all_steps.jsonl", all_steps), ("sampled_steps.jsonl", sampled_steps)):
+    for name, rows in (("all_steps.jsonl", all_steps),):
         with (corruption_dir / name).open("w", encoding="utf-8") as handle:
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -153,7 +143,6 @@ def _write_corruption_artifacts(run_dir: Path) -> None:
     summary = summarize_corruption_records(
         {
             "all_steps": all_steps,
-            "sampled_steps": sampled_steps,
         }
     )
     (corruption_dir / "corruption_summary.json").write_text(

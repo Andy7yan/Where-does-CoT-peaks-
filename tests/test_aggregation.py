@@ -107,8 +107,8 @@ def test_aggregate_stage1_outputs_writes_stage_e_artifacts(
             for row in metadata_rows
         }
 
-        assert metadata_by_question["q1"]["difficulty_bucket"] is None
-        assert metadata_by_question["q1"]["excluded_from_difficulty"] is True
+        assert metadata_by_question["q1"]["difficulty_bucket"] == "easy"
+        assert metadata_by_question["q1"]["excluded_from_difficulty"] is False
         assert metadata_by_question["q1"]["accuracy"] == 1.0
         assert metadata_by_question["q1"]["optimal_length"] == 2
         assert metadata_by_question["q1"]["natural_length_distribution"] == {"2": 2}

@@ -7,7 +7,6 @@ from pathlib import Path
 
 CORRUPTION_ARTIFACT_FILENAMES = (
     "all_steps.jsonl",
-    "sampled_steps.jsonl",
     "corruption_summary.json",
 )
 

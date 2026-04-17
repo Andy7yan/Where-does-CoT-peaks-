@@ -42,8 +42,8 @@ def build_question_metadata_v4(
     *,
     traces: list[dict[str, Any]],
     deduped_traces: list[dict[str, Any]],
-    difficulty_quantiles: list[float],
-    accuracy_exclusion_bounds: list[float],
+    hard_accuracy_threshold: float,
+    easy_accuracy_threshold: float,
 ) -> list[dict[str, Any]]:
     """Build per-question metadata with v4 difficulty annotations."""
 
@@ -51,26 +51,20 @@ def build_question_metadata_v4(
     deduped_by_question = _group_traces_by_question(deduped_traces)
     question_ids = sorted(set(raw_by_question) | set(deduped_by_question))
 
-    if len(difficulty_quantiles) != 2:
-        raise ValueError("analysis.difficulty_quantiles must contain exactly two entries.")
-    if len(accuracy_exclusion_bounds) != 2:
-        raise ValueError("analysis.accuracy_exclusion_bounds must contain exactly two entries.")
+    if not 0.0 <= hard_accuracy_threshold <= 1.0:
+        raise ValueError("analysis.hard_accuracy_threshold must lie in [0, 1].")
+    if not 0.0 <= easy_accuracy_threshold <= 1.0:
+        raise ValueError("analysis.easy_accuracy_threshold must lie in [0, 1].")
+    if hard_accuracy_threshold >= easy_accuracy_threshold:
+        raise ValueError("analysis.hard_accuracy_threshold must be smaller than analysis.easy_accuracy_threshold.")
 
-    lower_exclusion, upper_exclusion = accuracy_exclusion_bounds
     per_question_dedup_accuracy = {
         question_id: _compute_accuracy(deduped_by_question.get(question_id, []))
         for question_id in question_ids
     }
-    threshold_inputs = [
-        accuracy
-        for accuracy in per_question_dedup_accuracy.values()
-        if lower_exclusion <= accuracy <= upper_exclusion
-    ]
-    if not threshold_inputs:
-        threshold_inputs = list(per_question_dedup_accuracy.values())
     thresholds = DifficultyThresholds(
-        hard=interpolated_quantile(threshold_inputs, difficulty_quantiles[0]),
-        easy=interpolated_quantile(threshold_inputs, difficulty_quantiles[1]),
+        hard=hard_accuracy_threshold,
+        easy=easy_accuracy_threshold,
     )
 
     metadata_rows: list[dict[str, Any]] = []
@@ -79,23 +73,20 @@ def build_question_metadata_v4(
         dedup_rows = deduped_by_question.get(question_id, [])
         raw_accuracy = _compute_accuracy(raw_rows)
         dedup_accuracy = per_question_dedup_accuracy[question_id]
-        excluded = dedup_accuracy < lower_exclusion or dedup_accuracy > upper_exclusion
-        difficulty_bucket = None
-        if not excluded:
-            if dedup_accuracy > thresholds.easy:
-                difficulty_bucket = "easy"
-            elif dedup_accuracy < thresholds.hard:
-                difficulty_bucket = "hard"
-            else:
-                difficulty_bucket = "medium"
+        difficulty_score = 1.0 - dedup_accuracy
+        if dedup_accuracy > thresholds.easy:
+            difficulty_bucket = "easy"
+        elif dedup_accuracy < thresholds.hard:
+            difficulty_bucket = "hard"
+        else:
+            difficulty_bucket = "medium"
 
         metadata_rows.append(
             {
                 "question_id": question_id,
-                "difficulty": 1.0 - dedup_accuracy,
-                "difficulty_score": 1.0 - dedup_accuracy,
+                "difficulty_score": difficulty_score,
                 "difficulty_bucket": difficulty_bucket,
-                "excluded_from_difficulty": excluded,
+                "excluded_from_difficulty": False,
                 "difficulty_threshold_hard": thresholds.hard,
                 "difficulty_threshold_easy": thresholds.easy,
                 "accuracy": dedup_accuracy,

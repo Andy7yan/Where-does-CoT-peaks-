@@ -33,8 +33,8 @@ answer_extraction:
 
 nldd:
   corruption_type: "tiered_fallback"
-  integer_perturbation: "+/-1"
-  float_perturbation_range: [0.5, 0.9, 1.1, 1.5]
+  integer_perturbation_range: [-1, 1]
+  float_perturbation_range: [0.9, 1.1]
   enable_tier3_semantic_flip: false
   corruption_token_delta_max: 2
   corruption_retry_limit: 3
@@ -56,7 +56,8 @@ tas:
 analysis:
   min_bin_size: 5
   min_nldd_length: 3
-  difficulty_quantiles: [0.22, 0.55]
+  hard_accuracy_threshold: 0.5
+  easy_accuracy_threshold: 0.8
   num_length_bins: 3
   length_bin_mode: "tertile"
   target_traces_per_cell: 120
@@ -68,7 +69,5 @@ analysis:
   min_cell_size: 30
   num_normalized_bins: 6
   min_bin_coverage_ratio: 0.6
-  accuracy_exclusion_bounds: [0.01, 0.99]
   num_full_analysis_questions: 25  # Backfill after pilot review.
-  num_spot_checks: 3
   max_extraction_fail_rate: 0.05

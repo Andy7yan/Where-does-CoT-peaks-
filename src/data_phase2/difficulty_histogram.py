@@ -18,12 +18,15 @@ def load_question_difficulties(question_metadata_path: str | Path) -> list[float
             if not stripped:
                 continue
             row = json.loads(stripped)
-            difficulty = row.get("difficulty")
+            difficulty = row.get("difficulty_score", row.get("difficulty"))
             if not isinstance(difficulty, (int, float)):
-                raise TypeError("question_metadata.jsonl rows must contain numeric 'difficulty'.")
+                raise TypeError(
+                    "question_metadata.jsonl rows must contain numeric 'difficulty_score' "
+                    "(or legacy 'difficulty')."
+                )
             score = float(difficulty)
             if not (0.0 <= score <= 1.0):
-                raise ValueError("difficulty values must be within [0.0, 1.0].")
+                raise ValueError("difficulty scores must be within [0.0, 1.0].")
             difficulties.append(score)
     return difficulties
 
@@ -45,7 +48,7 @@ def build_difficulty_histogram(
     counts = [0 for _ in range(num_bins)]
     for difficulty in difficulties:
         if not (0.0 <= difficulty <= 1.0):
-            raise ValueError("difficulty values must be within [0.0, 1.0].")
+            raise ValueError("difficulty scores must be within [0.0, 1.0].")
         index = min(int(difficulty / bin_size), num_bins - 1)
         counts[index] += 1
 
@@ -96,4 +99,3 @@ def export_difficulty_histogram(
     )
     write_difficulty_histogram_csv(output_path, rows)
     return str(Path(output_path))
-

@@ -1,307 +1,96 @@
-# Stage 1: Minimum Viable Pipeline (MVP) & PoC
+# peak-CoT
 
-> **Important Note:** This `README.md` is an operational overview of the Stage 1 experiment. It is intentionally shorter and more readable than the full specification. For exact implementation details, schemas, thresholds, and configuration parameters, please refer to **`stage1-spec.md`**. If there is any discrepancy, `stage1-spec.md` overrides this file.
+This project studies a simple question about **Chain-of-Thought (CoT)** reasoning in language models:
 
-## 🎯 Objective
+> when a model writes out more reasoning steps, does that extra reasoning really help, or does it eventually become unnecessary or even harmful?
 
-Stage 1 is a single-model, single-dataset minimum viable pipeline.
+The project is motivated by two nearby ideas.
 
-* **Model:** `meta-llama/Llama-3.1-8B-Instruct`
-* **Dataset:** GSM8K-Platinum test split (`madrylab/gsm8k-platinum`)
-* **Goal:** jointly measure the behavioural optimum (L^*) and the mechanistic horizon (k^*) on the same pool of explicit CoT traces, then compare them in a controlled and interpretable way.
+- One line of work asks about **behavioural optimal length**: for a given task, is there a CoT length at which accuracy is highest?
+- Another line of work asks about **mechanistic faithfulness**: which reasoning steps are still causally doing work for the final answer?
 
-The purpose of Stage 1 is not to establish a final general theory of CoT faithfulness. Its role is to validate the full technical route end-to-end and produce a first clean comparison between:
+In this repository, those ideas are connected through a shared pool of model-generated reasoning traces.
 
-* where accuracy peaks as CoT gets longer;
-* where causal usefulness peaks within the reasoning chain;
-* whether those two turning points align or diverge.
+## What the key terms mean
 
----
+### Chain-of-Thought (CoT)
+A Chain-of-Thought is the model's written reasoning process before its final answer. For a maths word problem, this might look like a short sequence of intermediate calculations.
 
-## 🧠 Research Question & Hypotheses
+### Trace
+A **trace** is one complete model output for one question, including:
 
-**Research Question:**
-When the accuracy-optimal CoT length and the NLDD reasoning horizon are measured on the same model, dataset, and trace pool, what numerical relationship do they exhibit?
+- the reasoning text,
+- the final answer line,
+- the extracted numeric answer,
+- whether that answer is correct,
+- and basic metadata such as which prompt style produced it.
 
-### H1: (L^* \approx k^*) — Alignment
+This project generates many traces per question rather than relying on a single sample.
 
-The behavioural optimum and the mechanistic horizon coincide. Once the trace passes the optimal length, later reasoning steps no longer improve accuracy and no longer contribute causally.
+### Step
+A **step** is one non-empty line in the reasoning text. The final answer line is stored separately and does not count as a reasoning step. The number of reasoning lines is stored as `actual_num_steps`. fileciteturn5file15
 
-### H2: (L^* < k^*) — Behavioural optimum earlier than causal horizon
+### ICL prompts
+The project uses **in-context learning (ICL)** prompts: few-shot exemplars that encourage the model to reason in different styles. In practice, this is how the project gets shorter and longer traces without directly forcing a fixed number of steps. The current formal run uses four prompt groups: `icl_short`, `icl_medium`, `icl_detailed`, and `icl_verbose`. fileciteturn5file15
 
-Accuracy has already started to decline, but later steps still have positive causal contribution under NLDD. This suggests the model is still relying on later reasoning, but that extra reasoning is behaviourally harmful.
+### L*
+`L*` means the **behavioural optimum**: the CoT length at which performance is best. The "optimal length" paper argues that longer CoT is not always better; accuracy often follows an inverted-U pattern, so there can be a best intermediate length rather than "the longer the better". fileciteturn4file0turn5file5
 
-### H3: (L^* > k^*) — Causal horizon earlier than behavioural optimum
+### NLDD and k*
+**NLDD** is a step-level faithfulness metric from the "Mechanistic Evidence for Faithfulness Decay" paper. It works by corrupting one reasoning step, truncating what comes after it, and measuring how much the model's confidence in the correct answer drops. A larger drop means that step mattered more. The paper uses this to define a **reasoning horizon** `k*`: the step position where causal contribution is strongest before later steps start contributing less. fileciteturn4file0turn4file2
 
-The strongest causal contribution occurs before the behavioural optimum. This suggests later steps may still help through mechanisms not well captured by single-step NLDD corruption, such as local repair, output stabilisation, or answer-format anchoring.
+## Why this project exists
 
----
+CoT is often treated as both:
 
-## 📌 What This Project Measures
+- a way to improve reasoning performance, and
+- a window into how the model reached its answer.
 
-This project compares two quantities from two different perspectives.
+But those are not the same thing. A longer reasoning chain might improve performance, hurt performance, or simply add text that sounds plausible after the answer is already effectively determined. Related work also argues that CoT should not be judged only by whether it explicitly says every influential factor; some apparent "unfaithfulness" may instead be incomplete verbalisation of a more distributed internal process. fileciteturn5file14
 
-### 1. Behavioural optimum: (L^*)
+So the broader aim of peak-CoT is to compare two questions on the **same traces**:
 
-(L^*) is the CoT length at which accuracy peaks.
+- **Behavioural question:** how long should a trace be for best accuracy?
+- **Faithfulness question:** up to which step is the written reasoning still causally useful?
 
-In Stage 1, this is **not treated as one global scalar for the whole dataset**. Instead:
+## What Stage 1 currently is
 
-1. we first estimate per-question difficulty from post-hoc accuracy;
-2. we split questions into difficulty bands;
-3. we compute a separate accuracy-vs-length curve for each band;
-4. we define a separate (L^*) for each difficulty band.
+The most important status update is simple:
 
-So throughout this README, (L^*) means:
+**Stage 1 is currently frozen as a full trace-generation run, not as a full analysis pipeline.** The v5 spec explicitly says the current formal run is for generating the complete trace corpus that later data-phase and analysis-phase work will consume. It does **not** yet freeze difficulty grouping, coarse analysis, or analysis metrics as part of the current executable run. fileciteturn5file15
 
-[
-L^*_d = \arg\max_L ; \text{accuracy}_d(L)
-]
+So, at the moment, this repository's formal job is:
 
-where (d) is a difficulty band.
+1. load the full GSM8K-Platinum test split,
+2. run the model with four ICL prompt styles,
+3. collect multiple traces for every question,
+4. parse them into a consistent trace format,
+5. save them as the canonical corpus for later analysis. fileciteturn5file15
 
-### 2. Mechanistic horizon: (k^*)
+## Current Stage 1 setup
 
-(k^*) is the step position where the reasoning trace shows its strongest causal contribution under NLDD.
+The current formal run is deliberately narrow.
 
-For one clean correct trace, we:
+- **Dataset:** `madrylab/gsm8k-platinum`, `main`, `test` split, full coverage. fileciteturn5file15
+- **Prompt groups:** `icl_short`, `icl_medium`, `icl_detailed`, `icl_verbose`. fileciteturn5file15
+- **Samples per group:** `5`. fileciteturn5file15
+- **Temperature:** `0.6`, shared globally rather than varying by prompt group. fileciteturn5file15
+- **Max new tokens:** `1024`. fileciteturn5file15
+- **Total traces per question:** `20`. fileciteturn5file15
 
-1. corrupt one reasoning step at position (k);
-2. truncate all later steps;
-3. recompute the correct-answer logit margin;
-4. measure how much that margin drops.
+Each saved trace records at least the question ID, question text, gold answer, prompt ID, raw completion, parsed steps, `actual_num_steps`, final answer line, extracted answer, correctness, extraction failure flag, token count, and timestamp. fileciteturn5file15
 
-This produces a per-trace NLDD profile over step positions. We then define the trace-level peak:
+## What comes after this
 
-[
-k_i^* = \arg\max_{k>1} \text{NLDD}_i(k)
-]
+Later stages are intended to use the generated corpus to study relationships between CoT length and faithfulness. In earlier planning, the README framed this as a direct comparison between `L*` and `k*` on shared traces. fileciteturn4file0
 
-Stage 1 uses this **per-trace peak** as the primary building block. It does **not** define the main horizon directly from a globally averaged normalised curve.
+The v5 spec, however, intentionally stops short of freezing those later steps. It only reserves the main analysis panel that will eventually include metrics such as `accuracy(L)`, `L*`, `NLDD`, `k*(L)`, and `TAS`. fileciteturn5file15
 
-### 3. Why the main comparison is local, not global
+So the clean way to read the repository today is:
 
-The primary comparison is not between a global (L^*) and a global (k^*). Instead, for each difficulty band we compare:
+- **conceptually**, it is a project about CoT length, overthinking, and faithfulness;
+- **operationally**, Stage 1 is currently the data-collection layer that produces the trace corpus needed for those questions.
 
-* the behavioural optimum (L^*_d), and
-* the aggregated trace-level horizon among traces whose lengths fall in a small **near-(L^*)** window.
+## One-sentence summary
 
-This yields the main comparison quantity:
-
-[
-\Delta_d = k^*_{\text{near-}L^*,d} - L^*_d
-]
-
-This local comparison is the core of the project, because it asks whether the strongest causal step tends to occur at the same scale as the empirically best-performing trace length.
-
----
-
-## 🔍 Shared Trace Definition
-
-The whole project uses one unified notion of “step” and “trace length”.
-
-* A **step** is one non-empty line after splitting the model completion by newline.
-* The final answer line is recorded separately and does **not** count as a reasoning step.
-* Trace length is therefore defined as `actual_num_steps`.
-
-This same definition is used for both:
-
-* behavioural length bucketing in the accuracy analysis;
-* mechanistic corruption indexing in NLDD.
-
-This matters because the project compares the two frameworks on the **same explicit step structure**, rather than using one notion of length for behaviour and another for mechanism.
-
----
-
-## 🧪 Stage 1 Pipeline Overview
-
-Stage 1 runs as a five-stage pipeline.
-
-### 1. Pilot Run
-
-A low-cost pilot validates the full pipeline before the main run.
-
-It checks whether:
-
-* the ICL prompt groups actually induce a broad enough step-length distribution;
-* step parsing and answer extraction are reliable;
-* the corruption procedure is feasible on real traces;
-* NLDD values are numerically sensible on a small smoke-test subset.
-
-### 2. Data Phase — Trace Generation
-
-For each GSM8K-Platinum question, the model generates multiple explicit CoT traces.
-
-Length variation is induced **naturally**, not by hard length commands.
-
-The project uses:
-
-* multiple ICL prompt groups with different reasoning styles;
-* per-group temperature settings;
-* post-hoc grouping by the observed `actual_num_steps`.
-
-Each trace is then parsed into:
-
-* reasoning steps;
-* final answer line;
-* extracted numeric answer;
-* correctness label;
-* metadata such as token count and prompt group.
-
-After all traces are generated, question difficulty is computed post hoc from the empirical correct rate across samples.
-
-### 3. Coarse Analysis Stage
-
-Before any full NLDD sweep, Stage 1 first freezes the key analysis boundaries.
-
-This stage:
-
-* builds difficulty bands from post-hoc question accuracy;
-* computes per-difficulty `accuracy(L)` curves;
-* identifies per-difficulty behavioural optima (L^*_d);
-* creates per-difficulty relative length bins (short / mid / long);
-* defines the near-(L^*) comparison window for each difficulty band.
-
-This is important because the later NLDD analysis is not run over the entire trace pool indiscriminately. It is run inside a structure that has already fixed:
-
-* which difficulty regime a trace belongs to;
-* whether it is short, medium, or long relative to that regime;
-* which traces count as “near the behavioural optimum”.
-
-### 4. NLDD Measurement Stage
-
-NLDD is run only on **correct clean traces**.
-
-For each selected trace:
-
-1. compute the clean logit difference;
-2. corrupt each reasoning step in turn;
-3. truncate all following steps;
-4. recompute the corrupted logit difference;
-5. convert the drop into an NLDD value.
-
-The corruption system uses a two-tier fallback:
-
-* **Tier 1:** numeric perturbation, preferably on the computed result;
-* **Tier 2:** arithmetic operator swap when numeric perturbation is not possible.
-
-For each selected trace, this yields:
-
-* a full NLDD profile over step positions;
-* a trace-level peak (k_i^*);
-* an optional normalised ratio (r_i^* = k_i^*/L_i) used only as a secondary view.
-
-### 5. Aggregation & Visualisation
-
-The final stage aggregates all per-trace results.
-
-It produces:
-
-* per-difficulty behavioural optima (L^*_d);
-* per-cell distributions of trace-level (k_i^*);
-* near-(L^*) horizon summaries;
-* the final (L^*) vs. (k^*) comparison for each difficulty band.
-
-The main Stage 1 result is therefore not a single scalar, but a structured comparison across difficulty regimes.
-
----
-
-## 📈 Main Outputs
-
-Stage 1 produces six core figures.
-
-1. **Accuracy vs. CoT Length (per difficulty)**
-   Shows the behavioural inverted-U pattern and marks (L^*_d).
-
-2. **NLDD Surface Heatmap**
-   Shows mean NLDD over absolute `(L, k)` positions for each difficulty band.
-
-3. **Per-trace (k^*) Distribution**
-   Shows how trace-level horizons vary across difficulty × relative-length cells.
-
-4. **Near-(L^*) Comparison Plot**
-   Directly compares (L^*_d) with (k^*_{\text{near-}L^*,d}).
-
-5. **Normalised NLDD Curve (secondary view)**
-   Aggregates NLDD over relative position `k/L`; this is auxiliary and not the main horizon definition.
-
-6. **Difficulty vs. Optimal Length Scatter**
-   Shows how post-hoc task difficulty relates to the behavioural optimum.
-
----
-
-## ✅ Scope of Stage 1
-
-Stage 1 is intentionally narrow.
-
-It includes:
-
-* one model;
-* one dataset;
-* explicit CoT traces only;
-* single-step corruption only;
-* behavioural length analysis plus NLDD-based causal analysis.
-
-It does **not** aim to provide:
-
-* a multi-model comparison;
-* a multi-dataset benchmark;
-* RSA / probing / TAS analysis as part of the core Stage 1 result;
-* a final explanation of why late CoT tokens help or hurt.
-
-Those belong to later stages once the joint measurement pipeline is stable.
-
----
-
-## 🚀 Why Stage 1 Matters
-
-The two target papers motivate complementary but distinct questions.
-
-* The optimal-length view asks: **how long should a reasoning trace be for best performance?**
-* The NLDD view asks: **which reasoning steps are still causally doing work?**
-
-Stage 1 brings these two views into one shared experimental frame.
-
-This is the core conceptual contribution of the pipeline: instead of studying behavioural optimality and mechanistic faithfulness separately, it measures both on the same traces and asks whether they point to the same turning point.
-
-If they align, that supports a simple story: behavioural overthinking arises because causal reasoning usefulness has already decayed.
-
-If they diverge, that is equally informative: it suggests later CoT tokens may still serve functions other than direct stepwise causal reasoning, such as local repair, answer anchoring, or post-hoc structuring.
-
----
-
-## 🔭 Stage 2 Extensions
-
-Once Stage 1 is stable, Stage 2 can expand along three dimensions.
-
-### Model dimension
-
-Add stronger or different instruction-tuned models, such as:
-
-* `Qwen2.5-7B-Instruct`
-* larger reasoning-oriented models
-
-### Dataset dimension
-
-Extend beyond GSM8K-Platinum to harder benchmarks such as:
-
-* MATH
-
-This will require revised parsing and answer-extraction rules.
-
-### Analysis dimension
-
-Add richer explanations for alignment or mismatch, including:
-
-* step complexity proxies;
-* compression-theoretic views;
-* additional corruption schemes;
-* stronger mechanism-oriented follow-up analysis.
-
----
-
-## 🧭 One-Sentence Summary
-
-Stage 1 asks a precise question on a tightly controlled setup:
-
-**when explicit CoT traces get longer, does the length that maximises accuracy coincide with the step position where causal reasoning usefulness peaks?**
+This repository builds a clean corpus of short-to-long reasoning traces on GSM8K-Platinum so that later analysis can ask not just **how much** a model thinks, but **which parts of that thinking actually matter**.

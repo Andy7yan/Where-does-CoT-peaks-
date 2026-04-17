@@ -34,8 +34,6 @@ def main() -> None:
     )
     trace_sources = load_trace_sources(args.source_run_dir)
     selection = CorruptionSelectionConfig(
-        sampled_min_steps=args.sampled_min_steps,
-        sampled_max_steps=args.sampled_max_steps,
         seed=args.seed if args.seed is not None else config.experiment.seed,
         include_incorrect_traces=args.include_incorrect_traces,
     )
@@ -46,6 +44,7 @@ def main() -> None:
         token_delta_max=config.nldd.corruption_token_delta_max,
         retry_limit=config.nldd.corruption_retry_limit,
         selection=selection,
+        integer_perturbation_range=tuple(config.nldd.integer_perturbation_range),
         float_perturbation_range=tuple(config.nldd.float_perturbation_range),
         enable_tier3_semantic_flip=effective_enable_tier3,
         max_perplexity_ratio=None,
@@ -56,8 +55,6 @@ def main() -> None:
         "token_counter": token_counter_label,
         "token_delta_max": config.nldd.corruption_token_delta_max,
         "retry_limit": config.nldd.corruption_retry_limit,
-        "sampled_min_steps": selection.sampled_min_steps,
-        "sampled_max_steps": selection.sampled_max_steps,
         "seed": selection.seed,
         "include_incorrect_traces": selection.include_incorrect_traces,
         "tier3_semantic_flip_enabled": effective_enable_tier3,
@@ -90,18 +87,6 @@ def parse_args() -> argparse.Namespace:
         "--config",
         default="configs/stage1.yaml",
         help="Experiment config used to resolve tokenizer and corruption settings.",
-    )
-    parser.add_argument(
-        "--sampled-min-steps",
-        type=int,
-        default=1,
-        help="Minimum sampled corruption points per trace for sampled mode.",
-    )
-    parser.add_argument(
-        "--sampled-max-steps",
-        type=int,
-        default=2,
-        help="Maximum sampled corruption points per trace for sampled mode.",
     )
     parser.add_argument(
         "--seed",

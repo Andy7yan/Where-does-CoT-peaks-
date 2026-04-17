@@ -1,56 +1,68 @@
-"""Export per-difficulty jsonl groups for the canonical full-generation run."""
+"""Export per-difficulty analysis handoff artifacts for canonical runs."""
 
 from __future__ import annotations
 
+from collections import defaultdict
+import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
-from typing import Any
+from typing import Any, Callable
 
-from src.data_phase2.coarse_analysis import (
-    DIFFICULTY_ORDER,
-    dedupe_traces_for_analysis,
-    interpolated_quantile,
-)
-from src.data_phase2.aggregation import load_stage1_traces
+from src.common.settings import ExperimentConfig, require_config_value
+from src.data_phase1.pilot import build_token_counter
+from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER
 
 
-LENGTH_GROUP_ORDER = ("short", "medium", "detailed", "verbose")
-LT3_GROUP_NAME = "lt3_excluded"
+def export_difficulty_length_groups(
+    run_path: Path,
+    *,
+    config_path: str = "configs/stage1.yaml",
+) -> dict[str, Any]:
+    """Write the spec-oriented difficulty handoff directory."""
 
+    config = ExperimentConfig.from_yaml(config_path)
+    min_nldd_length = require_config_value(
+        "analysis.min_nldd_length",
+        config.analysis.min_nldd_length,
+    )
+    min_cell_size = require_config_value(
+        "analysis.min_cell_size",
+        config.analysis.min_cell_size,
+    )
+    target_traces_per_cell = require_config_value(
+        "analysis.target_traces_per_cell",
+        config.analysis.target_traces_per_cell,
+    )
 
-def export_difficulty_length_groups(run_path: Path) -> dict[str, Any]:
-    """Write grouped trace exports under `run_path/difficulty_groups`."""
-
-    traces = load_stage1_traces(run_path)
+    traces = _load_jsonl(run_path / "traces.jsonl")
+    metadata_rows = _load_jsonl(run_path / "question_metadata.jsonl")
     metadata_by_question = {
         str(row["question_id"]): row
-        for row in _load_jsonl(run_path / "question_metadata.jsonl")
+        for row in metadata_rows
     }
-    coarse_analysis = json.loads((run_path / "coarse_analysis.json").read_text(encoding="utf-8"))
-    min_nldd_length = int(coarse_analysis.get("notes", {}).get("min_nldd_length") or 3)
 
-    output_dir = run_path / "difficulty_groups"
+    output_dir = run_path / "difficulty"
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    thresholds = _compute_thresholds(
-        traces=traces,
-        metadata_by_question=metadata_by_question,
-        min_nldd_length=min_nldd_length,
-    )
-    grouped_rows: dict[str, dict[str, list[dict[str, Any]]]] = {
-        difficulty: {
-            "all": [],
-            LT3_GROUP_NAME: [],
-            **{label: [] for label in LENGTH_GROUP_ORDER},
-        }
+    token_counter = build_token_counter(tokenizer=None, approximate=True)
+    grouped_traces: dict[str, list[dict[str, Any]]] = {
+        difficulty: []
         for difficulty in DIFFICULTY_ORDER
     }
-    excluded_rows: list[dict[str, Any]] = []
+    grouped_metadata: dict[str, list[dict[str, Any]]] = {
+        difficulty: []
+        for difficulty in DIFFICULTY_ORDER
+    }
+    grouped_questions: dict[str, list[dict[str, Any]]] = {
+        difficulty: []
+        for difficulty in DIFFICULTY_ORDER
+    }
 
-    sorted_traces = sorted(
+    for trace in sorted(
         traces,
         key=lambda row: (
             str(row.get("question_id", "")),
@@ -58,113 +70,382 @@ def export_difficulty_length_groups(run_path: Path) -> dict[str, Any]:
             str(row.get("prompt_id", "")),
             str(row.get("trace_id", "")),
         ),
-    )
-    for trace in sorted_traces:
-        question_id = str(trace["question_id"])
-        question_meta = metadata_by_question.get(question_id, {})
-        difficulty = question_meta.get("difficulty_bucket")
-        enriched = dict(trace)
-        enriched["difficulty_bucket"] = difficulty
-        enriched["excluded_from_difficulty"] = bool(question_meta.get("excluded_from_difficulty", True))
-        enriched["nldd_min_length"] = min_nldd_length
-        enriched["nldd_length_eligible"] = int(trace["actual_num_steps"]) >= min_nldd_length
-        enriched["nldd_measurement_eligible"] = (
-            bool(trace.get("is_correct")) and int(trace["actual_num_steps"]) >= min_nldd_length
-        )
-
-        if difficulty not in DIFFICULTY_ORDER:
-            enriched["difficulty_length_group"] = None
-            excluded_rows.append(enriched)
+    ):
+        question_meta = metadata_by_question.get(str(trace["question_id"]))
+        if not question_meta:
             continue
-
-        group_name = _assign_length_group(
-            length=int(trace["actual_num_steps"]),
-            min_nldd_length=min_nldd_length,
-            threshold_row=thresholds[difficulty],
+        difficulty = question_meta.get("difficulty_bucket")
+        if difficulty not in DIFFICULTY_ORDER:
+            continue
+        grouped_traces[difficulty].append(
+            _enrich_trace_row(
+                trace=trace,
+                question_meta=question_meta,
+                min_nldd_length=min_nldd_length,
+            )
         )
-        threshold_row = thresholds[difficulty]
-        enriched["difficulty_length_group"] = group_name
-        enriched["length_group_q25"] = threshold_row["q25"]
-        enriched["length_group_q50"] = threshold_row["q50"]
-        enriched["length_group_q75"] = threshold_row["q75"]
 
-        grouped_rows[difficulty]["all"].append(enriched)
-        grouped_rows[difficulty][group_name].append(enriched)
+    for difficulty in DIFFICULTY_ORDER:
+        question_ids = sorted({str(row["question_id"]) for row in grouped_traces[difficulty]})
+        grouped_metadata[difficulty] = [
+            _project_group_question_metadata(metadata_by_question[question_id])
+            for question_id in question_ids
+        ]
+        grouped_questions[difficulty] = _build_question_rows(
+            grouped_traces[difficulty],
+            metadata_by_question=metadata_by_question,
+        )
 
-    manifest = {
-        "schema_version": "stage1_difficulty_groups_v1",
+    export_summary: dict[str, Any] = {
+        "schema_version": "stage1_difficulty_export_v1",
         "min_nldd_length": min_nldd_length,
-        "difficulty_groups": {},
-        "excluded_from_difficulty_count": len(excluded_rows),
+        "min_cell_size": min_cell_size,
+        "target_traces_per_cell": target_traces_per_cell,
+        "difficulties": {},
     }
+
     for difficulty in DIFFICULTY_ORDER:
         difficulty_dir = output_dir / difficulty
         difficulty_dir.mkdir(parents=True, exist_ok=True)
-        counts: dict[str, int] = {}
-        for name, rows in grouped_rows[difficulty].items():
-            _write_jsonl(difficulty_dir / f"{name}.jsonl", rows)
-            counts[name] = len(rows)
-        manifest["difficulty_groups"][difficulty] = {
-            "thresholds": thresholds[difficulty],
-            "counts": counts,
+
+        _write_jsonl(difficulty_dir / "questions.jsonl", grouped_questions[difficulty])
+        _write_jsonl(
+            difficulty_dir / "traces.jsonl",
+            [_project_group_trace_row(row) for row in grouped_traces[difficulty]],
+        )
+        _write_jsonl(difficulty_dir / "question_metadata.jsonl", grouped_metadata[difficulty])
+
+        bin_summary = export_bins_for_difficulty(
+            difficulty_dir=difficulty_dir,
+            difficulty=difficulty,
+            traces=grouped_traces[difficulty],
+            token_counter=token_counter,
+            integer_perturbation_range=tuple(config.nldd.integer_perturbation_range),
+            float_perturbation_range=tuple(config.nldd.float_perturbation_range),
+            enable_tier3_semantic_flip=config.nldd.enable_tier3_semantic_flip,
+            corruption_token_delta_max=config.nldd.corruption_token_delta_max,
+            corruption_retry_limit=config.nldd.corruption_retry_limit,
+            corruption_seed=config.experiment.seed,
+            min_nldd_length=min_nldd_length,
+            min_cell_size=min_cell_size,
+            target_traces_per_cell=target_traces_per_cell,
+        )
+        export_summary["difficulties"][difficulty] = {
+            "question_count": len(grouped_questions[difficulty]),
+            "trace_count": len(grouped_traces[difficulty]),
+            **bin_summary,
         }
 
-    _write_jsonl(output_dir / "excluded_from_difficulty.jsonl", excluded_rows)
-    (output_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return manifest
+    return export_summary
 
 
-def _compute_thresholds(
+def export_bins_for_difficulty(
     *,
+    difficulty_dir: Path,
+    difficulty: str,
     traces: list[dict[str, Any]],
-    metadata_by_question: dict[str, dict[str, Any]],
+    token_counter: Callable[[str], int],
+    integer_perturbation_range: tuple[int, int],
+    float_perturbation_range: tuple[float, float],
+    enable_tier3_semantic_flip: bool,
+    corruption_token_delta_max: int,
+    corruption_retry_limit: int,
+    corruption_seed: int,
     min_nldd_length: int,
-) -> dict[str, dict[str, float | None]]:
-    deduped_traces = dedupe_traces_for_analysis(traces)
-    rows: dict[str, dict[str, float | None]] = {}
-    for difficulty in DIFFICULTY_ORDER:
-        lengths = [
-            int(trace["actual_num_steps"])
-            for trace in deduped_traces
-            if trace.get("is_correct")
-            and int(trace["actual_num_steps"]) >= min_nldd_length
-            and metadata_by_question.get(str(trace["question_id"]), {}).get("difficulty_bucket") == difficulty
+    min_cell_size: int,
+    target_traces_per_cell: int,
+) -> dict[str, Any]:
+    """Write per-length bins and sample directories for one difficulty bucket."""
+
+    bins_dir = difficulty_dir / "bins"
+    bins_dir.mkdir(parents=True, exist_ok=True)
+
+    by_length: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for trace in traces:
+        by_length[int(trace["actual_num_steps"])].append(trace)
+
+    kept_bin_count = 0
+    selected_sample_count = 0
+    length_summaries: dict[str, Any] = {}
+    for actual_num_steps in sorted(by_length):
+        length_rows = by_length[actual_num_steps]
+        eligible_rows = [
+            row
+            for row in length_rows
+            if row["is_correct"] and int(row["actual_num_steps"]) >= min_nldd_length
         ]
-        if not lengths:
-            rows[difficulty] = {"q25": None, "q50": None, "q75": None}
+        if actual_num_steps < min_nldd_length or len(eligible_rows) < min_cell_size:
             continue
-        rows[difficulty] = {
-            "q25": interpolated_quantile(lengths, 0.25),
-            "q50": interpolated_quantile(lengths, 0.50),
-            "q75": interpolated_quantile(lengths, 0.75),
+
+        selected_bundles = build_sample_bundles_for_length(
+            difficulty=difficulty,
+            traces=eligible_rows,
+            token_counter=token_counter,
+            integer_perturbation_range=integer_perturbation_range,
+            float_perturbation_range=float_perturbation_range,
+            enable_tier3_semantic_flip=enable_tier3_semantic_flip,
+            corruption_token_delta_max=corruption_token_delta_max,
+            corruption_retry_limit=corruption_retry_limit,
+            corruption_seed=corruption_seed,
+            target_traces_per_cell=target_traces_per_cell,
+        )
+        if not selected_bundles:
+            continue
+
+        _assign_compact_sample_ids(selected_bundles)
+
+        bin_dir = bins_dir / f"bin_{actual_num_steps}"
+        samples_dir = bin_dir / "samples"
+        samples_dir.mkdir(parents=True, exist_ok=True)
+        selection_rows: list[dict[str, Any]] = []
+        for bundle in selected_bundles:
+            sample_dir = samples_dir / bundle["sample_id"]
+            sample_dir.mkdir(parents=True, exist_ok=True)
+            _write_json(sample_dir / "clean.json", bundle["clean_payload"])
+            _write_json(sample_dir / "meta.json", bundle["meta_payload"])
+            for k, payload in bundle["corrupt_payloads"].items():
+                _write_json(sample_dir / f"corrupt_k{k}.json", payload)
+            selection_rows.append(bundle["selection_row"])
+
+        _write_jsonl(bin_dir / "selection.jsonl", selection_rows)
+        kept_bin_count += 1
+        selected_sample_count += len(selected_bundles)
+        length_summaries[str(actual_num_steps)] = {
+            "eligible_trace_count": len(eligible_rows),
+            "selected_sample_count": len(selected_bundles),
         }
-    return rows
+
+    return {
+        "kept_bin_count": kept_bin_count,
+        "selected_sample_count": selected_sample_count,
+        "bins": length_summaries,
+    }
 
 
-def _assign_length_group(
+def build_sample_bundles_for_length(
     *,
-    length: int,
-    min_nldd_length: int,
-    threshold_row: dict[str, float | None],
-) -> str:
-    if length < min_nldd_length:
-        return LT3_GROUP_NAME
+    difficulty: str,
+    traces: list[dict[str, Any]],
+    token_counter: Callable[[str], int],
+    integer_perturbation_range: tuple[int, int],
+    float_perturbation_range: tuple[float, float],
+    enable_tier3_semantic_flip: bool,
+    corruption_token_delta_max: int,
+    corruption_retry_limit: int,
+    corruption_seed: int,
+    target_traces_per_cell: int,
+) -> list[dict[str, Any]]:
+    """Select fully successful samples for one exact-length bin."""
 
-    q25 = threshold_row["q25"]
-    q50 = threshold_row["q50"]
-    q75 = threshold_row["q75"]
-    if q25 is None or q50 is None or q75 is None:
-        return "verbose"
-    if length <= q25:
-        return "short"
-    if length <= q50:
-        return "medium"
-    if length <= q75:
-        return "detailed"
-    return "verbose"
+    from src.analysis_phase.nldd import CorruptionSelectionConfig, build_corruption_records
+
+    selected_bundles: list[dict[str, Any]] = []
+    sorted_traces = sorted(
+        traces,
+        key=lambda row: _stable_seed(
+            f"{difficulty}:{int(row['actual_num_steps'])}:{row['trace_id']}"
+        ),
+    )
+    for trace in sorted_traces:
+        records_by_mode = build_corruption_records(
+            [("root", trace)],
+            token_counter=token_counter,
+            token_delta_max=corruption_token_delta_max,
+            retry_limit=corruption_retry_limit,
+            selection=CorruptionSelectionConfig(seed=corruption_seed),
+            integer_perturbation_range=integer_perturbation_range,
+            float_perturbation_range=float_perturbation_range,
+            enable_tier3_semantic_flip=enable_tier3_semantic_flip,
+        )
+        bundle = build_trace_sample_bundle(
+            trace=trace,
+            difficulty=difficulty,
+            corruption_rows=records_by_mode["all_steps"],
+        )
+        if bundle is None:
+            continue
+        selected_bundles.append(bundle)
+        if len(selected_bundles) >= target_traces_per_cell:
+            break
+
+    return selected_bundles
+
+
+def build_trace_sample_bundle(
+    *,
+    trace: dict[str, Any],
+    difficulty: str,
+    corruption_rows: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build one sample directory payload, discarding partial corruption sweeps."""
+
+    actual_num_steps = int(trace["actual_num_steps"])
+    expected_k_values = list(range(2, actual_num_steps + 1))
+    rows_by_k = {
+        int(row["step_index"]): row
+        for row in corruption_rows
+        if str(row.get("trace_id")) == str(trace["trace_id"]) and int(row["step_index"]) >= 2
+    }
+    if expected_k_values != sorted(rows_by_k):
+        return None
+
+    selected_rows = [rows_by_k[k] for k in expected_k_values]
+    if any(bool(row["corruption_failed"]) for row in selected_rows):
+        return None
+
+    steps = [str(step) for step in trace.get("steps", [])]
+    trace_tier = max(int(row["corruption_tier"]) for row in selected_rows)
+
+    clean_payload = {
+        "steps": steps,
+        "raw_completion": str(trace.get("raw_completion", "")),
+        "final_answer_line": trace.get("final_answer_line"),
+    }
+
+    corrupt_payloads: dict[int, dict[str, Any]] = {}
+    for row in selected_rows:
+        k = int(row["step_index"])
+        corrupted_steps = list(steps)
+        corrupted_steps[k - 1] = str(row["corrupt_step"])
+        corrupted_completion = "\n".join(
+            corrupted_steps + ([str(trace["final_answer_line"])] if trace.get("final_answer_line") else [])
+        )
+        corrupt_payloads[k] = {
+            "step_index": k,
+            "steps": corrupted_steps,
+            "raw_completion": corrupted_completion,
+        }
+
+    meta_payload = {
+        "sample_id": None,
+        "source_trace_id": str(trace["trace_id"]),
+        "question_id": str(trace["question_id"]),
+        "actual_num_steps": actual_num_steps,
+        "trace_tier": trace_tier,
+        "k_values": expected_k_values,
+        "per_k": [
+            {
+                "k": int(row["step_index"]),
+                "tier": int(row["corruption_tier"]),
+                "corruption_id": str(row["corruption_id"]),
+                "token_delta": row.get("token_delta"),
+            }
+            for row in selected_rows
+        ],
+    }
+    selection_row = {
+        "sample_id": None,
+        "question_id": str(trace["question_id"]),
+        "source_trace_id": str(trace["trace_id"]),
+        "actual_num_steps": actual_num_steps,
+        "trace_tier": trace_tier,
+        "k_values": expected_k_values,
+        "sample_path": None,
+    }
+    return {
+        "sample_id": None,
+        "clean_payload": clean_payload,
+        "corrupt_payloads": corrupt_payloads,
+        "meta_payload": meta_payload,
+        "selection_row": selection_row,
+    }
+
+
+def _build_question_rows(
+    traces: list[dict[str, Any]],
+    *,
+    metadata_by_question: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    question_rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for trace in traces:
+        question_id = str(trace["question_id"])
+        if question_id in seen:
+            continue
+        seen.add(question_id)
+        question_meta = metadata_by_question.get(question_id, {})
+        question_rows.append(
+            {
+                "question_id": question_id,
+                "question_text": str(trace["question_text"]),
+                "gold_answer": trace["gold_answer"],
+            }
+        )
+    return sorted(question_rows, key=lambda row: row["question_id"])
+
+
+def _enrich_trace_row(
+    *,
+    trace: dict[str, Any],
+    question_meta: dict[str, Any],
+    min_nldd_length: int,
+) -> dict[str, Any]:
+    row = dict(trace)
+    difficulty_score = question_meta.get("difficulty_score", question_meta.get("difficulty"))
+    if not isinstance(difficulty_score, (int, float)):
+        raise TypeError("question metadata rows must contain numeric 'difficulty_score'.")
+    row["question_accuracy"] = float(question_meta["accuracy"])
+    row["difficulty_score"] = float(difficulty_score)
+    row["difficulty_bucket"] = str(question_meta["difficulty_bucket"])
+    row["nldd_min_length"] = min_nldd_length
+    row["nldd_length_eligible"] = int(trace["actual_num_steps"]) >= min_nldd_length
+    row["nldd_measurement_eligible"] = bool(trace["is_correct"]) and row["nldd_length_eligible"]
+    return row
+
+
+def _project_group_question_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    difficulty_score = row.get("difficulty_score", row.get("difficulty"))
+    if not isinstance(difficulty_score, (int, float)):
+        raise TypeError("question metadata rows must contain numeric 'difficulty_score'.")
+    return {
+        "question_id": str(row["question_id"]),
+        "accuracy": float(row["accuracy"]),
+        "difficulty_score": float(difficulty_score),
+        "optimal_length": row.get("optimal_length"),
+        "total_samples": int(row["total_samples"]),
+        "correct_count": int(row["correct_count"]),
+        "natural_length_distribution": dict(row["natural_length_distribution"]),
+    }
+
+
+def _project_group_trace_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trace_id": str(row["trace_id"]),
+        "question_id": str(row["question_id"]),
+        "actual_num_steps": int(row["actual_num_steps"]),
+        "steps": [str(step) for step in row.get("steps", [])],
+        "raw_completion": str(row.get("raw_completion", "")),
+        "final_answer_line": row.get("final_answer_line"),
+        "extracted_answer": row.get("extracted_answer"),
+        "is_correct": bool(row["is_correct"]),
+        "extraction_failed": bool(row["extraction_failed"]),
+        "token_count": row.get("token_count"),
+        "timestamp": row.get("timestamp"),
+        "nldd_length_eligible": bool(row["nldd_length_eligible"]),
+        "nldd_measurement_eligible": bool(row["nldd_measurement_eligible"]),
+    }
+
+
+def _assign_compact_sample_ids(bundles: list[dict[str, Any]]) -> None:
+    counts_by_base: dict[str, int] = defaultdict(int)
+    for bundle in bundles:
+        question_id = str(bundle["meta_payload"]["question_id"])
+        base = _extract_question_code(question_id)
+        counts_by_base[base] += 1
+        ordinal = counts_by_base[base]
+        sample_id = base if ordinal == 1 else f"{base}_{ordinal}"
+        bundle["sample_id"] = sample_id
+        bundle["meta_payload"]["sample_id"] = sample_id
+        bundle["selection_row"]["sample_id"] = sample_id
+        bundle["selection_row"]["sample_path"] = f"samples/{sample_id}"
+
+
+def _extract_question_code(question_id: str) -> str:
+    matches = re.findall(r"\d+", question_id)
+    if matches:
+        return matches[-1]
+    sanitized = re.sub(r"[^A-Za-z0-9]+", "_", question_id).strip("_")
+    return sanitized or "sample"
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -177,8 +458,18 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _stable_seed(value: str) -> int:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return int(digest[:16], 16)

@@ -40,13 +40,82 @@ def test_curate_data_phase_restructures_canonical_run(monkeypatch) -> None:
         artifacts = {row["path"]: row for row in manifest["artifacts"]}
         assert artifacts["traces.jsonl"]["role"] == "canonical"
         assert artifacts["traces.jsonl"]["default_for_analysis"] is True
+        assert artifacts["difficulty_histogram.csv"]["role"] == "canonical"
+        assert artifacts["difficulty"]["default_for_analysis"] is True
         assert artifacts["legacy/failed_corruptions.jsonl"]["role"] == "legacy"
         assert artifacts["full_run_diff-temperature/traces.jsonl"]["role"] == "legacy"
         assert artifacts["full_run_diff-temperature/traces.jsonl"]["default_for_analysis"] is False
+        assert (canonical / "difficulty_histogram.csv").exists()
+        for difficulty in ("easy", "medium", "hard"):
+            assert (canonical / "difficulty" / difficulty / "questions.jsonl").exists()
+            assert (canonical / "difficulty" / difficulty / "traces.jsonl").exists()
+            assert (canonical / "difficulty" / difficulty / "question_metadata.jsonl").exists()
 
         readme = (canonical / "README.md").read_text(encoding="utf-8")
         assert "唯一的正式 data-phase 入口" in readme
         assert "旧口径步骤失败记录" in readme
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def test_aggregate_stage1_outputs_builds_per_length_full_analysis_exports(monkeypatch) -> None:
+    monkeypatch.setenv("SCRATCH", "/tmp")
+
+    workspace = Path("tests") / f"_tmp_data_phase_groups_{uuid.uuid4().hex}"
+    run_dir = workspace / "full_generation"
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        traces: list[dict[str, object]] = []
+        for index in range(31):
+            traces.append(_trace(f"easy_len4_{index:03d}", "icl_short", 1, True, 4))
+        for index in range(130):
+            traces.append(_trace(f"easy_len5_{index:03d}", "icl_short", 1, True, 5))
+        for index in range(2):
+            traces.append(_trace(f"easy_len2_{index:03d}", "icl_short", 1, True, 2))
+            traces.append(_trace(f"easy_len6_{index:03d}", "icl_short", 1, True, 6))
+        with (run_dir / "traces.jsonl").open("w", encoding="utf-8") as handle:
+            for row in traces:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        (run_dir / "run_meta.json").write_text(
+            json.dumps({"schema_version": "stage1_trace_v2"}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        aggregate_stage1_outputs(str(run_dir))
+
+        easy_dir = run_dir / "difficulty" / "easy"
+        easy_traces = _load_jsonl_file(easy_dir / "traces.jsonl")
+        easy_questions = _load_jsonl_file(easy_dir / "questions.jsonl")
+        easy_metadata = _load_jsonl_file(easy_dir / "question_metadata.jsonl")
+
+        assert len(easy_traces) == len(traces)
+        assert len(easy_questions) == len(traces)
+        assert len(easy_metadata) == len(traces)
+        assert all("difficulty_bucket" not in row for row in easy_traces)
+        assert all("prompt_id" not in row for row in easy_traces)
+        assert any(row["actual_num_steps"] == 2 and row["nldd_measurement_eligible"] is False for row in easy_traces)
+
+        bin4_dir = easy_dir / "bins" / "bin_4"
+        bin5_dir = easy_dir / "bins" / "bin_5"
+        assert not (easy_dir / "bins" / "bin_2").exists()
+        assert not (easy_dir / "bins" / "bin_6").exists()
+
+        bin4_selection = _load_jsonl_file(bin4_dir / "selection.jsonl")
+        bin5_selection = _load_jsonl_file(bin5_dir / "selection.jsonl")
+        assert len(bin4_selection) == 31
+        assert len(bin5_selection) == 120
+        assert all(row["trace_tier"] in {1, 2} for row in bin4_selection + bin5_selection)
+
+        sample_meta = json.loads(
+            (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "meta.json").read_text(encoding="utf-8")
+        )
+        assert sample_meta["trace_tier"] in {1, 2}
+        assert sample_meta["k_values"] == [2, 3, 4]
+        assert "source_trace_id" in sample_meta
+        assert all(set(item) == {"k", "tier", "corruption_id", "token_delta"} for item in sample_meta["per_k"])
+        assert (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "clean.json").exists()
+        assert (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "corrupt_k2.json").exists()
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -160,17 +229,7 @@ def _write_corruption_artifacts(run_dir: Path) -> None:
             "failure_tier": "uncorruptible",
         },
     ]
-    sampled_steps = [
-        {
-            "corruption_id": "q1_icl_medium_1_step1_sampled_steps",
-            "trace_id": "q1_icl_medium_1",
-            "corruption_failed": False,
-            "corruption_tier": 2,
-            "corruption_type": "operator_swap",
-            "failure_tier": None,
-        }
-    ]
-    for name, rows in (("all_steps.jsonl", all_steps), ("sampled_steps.jsonl", sampled_steps)):
+    for name, rows in (("all_steps.jsonl", all_steps),):
         with (corruption_dir / name).open("w", encoding="utf-8") as handle:
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -178,7 +237,6 @@ def _write_corruption_artifacts(run_dir: Path) -> None:
     summary = summarize_corruption_records(
         {
             "all_steps": all_steps,
-            "sampled_steps": sampled_steps,
         }
     )
     (corruption_dir / "corruption_summary.json").write_text(
@@ -201,8 +259,10 @@ def _trace(
         "question_text": f"Question {question_id}",
         "gold_answer": 1.0,
         "prompt_id": prompt_id,
-        "raw_completion": "stub",
-        "steps": ["stub"] * actual_num_steps,
+        "raw_completion": "\n".join(
+            [f"Step {index}: {index + 2} + 1 = {index + 3}." for index in range(actual_num_steps)]
+        ),
+        "steps": [f"Step {index}: {index + 2} + 1 = {index + 3}." for index in range(actual_num_steps)],
         "actual_num_steps": actual_num_steps,
         "final_answer_line": "#### 1",
         "extracted_answer": 1.0 if is_correct else 0.0,
@@ -211,3 +271,20 @@ def _trace(
         "token_count": 10 + actual_num_steps,
         "timestamp": "2026-01-01T00:00:00+00:00",
     }
+
+
+def _load_jsonl_file(path: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if stripped:
+                rows.append(json.loads(stripped))
+    return rows
+
+
+def _load_csv_file(path: Path) -> list[dict[str, str]]:
+    import csv
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))

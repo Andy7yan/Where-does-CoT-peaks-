@@ -33,9 +33,9 @@ def test_export_difficulty_histogram_writes_expected_csv() -> None:
     try:
         temp_dir.mkdir(parents=True, exist_ok=True)
         rows = [
-            {"question_id": "q1", "difficulty": 0.0},
-            {"question_id": "q2", "difficulty": 0.05},
-            {"question_id": "q3", "difficulty": 1.0},
+            {"question_id": "q1", "difficulty_score": 0.0},
+            {"question_id": "q2", "difficulty_score": 0.05},
+            {"question_id": "q3", "difficulty_score": 1.0},
         ]
         with metadata_path.open("w", encoding="utf-8") as handle:
             for row in rows:
@@ -67,8 +67,8 @@ def test_export_difficulty_histogram_cli(monkeypatch) -> None:
     try:
         temp_dir.mkdir(parents=True, exist_ok=True)
         with metadata_path.open("w", encoding="utf-8") as handle:
-            handle.write(json.dumps({"question_id": "q1", "difficulty": 0.25}) + "\n")
-            handle.write(json.dumps({"question_id": "q2", "difficulty": 0.75}) + "\n")
+            handle.write(json.dumps({"question_id": "q1", "difficulty_score": 0.25}) + "\n")
+            handle.write(json.dumps({"question_id": "q2", "difficulty_score": 0.75}) + "\n")
 
         result = subprocess.run(
             [

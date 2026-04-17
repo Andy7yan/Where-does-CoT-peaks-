@@ -1,12 +1,14 @@
 #!/bin/bash
 #PBS -N peak-cot-generate
 #PBS -l select=1:ncpus=4:ngpus=1:mem=32gb:gpu_model=L40S
-#PBS -l walltime=11:50:00
+#PBS -l walltime=02:30:00
 #PBS -j oe
 #PBS -V
 #PBS -o /srv/scratch/${USER}/peak-CoT/generate.pbs.log
 #
 # Pin formal generation to L40S on Katana.
+# Historical full-run logs put 300-question shards around 1h41m-1h56m, so 2.5h keeps queueing friendlier
+# while leaving enough headroom for model load and normal variance.
 # Pilot hit a CPU RSS peak near 19 GiB during model load, so 32 GiB leaves safer headroom.
 
 set -euo pipefail

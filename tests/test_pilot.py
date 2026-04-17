@@ -163,7 +163,6 @@ def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
             "analysis.min_bin_size",
             "analysis.max_extraction_fail_rate",
             "tas.plateau_threshold",
-            "analysis.num_spot_checks",
         ):
             assert field_name in report
     finally:

@@ -35,6 +35,8 @@ def main() -> None:
         traces=traces,
         token_counter=token_counter,
         corruption_token_delta_max=config.nldd.corruption_token_delta_max,
+        integer_perturbation_range=tuple(config.nldd.integer_perturbation_range),
+        float_perturbation_range=tuple(config.nldd.float_perturbation_range),
     )
 
     output_path = run_dir / "corruption_failures.jsonl"

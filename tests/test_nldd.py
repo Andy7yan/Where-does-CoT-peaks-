@@ -3,31 +3,10 @@
 from src.analysis_phase.nldd import (
     CorruptionSelectionConfig,
     build_corruption_records,
-    sample_step_indices_for_trace,
 )
 
 
-def test_sample_step_indices_for_trace_is_deterministic() -> None:
-    first = sample_step_indices_for_trace(
-        trace_id="trace-1",
-        num_steps=5,
-        sampled_min_steps=1,
-        sampled_max_steps=2,
-        seed=42,
-    )
-    second = sample_step_indices_for_trace(
-        trace_id="trace-1",
-        num_steps=5,
-        sampled_min_steps=1,
-        sampled_max_steps=2,
-        seed=42,
-    )
-
-    assert first == second
-    assert 1 <= len(first) <= 2
-
-
-def test_build_corruption_records_emits_all_and_sampled_modes() -> None:
+def test_build_corruption_records_emits_full_mode() -> None:
     traces = [
         (
             "q0000_0001",
@@ -47,11 +26,10 @@ def test_build_corruption_records_emits_all_and_sampled_modes() -> None:
         token_counter=lambda text: len(text.split()),
         token_delta_max=2,
         retry_limit=3,
-        selection=CorruptionSelectionConfig(sampled_min_steps=1, sampled_max_steps=2, seed=42),
+        selection=CorruptionSelectionConfig(seed=42),
     )
 
     assert len(records["all_steps"]) == 2
-    assert 1 <= len(records["sampled_steps"]) <= 2
     assert all("corruption_tier" in record for record in records["all_steps"])
 
 

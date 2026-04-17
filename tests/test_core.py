@@ -49,7 +49,8 @@ def test_config_can_be_loaded(monkeypatch) -> None:
     assert config.tas.plateau_threshold == 0.05
     assert config.analysis.min_bin_size == 5
     assert config.analysis.num_full_analysis_questions == 25
-    assert config.analysis.num_spot_checks == 3
+    assert config.analysis.hard_accuracy_threshold == 0.5
+    assert config.analysis.easy_accuracy_threshold == 0.8
     assert config.analysis.max_extraction_fail_rate == 0.05
 
 
@@ -74,7 +75,8 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     assert settings["tas"]["plateau_threshold"] == 0.05
     assert settings["analysis"]["min_bin_size"] == 5
     assert settings["analysis"]["num_full_analysis_questions"] == 25
-    assert settings["analysis"]["num_spot_checks"] == 3
+    assert settings["analysis"]["hard_accuracy_threshold"] == 0.5
+    assert settings["analysis"]["easy_accuracy_threshold"] == 0.8
     assert settings["analysis"]["max_extraction_fail_rate"] == 0.05
 
 

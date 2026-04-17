@@ -25,8 +25,16 @@ def main() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--question-metadata", required=True, help="Path to question_metadata.jsonl.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
+    parser.add_argument(
+        "--question-metadata",
+        required=True,
+        help="Path to question_metadata.jsonl.",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output CSV path.",
+    )
     parser.add_argument(
         "--bin-size",
         type=float,

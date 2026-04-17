@@ -17,7 +17,11 @@ from src.data_phase1.generation import (
 )
 from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test, slice_question_records
 from src.data_phase1.prompting import load_prompt_template
-from src.common.reasoning import DEFAULT_FLOAT_PERTURBATION_RANGE, corrupt_arithmetic
+from src.common.corruption import (
+    DEFAULT_FLOAT_PERTURBATION_RANGE,
+    DEFAULT_INTEGER_PERTURBATION_RANGE,
+    corrupt_arithmetic,
+)
 from src.common.settings import ExperimentConfig, load_settings
 
 
@@ -214,6 +218,7 @@ def run_pilot(
             _require_mapping(settings, "nldd"),
             "corruption_token_delta_max",
         ),
+        integer_perturbation_range=tuple(experiment_config.nldd.integer_perturbation_range),
         float_perturbation_range=tuple(experiment_config.nldd.float_perturbation_range),
         token_counter_label="whitespace_approximation" if mock else "model_tokenizer",
     )
@@ -303,7 +308,8 @@ def evaluate_pilot_checks(
     pilot: PilotOverrides,
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
-    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     token_counter_label: str,
 ) -> list[PilotCheckResult]:
     """Compute Pilot checks A/B/C/D/E from generated traces."""
@@ -316,6 +322,7 @@ def evaluate_pilot_checks(
             traces=traces,
             token_counter=token_counter,
             corruption_token_delta_max=corruption_token_delta_max,
+            integer_perturbation_range=integer_perturbation_range,
             float_perturbation_range=float_perturbation_range,
             token_counter_label=token_counter_label,
         ),
@@ -485,7 +492,8 @@ def evaluate_check_d(
     traces: list[dict[str, Any]],
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
-    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     token_counter_label: str,
 ) -> PilotCheckResult:
     """Evaluate single-step corruption feasibility over correct traces."""
@@ -496,6 +504,7 @@ def evaluate_check_d(
         traces=correct_traces,
         token_counter=token_counter,
         corruption_token_delta_max=corruption_token_delta_max,
+        integer_perturbation_range=integer_perturbation_range,
         float_perturbation_range=float_perturbation_range,
     )
     failure_counts: dict[str, int] = defaultdict(int)
@@ -549,7 +558,8 @@ def diagnose_corruption_failures(
     traces: list[dict[str, Any]],
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
-    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
 ) -> list[dict[str, Any]]:
     """Collect failed corruption attempts over the steps of correct traces."""
 
@@ -568,6 +578,7 @@ def diagnose_corruption_failures(
                 step_text=step_text,
                 token_counter=token_counter,
                 corruption_token_delta_max=corruption_token_delta_max,
+                integer_perturbation_range=integer_perturbation_range,
                 float_perturbation_range=float_perturbation_range,
             )
             if failure_reason is None:
@@ -590,13 +601,15 @@ def classify_corruption_failure(
     step_text: str,
     token_counter: Callable[[str], int],
     corruption_token_delta_max: int,
-    float_perturbation_range: tuple[float, float, float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
 ) -> str | None:
     """Classify a corruption failure reason for a single reasoning step."""
 
     try:
         result = corrupt_arithmetic(
             step_text,
+            integer_perturbation_range=integer_perturbation_range,
             float_perturbation_range=float_perturbation_range,
         )
     except Exception:
@@ -626,7 +639,6 @@ def evaluate_check_e() -> PilotCheckResult:
         summary="Deferred to Stage F by stage-boundary decision.",
         metrics={
             "tas_plateau_threshold_default": 0.05,
-            "analysis_num_spot_checks_default": 3,
         },
     )
 
@@ -688,7 +700,7 @@ def render_pilot_report(
             "## Notes",
             "",
             "- Check E is intentionally deferred to Stage F and does not exercise `src/analysis_phase/nldd.py` in Stage D.",
-            "- `tas.plateau_threshold` and `analysis.num_spot_checks` are provisional defaults until Stage F smoke data exists.",
+            "- `tas.plateau_threshold` remains a provisional default until Stage F smoke data exists.",
             "- The backfill table is intended to be copied into `configs/stage1.yaml` by hand after Pilot review.",
         ]
     )
@@ -741,11 +753,6 @@ def build_recommendation_rows(
         {
             "field": "tas.plateau_threshold",
             "value": 0.05,
-            "basis": "Provisional Stage D default because check E is deferred.",
-        },
-        {
-            "field": "analysis.num_spot_checks",
-            "value": 3,
             "basis": "Provisional Stage D default because check E is deferred.",
         },
     ]

@@ -70,7 +70,7 @@ class NLDDConfig:
     """NLDD measurement configuration."""
 
     corruption_type: str
-    integer_perturbation: str
+    integer_perturbation_range: list[int]
     float_perturbation_range: list[float]
     enable_tier3_semantic_flip: bool
     corruption_token_delta_max: int
@@ -100,7 +100,8 @@ class AnalysisConfig:
 
     min_bin_size: int | None
     min_nldd_length: int | None
-    difficulty_quantiles: list[float] | None
+    hard_accuracy_threshold: float | None
+    easy_accuracy_threshold: float | None
     num_length_bins: int | None
     length_bin_mode: str | None
     target_traces_per_cell: int | None
@@ -112,9 +113,7 @@ class AnalysisConfig:
     min_cell_size: int | None
     num_normalized_bins: int | None
     min_bin_coverage_ratio: float | None
-    accuracy_exclusion_bounds: list[float] | None
     num_full_analysis_questions: int | None
-    num_spot_checks: int | None
     max_extraction_fail_rate: float | None
 
 
@@ -149,10 +148,16 @@ class ExperimentConfig:
         pilot = _require_mapping(data, "pilot")
         tas = _require_mapping(data, "tas")
         analysis = _require_mapping(data, "analysis")
+        integer_perturbation_range = _require_int_list(
+            nldd,
+            "integer_perturbation_range",
+            expected_length=2,
+        )
+        _validate_integer_perturbation_range(integer_perturbation_range)
         float_perturbation_range = _require_float_list(
             nldd,
             "float_perturbation_range",
-            expected_length=4,
+            expected_length=2,
         )
         _validate_float_perturbation_range(float_perturbation_range)
 
@@ -189,7 +194,7 @@ class ExperimentConfig:
             ),
             nldd=NLDDConfig(
                 corruption_type=_require_string(nldd, "corruption_type"),
-                integer_perturbation=_require_string(nldd, "integer_perturbation"),
+                integer_perturbation_range=integer_perturbation_range,
                 float_perturbation_range=float_perturbation_range,
                 enable_tier3_semantic_flip=_require_bool(
                     nldd,
@@ -213,9 +218,13 @@ class ExperimentConfig:
             analysis=AnalysisConfig(
                 min_bin_size=_optional_int(analysis, "min_bin_size"),
                 min_nldd_length=_optional_int(analysis, "min_nldd_length"),
-                difficulty_quantiles=_optional_float_list(
+                hard_accuracy_threshold=_optional_float(
                     analysis,
-                    "difficulty_quantiles",
+                    "hard_accuracy_threshold",
+                ),
+                easy_accuracy_threshold=_optional_float(
+                    analysis,
+                    "easy_accuracy_threshold",
                 ),
                 num_length_bins=_optional_int(analysis, "num_length_bins"),
                 length_bin_mode=_optional_string(analysis, "length_bin_mode"),
@@ -252,15 +261,10 @@ class ExperimentConfig:
                     analysis,
                     "min_bin_coverage_ratio",
                 ),
-                accuracy_exclusion_bounds=_optional_float_list(
-                    analysis,
-                    "accuracy_exclusion_bounds",
-                ),
                 num_full_analysis_questions=_optional_int(
                     analysis,
                     "num_full_analysis_questions",
                 ),
-                num_spot_checks=_optional_int(analysis, "num_spot_checks"),
                 max_extraction_fail_rate=_optional_float(
                     analysis,
                     "max_extraction_fail_rate",
@@ -423,6 +427,27 @@ def _require_float_list(
     return converted
 
 
+def _require_int_list(
+    data: dict[str, Any],
+    key: str,
+    *,
+    expected_length: int | None = None,
+) -> list[int]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise TypeError(f"Config field '{key}' must be a list.")
+    converted: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise TypeError(f"Config field '{key}' must contain only integers.")
+        converted.append(item)
+    if expected_length is not None and len(converted) != expected_length:
+        raise TypeError(
+            f"Config field '{key}' must contain exactly {expected_length} integers."
+        )
+    return converted
+
+
 def _optional_float_list(
     data: dict[str, Any],
     key: str,
@@ -468,12 +493,20 @@ def _coerce_float(value: Any, key: str, allow_null: bool) -> float:
     raise TypeError(f"Config field '{key}' must be a float.")
 
 
+def _validate_integer_perturbation_range(values: list[int]) -> None:
+    low, high = values
+    if not (low < 0 < high):
+        raise TypeError(
+            "Config field 'integer_perturbation_range' must satisfy low < 0 < high."
+        )
+
+
 def _validate_float_perturbation_range(values: list[float]) -> None:
-    low_min, low_max, high_min, high_max = values
-    if not (low_min < low_max < high_min < high_max):
+    low, high = values
+    if not (0.0 < low < high):
         raise TypeError(
             "Config field 'float_perturbation_range' must satisfy "
-            "low_min < low_max < high_min < high_max."
+            "0.0 < low < high."
         )
 
 
