@@ -11,6 +11,7 @@ import shutil
 from typing import Any, Callable
 
 from src.common.settings import ExperimentConfig, require_config_value
+from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test
 from src.data_phase1.pilot import build_token_counter
 from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER
 
@@ -49,6 +50,10 @@ def export_difficulty_length_groups(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     token_counter = build_token_counter(tokenizer=None, approximate=True)
+    question_lookup = _build_question_lookup(
+        traces=traces,
+        config=config,
+    )
     grouped_traces: dict[str, list[dict[str, Any]]] = {
         difficulty: []
         for difficulty in DIFFICULTY_ORDER
@@ -93,7 +98,7 @@ def export_difficulty_length_groups(
         ]
         grouped_questions[difficulty] = _build_question_rows(
             grouped_traces[difficulty],
-            metadata_by_question=metadata_by_question,
+            question_lookup=question_lookup,
         )
 
     export_summary: dict[str, Any] = {
@@ -187,6 +192,7 @@ def export_bins_for_difficulty(
             corruption_token_delta_max=corruption_token_delta_max,
             corruption_retry_limit=corruption_retry_limit,
             corruption_seed=corruption_seed,
+            min_cell_size=min_cell_size,
             target_traces_per_cell=target_traces_per_cell,
         )
         if not selected_bundles:
@@ -233,13 +239,14 @@ def build_sample_bundles_for_length(
     corruption_token_delta_max: int,
     corruption_retry_limit: int,
     corruption_seed: int,
+    min_cell_size: int,
     target_traces_per_cell: int,
 ) -> list[dict[str, Any]]:
     """Select fully successful samples for one exact-length bin."""
 
-    from src.analysis_phase.nldd import CorruptionSelectionConfig, build_corruption_records
+    from src.analysis_phase1.nldd import CorruptionSelectionConfig, build_corruption_records
 
-    selected_bundles: list[dict[str, Any]] = []
+    complete_bundles: list[dict[str, Any]] = []
     sorted_traces = sorted(
         traces,
         key=lambda row: _stable_seed(
@@ -264,11 +271,11 @@ def build_sample_bundles_for_length(
         )
         if bundle is None:
             continue
-        selected_bundles.append(bundle)
-        if len(selected_bundles) >= target_traces_per_cell:
-            break
+        complete_bundles.append(bundle)
 
-    return selected_bundles
+    if len(complete_bundles) < min_cell_size:
+        return []
+    return complete_bundles[:target_traces_per_cell]
 
 
 def build_trace_sample_bundle(
@@ -354,7 +361,7 @@ def build_trace_sample_bundle(
 def _build_question_rows(
     traces: list[dict[str, Any]],
     *,
-    metadata_by_question: dict[str, dict[str, Any]],
+    question_lookup: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     question_rows: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -363,15 +370,75 @@ def _build_question_rows(
         if question_id in seen:
             continue
         seen.add(question_id)
-        question_meta = metadata_by_question.get(question_id, {})
+        question_row = question_lookup.get(question_id)
+        if question_row is None:
+            raise KeyError(f"Missing question payload for question_id {question_id!r}.")
         question_rows.append(
             {
                 "question_id": question_id,
-                "question_text": str(trace["question_text"]),
-                "gold_answer": trace["gold_answer"],
+                "question_text": str(question_row["question_text"]),
+                "gold_answer": question_row["gold_answer"],
             }
         )
     return sorted(question_rows, key=lambda row: row["question_id"])
+
+
+def _build_question_lookup(
+    *,
+    traces: list[dict[str, Any]],
+    config: ExperimentConfig,
+) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    missing_question_ids: set[str] = set()
+    for trace in traces:
+        question_id = str(trace["question_id"])
+        question_text = trace.get("question_text")
+        gold_answer = trace.get("gold_answer")
+        if isinstance(question_text, str) and question_text.strip() and gold_answer is not None:
+            lookup[question_id] = {
+                "question_text": question_text,
+                "gold_answer": gold_answer,
+            }
+        else:
+            missing_question_ids.add(question_id)
+
+    if not missing_question_ids:
+        return lookup
+
+    ranked_questions = build_ranked_questions(
+        load_gsm8k_test(
+            cache_dir=config.model.hf_cache,
+            dataset_name=config.dataset.name,
+            dataset_config=config.dataset.hf_config,
+            split=config.dataset.split,
+        ),
+        hash_seed=config.dataset.order_hash_seed,
+        dataset_name=config.dataset.name,
+        split=config.dataset.split,
+    )
+    ranked_by_index = {
+        _question_index_key(str(row["question_id"])): row
+        for row in ranked_questions
+    }
+    for question_id in sorted(missing_question_ids):
+        recovered = ranked_by_index.get(_question_index_key(question_id))
+        if recovered is None:
+            raise KeyError(
+                f"Could not recover question payload for question_id {question_id!r} "
+                "from the ranked dataset."
+            )
+        lookup[question_id] = {
+            "question_text": str(recovered["question_text"]),
+            "gold_answer": recovered["gold_answer"],
+        }
+    return lookup
+
+
+def _question_index_key(question_id: str) -> int | str:
+    matches = re.findall(r"\d+", question_id)
+    if matches:
+        return int(matches[-1])
+    return question_id
 
 
 def _enrich_trace_row(
@@ -401,7 +468,6 @@ def _project_group_question_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "question_id": str(row["question_id"]),
         "accuracy": float(row["accuracy"]),
         "difficulty_score": float(difficulty_score),
-        "optimal_length": row.get("optimal_length"),
         "total_samples": int(row["total_samples"]),
         "correct_count": int(row["correct_count"]),
         "natural_length_distribution": dict(row["natural_length_distribution"]),

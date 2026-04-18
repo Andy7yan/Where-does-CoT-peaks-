@@ -16,33 +16,29 @@ from typing import Any
 from src.data_phase2.corruption_layout import resolve_corruption_artifact_path
 from src.data_phase2.coarse_analysis import (
     DIFFICULTY_ORDER,
-    build_accuracy_buckets_by_difficulty,
-    build_coarse_analysis,
+    build_accuracy_rows_by_difficulty,
     build_question_metadata_v4,
-    dedupe_traces_for_analysis,
 )
-from src.analysis_phase.nldd import summarize_corruption_records
+from src.analysis_phase1.nldd import summarize_corruption_records
 from src.data_phase2.aggregation import (
     aggregate_stage1_outputs,
-    build_accuracy_buckets,
     load_stage1_traces,
-    select_l_star,
 )
 from src.common.settings import ExperimentConfig, require_config_value
 
 
 CANONICAL_ROOT_ITEMS = {
     "accuracy_by_length.csv",
-    "coarse_analysis.json",
+    "difficulty_histogram.csv",
+    "difficulty",
+    "question_metadata.jsonl",
+    "traces.jsonl",
+}
+OPTIONAL_ROOT_ITEMS = {
     "all_steps.jsonl",
     "corruption_summary.json",
     "corruptted_traces",
-    "difficulty_histogram.csv",
-    "difficulty",
-    "lstar_summary.csv",
-    "question_metadata.jsonl",
     "run_meta.json",
-    "traces.jsonl",
 }
 GENERATED_ROOT_ITEMS = {
     "README.md",
@@ -153,10 +149,7 @@ def validate_canonical_data_phase(
         )
 
     _validate_accuracy_csv(run_path, traces=traces, config_path=config_path)
-    for filename in ("coarse_analysis.json", "lstar_summary.csv"):
-        if not (run_path / filename).exists():
-            raise FileNotFoundError(f"Canonical data phase is missing required coarse-analysis artifact: {filename}")
-    corruption_validation = _validate_corruption_summary(run_path)
+    corruption_validation = _validate_optional_corruption_summary(run_path)
     difficulty_validation = _validate_difficulty_exports(run_path, traces=traces)
     run_meta_notes = _build_run_meta_notes(
         run_path=run_path,
@@ -170,10 +163,12 @@ def validate_canonical_data_phase(
         "trace_id_unique": True,
         "question_metadata_matches_traces": True,
         "accuracy_csv_matches_traces": True,
-        "corruption_summary_matches_records": True,
+        "corruption_summary_matches_records": (
+            True if corruption_validation["present"] else None
+        ),
         "difficulty_exports_match_traces": True,
         "run_meta_notes": run_meta_notes,
-        "corruption_validation": corruption_validation,
+        "corruption_validation": corruption_validation["modes"],
         "difficulty_validation": difficulty_validation,
     }
 
@@ -184,7 +179,7 @@ def move_noncanonical_root_items(run_path: Path) -> list[dict[str, str]]:
     legacy_dir = run_path / "legacy"
     legacy_dir.mkdir(parents=True, exist_ok=True)
 
-    allowed = CANONICAL_ROOT_ITEMS | GENERATED_ROOT_ITEMS
+    allowed = CANONICAL_ROOT_ITEMS | OPTIONAL_ROOT_ITEMS | GENERATED_ROOT_ITEMS
     moved_items: list[dict[str, str]] = []
     for path in sorted(run_path.iterdir(), key=lambda item: item.name):
         if path.name in allowed:
@@ -226,12 +221,7 @@ def build_data_phase_manifest(
             "traces.jsonl",
             "question_metadata.jsonl",
             "accuracy_by_length.csv",
-            "coarse_analysis.json",
-            "lstar_summary.csv",
             "difficulty_histogram.csv",
-            "run_meta.json",
-            "all_steps.jsonl",
-            "corruption_summary.json",
             "difficulty",
         ],
         "legacy_sources": [
@@ -257,6 +247,14 @@ def build_overview_markdown(
     if not moved:
         moved = "- 本次整理没有发现需要下沉的根目录文件。"
     corruption = validation["corruption_validation"]
+    if corruption:
+        corruption_block = (
+            "- `corruption_summary.json` 与 corruption records 一致性: 通过\n"
+            f"- `all_steps` 记录数 / 失败数: `{corruption['all_steps']['records']}` / "
+            f"`{corruption['all_steps']['failures']}`\n"
+        )
+    else:
+        corruption_block = "- 当前 canonical data-phase 不要求根级 corruption summary。\n"
     return (
         "# Data Phase Overview\n\n"
         "这个目录现在是 analysis 阶段唯一的正式 data-phase 入口。\n\n"
@@ -264,9 +262,8 @@ def build_overview_markdown(
         "- `traces.jsonl`: dedup 后的正式 trace 表\n"
         "- `question_metadata.jsonl`: 基于 dedup trace 生成的题目级元数据\n"
         "- `accuracy_by_length.csv`: 基于 dedup trace 生成的长度-准确率聚合表\n"
-        "- `run_meta.json`: 生成时配置快照，不保证与当前 `configs/stage1.yaml` 完全一致\n"
-        "- `corruptted_traces/all_steps.jsonl`\n"
-        "- `corruptted_traces/corruption_summary.json`: corruption 正式统计口径\n\n"
+        "- `difficulty_histogram.csv`: 全局难度分布直方图\n"
+        "- `difficulty/*/bins/bin_{L}/samples/*`: analysis 的正式 sample handoff\n\n"
         "## 不再默认读取\n\n"
         "- `legacy/failed_corruptions.jsonl` 是旧口径步骤失败记录，不代表当前正式 corruption 成败率\n"
         f"- `{external_legacy_path.as_posix()}` 仅作 provenance / 历史追溯，不作默认 analysis 输入\n\n"
@@ -276,8 +273,7 @@ def build_overview_markdown(
         "- `trace_id` 唯一性: 通过\n"
         "- `question_metadata.jsonl` 覆盖一致性: 通过\n"
         "- `accuracy_by_length.csv` 与 dedup trace 一致性: 通过\n"
-        "- `corruption_summary.json` 与 corruption records 一致性: 通过\n"
-        f"- `all_steps` 记录数 / 失败数: `{corruption['all_steps']['records']}` / `{corruption['all_steps']['failures']}`\n"
+        f"{corruption_block}"
         "## run_meta 说明\n\n"
         f"{notes}\n\n"
         "## 本次下沉到 legacy 的内容\n\n"
@@ -308,7 +304,7 @@ def build_legacy_markdown(
 
 
 def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
-    return [
+    entries = [
         _artifact_entry(
             run_path=run_path,
             path=run_path / "traces.jsonl",
@@ -332,27 +328,9 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
             path=run_path / "accuracy_by_length.csv",
             role="canonical",
             default_for_analysis=True,
-            join_keys=["bucket_label"],
+            join_keys=["difficulty", "length"],
             source="derived from canonical traces",
-            notes="Per-difficulty accuracy-by-length aggregation with raw and dedup views.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
-            path=run_path / "coarse_analysis.json",
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=[],
-            source="derived from canonical traces",
-            notes="Frozen v4 coarse-analysis boundaries for difficulty, tertiles, and near-L* windows.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
-            path=run_path / "lstar_summary.csv",
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=["difficulty"],
-            source="derived from coarse analysis",
-            notes="Per-difficulty L* and selected near-L* window summary.",
+            notes="Per-difficulty exact-length accuracy table used as the canonical L-curve.",
         ),
         _artifact_entry(
             run_path=run_path,
@@ -362,33 +340,6 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
             join_keys=["bin_left", "bin_right"],
             source="derived from question metadata",
             notes="Root-level histogram over per-question difficulty scores.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
-            path=run_path / "run_meta.json",
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=[],
-            source="generation-time snapshot",
-            notes="Generation-time run metadata snapshot; may differ from the current config YAML.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
-            path=resolve_corruption_artifact_path(run_path, "all_steps.jsonl"),
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=["corruption_id", "trace_id"],
-            source="deduplicated corruption records",
-            notes="Full corruption records across all eligible steps.",
-        ),
-        _artifact_entry(
-            run_path=run_path,
-            path=resolve_corruption_artifact_path(run_path, "corruption_summary.json"),
-            role="canonical",
-            default_for_analysis=True,
-            join_keys=[],
-            source="derived from canonical corruption records",
-            notes="Official corruption success/failure summary for analysis.",
         ),
         _artifact_entry(
             run_path=run_path,
@@ -418,6 +369,43 @@ def _build_canonical_entries(run_path: Path) -> list[dict[str, Any]]:
             notes="Machine-readable manifest describing canonical and legacy artifacts.",
         ),
     ]
+    optional_entries = [
+        (
+            run_path / "run_meta.json",
+            True,
+            [],
+            "generation-time snapshot",
+            "Optional generation-time run metadata snapshot retained for provenance.",
+        ),
+        (
+            resolve_corruption_artifact_path(run_path, "all_steps.jsonl"),
+            False,
+            ["corruption_id", "trace_id"],
+            "deduplicated corruption records",
+            "Optional legacy-compatible corruption record table.",
+        ),
+        (
+            resolve_corruption_artifact_path(run_path, "corruption_summary.json"),
+            False,
+            [],
+            "derived from canonical corruption records",
+            "Optional legacy-compatible corruption summary.",
+        ),
+    ]
+    for path, default_for_analysis, join_keys, source, notes in optional_entries:
+        if path.exists():
+            entries.append(
+                _artifact_entry(
+                    run_path=run_path,
+                    path=path,
+                    role="canonical",
+                    default_for_analysis=default_for_analysis,
+                    join_keys=join_keys,
+                    source=source,
+                    notes=notes,
+                )
+            )
+    return entries
 
 
 def _build_local_legacy_entries(run_path: Path) -> list[dict[str, Any]]:
@@ -456,8 +444,6 @@ def _build_external_legacy_entries(run_path: Path, external_legacy_path: Path) -
         "traces.jsonl",
         "question_metadata.jsonl",
         "accuracy_by_length.csv",
-        "coarse_analysis.json",
-        "lstar_summary.csv",
         "run_meta.json",
         "failed_corruptions.jsonl",
         "all_steps.jsonl",
@@ -511,11 +497,9 @@ def _default_join_keys_for_path(path: Path) -> list[str]:
     if name == "question_metadata.jsonl":
         return ["question_id"]
     if name == "accuracy_by_length.csv":
-        return ["difficulty", "dedup_mode", "bucket_label"]
+        return ["difficulty", "length"]
     if name == "difficulty_histogram.csv":
         return ["bin_left", "bin_right"]
-    if name == "lstar_summary.csv":
-        return ["difficulty"]
     if name == "all_steps.jsonl":
         return ["corruption_id", "trace_id"]
     if name == "failed_corruptions.jsonl":
@@ -525,14 +509,8 @@ def _default_join_keys_for_path(path: Path) -> list[str]:
 
 def _validate_accuracy_csv(run_path: Path, *, traces: list[dict[str, Any]], config_path: str) -> None:
     config = ExperimentConfig.from_yaml(config_path)
-    min_bin_size = require_config_value(
-        "analysis.min_bin_size",
-        config.analysis.min_bin_size,
-    )
-    deduped_traces = dedupe_traces_for_analysis(traces)
     question_metadata = build_question_metadata_v4(
         traces=traces,
-        deduped_traces=deduped_traces,
         hard_accuracy_threshold=require_config_value(
             "analysis.hard_accuracy_threshold",
             config.analysis.hard_accuracy_threshold,
@@ -542,27 +520,24 @@ def _validate_accuracy_csv(run_path: Path, *, traces: list[dict[str, Any]], conf
             config.analysis.easy_accuracy_threshold,
         ),
     )
-    buckets_by_difficulty = build_accuracy_buckets_by_difficulty(
+    expected_rows = build_accuracy_rows_by_difficulty(
         traces=traces,
-        deduped_traces=deduped_traces,
         question_metadata=question_metadata,
-        build_accuracy_buckets=build_accuracy_buckets,
-        min_bin_size=min_bin_size,
+        min_nldd_length=require_config_value(
+            "analysis.min_nldd_length",
+            config.analysis.min_nldd_length,
+        ),
     )
-    expected_rows: list[dict[str, str]] = []
-    for difficulty in DIFFICULTY_ORDER:
-        for dedup_mode in ("dedup", "raw"):
-            for bucket in buckets_by_difficulty[difficulty][dedup_mode]:
-                expected_rows.append(
-                    {
-                        "difficulty": difficulty,
-                        "dedup_mode": dedup_mode,
-                        "bucket_label": _format_bucket_label(bucket.bucket_label),
-                        "n": str(bucket.n),
-                        "mean": f"{bucket.mean:.6f}",
-                        "se": f"{bucket.se:.6f}",
-                    }
-                )
+    expected_rows = [
+        {
+            "difficulty": str(row["difficulty"]),
+            "length": str(int(row["length"])),
+            "n": str(int(row["n"])),
+            "mean_accuracy": f"{float(row['mean_accuracy']):.6f}",
+            "se_accuracy": f"{float(row['se_accuracy']):.6f}",
+        }
+        for row in expected_rows
+    ]
 
     accuracy_path = run_path / "accuracy_by_length.csv"
     with accuracy_path.open("r", encoding="utf-8", newline="") as handle:
@@ -571,8 +546,14 @@ def _validate_accuracy_csv(run_path: Path, *, traces: list[dict[str, Any]], conf
         raise ValueError("accuracy_by_length.csv is inconsistent with the deduplicated traces.")
 
 
-def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
+def _validate_optional_corruption_summary(run_path: Path) -> dict[str, Any]:
     summary_path = resolve_corruption_artifact_path(run_path, "corruption_summary.json")
+    records_present = any(
+        resolve_corruption_artifact_path(run_path, f"{mode_name}.jsonl").exists()
+        for mode_name in CORRUPTION_MODES
+    )
+    if not summary_path.exists() and not records_present:
+        return {"present": False, "modes": {}}
     if not summary_path.exists():
         raise FileNotFoundError(f"Missing corruption summary: {summary_path}")
 
@@ -585,6 +566,8 @@ def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
     mode_rows: dict[str, list[dict[str, Any]]] = {}
     for mode_name in CORRUPTION_MODES:
         mode_path = resolve_corruption_artifact_path(run_path, f"{mode_name}.jsonl")
+        if not mode_path.exists():
+            raise FileNotFoundError(f"Missing corruption records: {mode_path}")
         rows = _load_jsonl(mode_path)
         mode_rows[mode_name] = rows
         failure_count = sum(1 for row in rows if row.get("corruption_failed"))
@@ -603,7 +586,7 @@ def _validate_corruption_summary(run_path: Path) -> dict[str, dict[str, int]]:
     recomputed = json.loads(json.dumps(summarize_corruption_records(mode_rows)))
     if recomputed != summary:
         raise ValueError("corruption_summary.json does not match the recomputed corruption summary.")
-    return validation
+    return {"present": True, "modes": validation}
 
 
 def _validate_difficulty_exports(
@@ -668,6 +651,10 @@ def _build_run_meta_notes(
 ) -> list[str]:
     config = ExperimentConfig.from_yaml(config_path)
     run_meta_path = run_path / "run_meta.json"
+    if not run_meta_path.exists():
+        return [
+            "当前 canonical data-phase handoff 不要求根级 run_meta.json；若后续需要追溯 generation-time 配置，可单独补回 provenance 快照。",
+        ]
     run_meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
 
     notes = [
@@ -725,12 +712,6 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
             if stripped:
                 rows.append(json.loads(stripped))
     return rows
-
-
-def _format_bucket_label(value: float) -> str:
-    if value.is_integer():
-        return str(int(value))
-    return f"{value:.1f}"
 
 
 def _move_path(source: Path, destination: Path) -> None:

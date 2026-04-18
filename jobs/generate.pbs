@@ -1,12 +1,13 @@
 #!/bin/bash
 #PBS -N peak-cot-generate
-#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb:gpu_model=L40S
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb
 #PBS -l walltime=02:30:00
 #PBS -j oe
 #PBS -V
 #PBS -o /srv/scratch/${USER}/peak-CoT/generate.pbs.log
 #
-# Pin formal generation to L40S on Katana.
+# Leave GPU model unconstrained to improve queueability.
+# Runtime preflight still rejects incompatible CUDA devices.
 # Historical full-run logs put 300-question shards around 1h41m-1h56m, so 2.5h keeps queueing friendlier
 # while leaving enough headroom for model load and normal variance.
 # Pilot hit a CPU RSS peak near 19 GiB during model load, so 32 GiB leaves safer headroom.
@@ -23,6 +24,8 @@ PROJECT_NAME="peak-CoT"
 : "${DEBUG:=0}"
 : "${SOURCE:=huggingface}"
 : "${LOCAL_PATH:=}"
+: "${PEAK_COT_FORCE_DEVICE:=cuda}"
+: "${PEAK_COT_ALLOW_CPU_FALLBACK:=0}"
 
 cd "${PROJECT_HOME}" || exit 1
 if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
@@ -42,12 +45,14 @@ set -u
 : "${HF_DATASETS_CACHE:?HF_DATASETS_CACHE must be set by ${PROJECT_HOME}/.env}"
 
 export RUN_NAME
+export PEAK_COT_FORCE_DEVICE
+export PEAK_COT_ALLOW_CPU_FALLBACK
 SCRATCH_ROOT="${SCRATCH}"
 RUN_DIR="${SCRATCH_ROOT}/runs/${RUN_NAME}"
 VENV_DIR="${SCRATCH_ROOT}/.venv"
 LOG_PATH="${RUN_DIR}/logs/generation-${SHARD_ID}.log"
 
-mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints"
+mkdir -p "${RUN_DIR}/logs"
 exec > >(tee -a "${LOG_PATH}") 2>&1
 
 echo "project_home=${PROJECT_HOME}"

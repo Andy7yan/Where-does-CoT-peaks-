@@ -276,9 +276,13 @@ class ExperimentConfig:
 def load_settings(path: str) -> dict[str, Any]:
     """Read YAML, expand environment variables, and return the raw mapping."""
 
-    config_path = Path(path)
+    config_path = _resolve_config_path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
+    if config_path.is_dir():
+        raise IsADirectoryError(
+            f"Config path points to a directory, not a YAML file: {config_path}"
+        )
 
     with config_path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
@@ -304,6 +308,22 @@ def require_config_value(field_path: str, value: T | None) -> T:
     if value is None:
         raise ValueError(f"{field_path} 需由 Pilot Run 确认后填写")
     return value
+
+
+def _resolve_config_path(path: str) -> Path:
+    raw_path = path.strip() if isinstance(path, str) else str(path)
+    if not raw_path:
+        return Path("configs/stage1.yaml")
+
+    config_path = Path(raw_path)
+    if config_path.is_dir():
+        for candidate in (
+            config_path / "configs" / "stage1.yaml",
+            config_path / "stage1.yaml",
+        ):
+            if candidate.exists() and candidate.is_file():
+                return candidate
+    return config_path
 
 
 def _expand_env_vars(value: Any) -> Any:

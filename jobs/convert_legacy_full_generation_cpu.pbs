@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -N peak-cot-convert-legacy
+#PBS -l select=1:ncpus=4:mem=32gb
+#PBS -l walltime=01:50:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/convert_legacy_full_generation_cpu.pbs.log
+#
+# One-off CPU job that converts a legacy full_generation run in place
+# into the current canonical difficulty handoff layout.
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${CONFIG_PATH:=configs/stage1.yaml}"
+: "${RUN_DIR:=/srv/scratch/${USER}/peak-CoT/runs/full_generation}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+LOG_PATH="${RUN_DIR}/logs/convert_legacy_full_generation.log"
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+
+python scripts/convert_legacy_full_generation.py \
+  --run-dir "${RUN_DIR}" \
+  --config "${CONFIG_PATH}"

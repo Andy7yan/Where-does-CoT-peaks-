@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data_phase1.generation import _load_tokenizer_with_fallback, ensure_model_available
-from src.analysis_phase.nldd import (
+from src.analysis_phase1.nldd import (
     CorruptionSelectionConfig,
     build_corruption_records,
     load_trace_sources,

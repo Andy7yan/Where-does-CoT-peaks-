@@ -8,18 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from src.common.settings import ExperimentConfig, require_config_value
-from src.data_phase2.aggregation_core import (
-    AccuracyBucket,
-    _format_bucket_label,
-    build_accuracy_buckets,
-    select_l_star,
-)
 from src.data_phase2.coarse_analysis import (
     DIFFICULTY_ORDER,
-    build_accuracy_buckets_by_difficulty,
-    build_coarse_analysis,
+    build_accuracy_rows_by_difficulty,
     build_question_metadata_v4,
-    dedupe_traces_for_analysis,
 )
 from src.data_phase2.difficulty_groups import export_difficulty_length_groups
 from src.data_phase2.difficulty_histogram import export_difficulty_histogram
@@ -33,10 +25,6 @@ def aggregate_stage1_outputs(
     """Aggregate Stage C outputs into summary tables and coarse-analysis artifacts."""
 
     config = ExperimentConfig.from_yaml(config_path)
-    min_bin_size = require_config_value(
-        "analysis.min_bin_size",
-        config.analysis.min_bin_size,
-    )
     min_nldd_length = require_config_value(
         "analysis.min_nldd_length",
         config.analysis.min_nldd_length,
@@ -49,18 +37,6 @@ def aggregate_stage1_outputs(
         "analysis.easy_accuracy_threshold",
         config.analysis.easy_accuracy_threshold,
     )
-    primary_lstar_window = require_config_value(
-        "analysis.primary_lstar_window",
-        config.analysis.primary_lstar_window,
-    )
-    fallback_lstar_window = require_config_value(
-        "analysis.fallback_lstar_window",
-        config.analysis.fallback_lstar_window,
-    )
-    min_near_lstar_traces = require_config_value(
-        "analysis.min_near_lstar_traces",
-        config.analysis.min_near_lstar_traces,
-    )
     min_cell_size = require_config_value(
         "analysis.min_cell_size",
         config.analysis.min_cell_size,
@@ -71,44 +47,22 @@ def aggregate_stage1_outputs(
     if not traces:
         raise ValueError(f"Stage C requires at least one trace in '{traces_path}'.")
 
-    deduped_traces = dedupe_traces_for_analysis(traces)
     question_metadata = build_question_metadata_v4(
         traces=traces,
-        deduped_traces=deduped_traces,
         hard_accuracy_threshold=hard_accuracy_threshold,
         easy_accuracy_threshold=easy_accuracy_threshold,
     )
-    buckets_by_difficulty = build_accuracy_buckets_by_difficulty(
+    accuracy_rows = build_accuracy_rows_by_difficulty(
         traces=traces,
-        deduped_traces=deduped_traces,
         question_metadata=question_metadata,
-        build_accuracy_buckets=build_accuracy_buckets,
-        min_bin_size=min_bin_size,
-    )
-    coarse_analysis = build_coarse_analysis(
-        deduped_traces=deduped_traces,
-        question_metadata=question_metadata,
-        buckets_by_difficulty=buckets_by_difficulty,
         min_nldd_length=min_nldd_length,
-        primary_lstar_window=primary_lstar_window,
-        fallback_lstar_window=fallback_lstar_window,
-        min_near_lstar_traces=min_near_lstar_traces,
-        min_cell_size=min_cell_size,
-        select_l_star=select_l_star,
     )
 
     accuracy_path = run_path / "accuracy_by_length.csv"
     metadata_path = run_path / "question_metadata.jsonl"
-    coarse_analysis_path = run_path / "coarse_analysis.json"
-    lstar_summary_path = run_path / "lstar_summary.csv"
     difficulty_histogram_path = run_path / "difficulty_histogram.csv"
-    _write_accuracy_rows(accuracy_path, buckets_by_difficulty)
+    _write_accuracy_rows(accuracy_path, accuracy_rows)
     _write_question_metadata(metadata_path, question_metadata)
-    coarse_analysis_path.write_text(
-        json.dumps(coarse_analysis, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    _write_lstar_summary(lstar_summary_path, coarse_analysis)
     export_difficulty_histogram(
         question_metadata_path=metadata_path,
         output_path=difficulty_histogram_path,
@@ -121,8 +75,6 @@ def aggregate_stage1_outputs(
     return {
         "accuracy_by_length_path": str(accuracy_path),
         "question_metadata_path": str(metadata_path),
-        "coarse_analysis_path": str(coarse_analysis_path),
-        "lstar_summary_path": str(lstar_summary_path),
         "difficulty_histogram_path": str(difficulty_histogram_path),
         "difficulty_root_path": str(run_path / "difficulty"),
         "difficulty_question_counts": {
@@ -139,7 +91,7 @@ def aggregate_stage1_outputs(
         },
         "num_questions": len(question_metadata),
         "num_traces": len(traces),
-        "num_deduped_traces": len(deduped_traces),
+        "num_deduped_traces": None,
     }
 
 
@@ -151,16 +103,23 @@ def load_stage1_traces(run_path: Path) -> list[dict[str, Any]]:
         return _load_jsonl_records(traces_path)
 
     shard_paths = discover_stage1_shard_paths(run_path)
-    if not shard_paths:
-        raise FileNotFoundError(
-            f"Stage E requires traces.jsonl at '{traces_path}' or shard traces under "
-            f"'{run_path / 'shards'}'."
-        )
+    if shard_paths:
+        traces = merge_stage1_shards(shard_paths)
+        _write_jsonl_records(traces_path, traces)
+        ensure_root_run_metadata(run_path, shard_paths)
+        return traces
 
-    traces = merge_stage1_shards(shard_paths)
-    _write_jsonl_records(traces_path, traces)
-    ensure_root_run_metadata(run_path, shard_paths)
-    return traces
+    difficulty_trace_paths = discover_exported_difficulty_trace_paths(run_path)
+    if difficulty_trace_paths:
+        traces = merge_stage1_trace_files(difficulty_trace_paths)
+        _write_jsonl_records(traces_path, traces)
+        return traces
+
+    raise FileNotFoundError(
+        f"Stage E requires traces.jsonl at '{traces_path}', shard traces under "
+        f"'{run_path / 'shards'}', or per-difficulty traces under "
+        f"'{run_path / 'difficulty'}'."
+    )
 
 
 def discover_stage1_shard_paths(run_path: Path) -> list[Path]:
@@ -172,14 +131,33 @@ def discover_stage1_shard_paths(run_path: Path) -> list[Path]:
     return sorted(path for path in shards_root.glob("*/traces.jsonl") if path.is_file())
 
 
+def discover_exported_difficulty_trace_paths(run_path: Path) -> list[Path]:
+    """Discover per-difficulty trace tables from an exported data-phase handoff."""
+
+    difficulty_root = run_path / "difficulty"
+    if not difficulty_root.exists():
+        return []
+    return sorted(
+        path
+        for path in difficulty_root.glob("*/traces.jsonl")
+        if path.is_file()
+    )
+
+
 def merge_stage1_shards(shard_paths: list[Path]) -> list[dict[str, Any]]:
     """Merge shard trace files, keeping the first occurrence of each trace id."""
+
+    return merge_stage1_trace_files(shard_paths)
+
+
+def merge_stage1_trace_files(trace_paths: list[Path]) -> list[dict[str, Any]]:
+    """Merge trace files, keeping the first occurrence of each trace id."""
 
     merged: list[dict[str, Any]] = []
     seen_trace_ids: set[str] = set()
 
-    for shard_path in shard_paths:
-        for record in _load_jsonl_records(shard_path):
+    for trace_path in trace_paths:
+        for record in _load_jsonl_records(trace_path):
             trace_id = record.get("trace_id")
             if isinstance(trace_id, str):
                 if trace_id in seen_trace_ids:
@@ -230,29 +208,23 @@ def _write_jsonl_records(path: Path, rows: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def _write_accuracy_rows(
-    path: Path,
-    buckets_by_difficulty: dict[str, dict[str, list[AccuracyBucket]]],
-) -> None:
+def _write_accuracy_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["difficulty", "dedup_mode", "bucket_label", "n", "mean", "se"],
+            fieldnames=["difficulty", "length", "n", "mean_accuracy", "se_accuracy"],
         )
         writer.writeheader()
-        for difficulty in DIFFICULTY_ORDER:
-            for dedup_mode in ("dedup", "raw"):
-                for bucket in buckets_by_difficulty[difficulty][dedup_mode]:
-                    writer.writerow(
-                        {
-                            "difficulty": difficulty,
-                            "dedup_mode": dedup_mode,
-                            "bucket_label": _format_bucket_label(bucket.bucket_label),
-                            "n": bucket.n,
-                            "mean": f"{bucket.mean:.6f}",
-                            "se": f"{bucket.se:.6f}",
-                        }
-                    )
+        for row in rows:
+            writer.writerow(
+                {
+                    "difficulty": row["difficulty"],
+                    "length": int(row["length"]),
+                    "n": int(row["n"]),
+                    "mean_accuracy": f"{float(row['mean_accuracy']):.6f}",
+                    "se_accuracy": f"{float(row['se_accuracy']):.6f}",
+                }
+            )
 
 
 def _write_question_metadata(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -260,31 +232,3 @@ def _write_question_metadata(path: Path, rows: list[dict[str, Any]]) -> None:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-
-def _write_lstar_summary(path: Path, coarse_analysis: dict[str, Any]) -> None:
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "difficulty",
-                "L_star",
-                "window_left",
-                "window_right",
-                "n_traces_near_lstar",
-                "window_status",
-            ],
-        )
-        writer.writeheader()
-        for difficulty in DIFFICULTY_ORDER:
-            row = coarse_analysis["difficulties"][difficulty]
-            selected_window = row["near_lstar"]["selected_window"]
-            writer.writerow(
-                {
-                    "difficulty": difficulty,
-                    "L_star": "" if row["l_star"] is None else _format_bucket_label(float(row["l_star"])),
-                    "window_left": "" if selected_window is None else _format_bucket_label(float(selected_window[0])),
-                    "window_right": "" if selected_window is None else _format_bucket_label(float(selected_window[1])),
-                    "n_traces_near_lstar": row["near_lstar"]["selected_count"],
-                    "window_status": row["near_lstar"]["status"],
-                }
-            )

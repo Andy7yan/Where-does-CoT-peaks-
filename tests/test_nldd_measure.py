@@ -1,4 +1,4 @@
-"""Tests for the v4 Stage D2 NLDD measurement path."""
+"""Tests for NLDD measurement helpers and the deprecated compatibility CLI."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 from types import SimpleNamespace
 import uuid
 
-from src.analysis_phase.nldd import (
+from src.analysis_phase1.nldd import (
     build_correct_token_ids,
     compute_logit_margin,
     extract_trace_horizon,
@@ -186,22 +186,23 @@ def test_measure_trace_profile_emits_failed_rows_with_null_nldd() -> None:
     assert rows[0]["measurement_exclusion_reason"] == "corruption_failed"
 
 
-def test_run_nldd_measure_main_writes_v4_outputs(monkeypatch) -> None:
+def test_run_nldd_measure_main_runs_analysis_phase1_compatibility_wrapper(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
 
     workspace = Path("tests") / f"_tmp_nldd_measure_{uuid.uuid4().hex}"
     run_dir = workspace / "full_generation"
     try:
-        _build_stage_c_run(run_dir)
+        shutil.copytree("tests/sample_data", run_dir)
 
         import scripts.run_nldd_measure as runner
 
         monkeypatch.setattr(
             runner,
-            "load_measurement_backend",
+            "load_analysis_backend",
             lambda config: {
                 "tokenizer": FakeTokenizer(),
                 "prompt_logits_fn": _fake_prompt_logits,
+                "trace_trajectory_fn": _fake_trace_trajectory,
                 "runtime_selection": SimpleNamespace(
                     requested_device="cpu",
                     resolved_device="cpu",
@@ -222,40 +223,13 @@ def test_run_nldd_measure_main_writes_v4_outputs(monkeypatch) -> None:
 
         runner.main()
 
-        selection_path = run_dir / "trace_selection.csv"
-        calibration_path = run_dir / "s_calibration.json"
-        nldd_path = run_dir / "nldd_full.jsonl"
-        summary_path = run_dir / "corruption_summary.json"
-
-        assert selection_path.exists()
-        assert calibration_path.exists()
-        assert nldd_path.exists()
-        assert summary_path.exists()
-
-        selection_rows = runner.load_or_build_trace_selection(
-            run_dir=str(run_dir),
-            traces=runner.load_stage1_traces(run_dir),
-            question_metadata=runner.load_question_metadata(run_dir / "question_metadata.jsonl"),
-            coarse_analysis=runner.load_coarse_analysis(run_dir / "coarse_analysis.json"),
-            selection_config=runner.TraceSelectionConfig(
-                target_traces_per_cell=120,
-                target_traces_near_lstar=120,
-                per_question_trace_cap=2,
-                min_nldd_length=3,
-                seed=42,
-            ),
-        )[0]
-        records = [
-            json.loads(line)
-            for line in nldd_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        validate_nldd_full_records(selection_rows=selection_rows, records=records)
-
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        assert summary["summary"]["measured_row_count"] == len(records)
-        assert not (run_dir / "sampled_steps.jsonl").exists()
-        assert not (run_dir / "nldd_spot.jsonl").exists()
+        analysis_dir = run_dir / "analysis_phase1"
+        assert (analysis_dir / "nldd_per_trace.jsonl").exists()
+        assert (analysis_dir / "tas_per_trace.jsonl").exists()
+        assert (analysis_dir / "tas_curve_per_trace.jsonl").exists()
+        assert not (run_dir / "trace_selection.csv").exists()
+        assert not (run_dir / "s_calibration.json").exists()
+        assert not (run_dir / "nldd_full.jsonl").exists()
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -327,3 +301,12 @@ def _fake_prompt_logits(prompt: str) -> list[float]:
     if "-" in lowered or "5" in lowered:
         return [0.2, 0.1, 1.6, 1.4, 0.0, -0.2, -0.4, -0.6, -0.8, -1.0, -1.2, -1.4]
     return [3.0, 2.8, 0.6, 0.4, 0.2, 0.0, -0.2, -0.4, -0.6, -0.8, -1.0, -1.2]
+
+
+def _fake_trace_trajectory(question: str, steps: tuple[str, ...]) -> list[list[float]]:
+    vectors: list[list[float]] = [[0.0, float(len(question)), 0.0]]
+    running_chars = len(question)
+    for index, step in enumerate(steps, start=1):
+        running_chars += len(step)
+        vectors.append([float(index), float(running_chars), float(len(step))])
+    return vectors

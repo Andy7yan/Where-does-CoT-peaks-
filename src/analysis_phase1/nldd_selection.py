@@ -11,7 +11,7 @@ from typing import Any
 
 from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER, assign_length_bin, dedupe_traces_for_analysis
 
-from src.analysis_phase.nldd_shared import (
+from src.analysis_phase1.nldd_shared import (
     TRACE_SELECTION_FIELDNAMES,
     TRACE_SELECTION_REQUIRED_COLUMNS,
     _load_jsonl_records,

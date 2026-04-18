@@ -1,0 +1,68 @@
+"""Postprocess existing runs into the canonical handoff and downstream analysis outputs."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import shutil
+from typing import Any
+
+from src.analysis_phase1.analysis import run_analysis
+from src.analysis_phase1.backend import load_analysis_backend
+from src.common.settings import ExperimentConfig
+from src.data_phase2.aggregation import aggregate_stage1_outputs
+from src.data_phase2.curation import validate_canonical_data_phase
+
+
+def run_postprocess_pipeline(
+    *,
+    run_dir: str | Path,
+    config_path: str = "configs/stage1.yaml",
+    include_analysis: bool = True,
+) -> dict[str, Any]:
+    """Convert one existing run into the canonical handoff and optionally run analysis."""
+
+    run_path = Path(run_dir)
+    aggregation = aggregate_stage1_outputs(str(run_path), config_path=config_path)
+    validation = validate_canonical_data_phase(run_path, config_path=config_path)
+
+    result: dict[str, Any] = {
+        "run_dir": str(run_path),
+        "aggregation": aggregation,
+        "validation": validation,
+    }
+    if not include_analysis:
+        return result
+
+    config = ExperimentConfig.from_yaml(config_path)
+    backend = load_analysis_backend(config)
+    analysis = run_analysis(
+        run_dir=str(run_path),
+        prompt_logits_fn=backend["prompt_logits_fn"],
+        tokenizer=backend["tokenizer"],
+        trace_trajectory_fn=backend["trace_trajectory_fn"],
+        ld_epsilon=config.nldd.ld_epsilon,
+        tas_plateau_threshold=config.tas.plateau_threshold,
+    )
+    _write_analysis_compat_exports(Path(analysis["analysis_dir"]))
+    result["analysis"] = analysis
+    result["runtime_selection"] = {
+        "requested_device": backend["runtime_selection"].requested_device,
+        "resolved_device": backend["runtime_selection"].resolved_device,
+        "reason": backend["runtime_selection"].reason,
+        "gpu_name": backend["runtime_selection"].gpu_name,
+        "gpu_compute_capability": backend["runtime_selection"].gpu_compute_capability,
+    }
+    return result
+
+
+def _write_analysis_compat_exports(analysis_phase1_dir: Path) -> None:
+    """Mirror analysis_phase1 outputs to the legacy analysis/ directory expected by older tooling."""
+
+    compat_dir = analysis_phase1_dir.parent / "analysis"
+    compat_dir.mkdir(parents=True, exist_ok=True)
+    for path in analysis_phase1_dir.iterdir():
+        if path.is_file():
+            shutil.copy2(path, compat_dir / path.name)
+
+
+__all__ = ["run_postprocess_pipeline"]

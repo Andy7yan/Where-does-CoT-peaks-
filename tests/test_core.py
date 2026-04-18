@@ -80,6 +80,15 @@ def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     assert settings["analysis"]["max_extraction_fail_rate"] == 0.05
 
 
+def test_load_settings_accepts_repo_root_directory(monkeypatch) -> None:
+    monkeypatch.setenv("SCRATCH", "/tmp")
+    monkeypatch.setenv("RUN_NAME", "stage-a")
+
+    settings = load_settings(".")
+
+    assert settings["experiment"]["run_id"] == "peak-cot-stage1-gsm8k-platinum-llama31"
+
+
 def test_require_config_value_returns_value() -> None:
     assert require_config_value("generation.temperature", 0.7) == 0.7
 

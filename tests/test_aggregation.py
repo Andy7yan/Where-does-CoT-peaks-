@@ -1,4 +1,4 @@
-"""Tests for Stage E accuracy aggregation."""
+"""Tests for exact-length data-phase aggregation."""
 
 from __future__ import annotations
 
@@ -9,72 +9,60 @@ import shutil
 import uuid
 
 from src.data_phase2.aggregation import (
-    AccuracyBucket,
     aggregate_stage1_outputs,
-    choose_merge_neighbor,
+    build_accuracy_rows,
     discover_stage1_shard_paths,
-    merge_sparse_accuracy_buckets,
     merge_stage1_shards,
+    select_l_star_from_accuracy_rows,
 )
 
 
-def test_choose_merge_neighbor_prefers_larger_adjacent_bucket() -> None:
-    buckets = [
-        AccuracyBucket(lengths=[2], outcomes=[1, 0]),
-        AccuracyBucket(lengths=[3], outcomes=[1]),
-        AccuracyBucket(lengths=[4], outcomes=[1, 1, 1, 0]),
+def test_build_accuracy_rows_and_select_l_star_follow_exact_lengths() -> None:
+    traces = [
+        _trace("q1", 3, True),
+        _trace("q1", 3, False),
+        _trace("q2", 4, True),
+        _trace("q2", 4, True),
+        _trace("q3", 5, False),
     ]
+    metadata_by_question = {
+        "q1": {"difficulty_bucket": "easy"},
+        "q2": {"difficulty_bucket": "easy"},
+        "q3": {"difficulty_bucket": "easy"},
+    }
 
-    assert choose_merge_neighbor(buckets, 1) == 2
+    rows = build_accuracy_rows(
+        traces,
+        metadata_by_question=metadata_by_question,
+        difficulty="easy",
+        min_nldd_length=3,
+    )
 
-
-def test_merge_sparse_accuracy_buckets_merges_until_threshold() -> None:
-    buckets = [
-        AccuracyBucket(lengths=[2, 2], outcomes=[1, 1]),
-        AccuracyBucket(lengths=[3], outcomes=[1]),
-        AccuracyBucket(lengths=[4, 4, 4, 4], outcomes=[0, 0, 1, 1]),
+    assert rows == [
+        {"difficulty": "easy", "length": 3, "n": 2, "mean_accuracy": 0.5, "se_accuracy": rows[0]["se_accuracy"]},
+        {"difficulty": "easy", "length": 4, "n": 2, "mean_accuracy": 1.0, "se_accuracy": rows[1]["se_accuracy"]},
+        {"difficulty": "easy", "length": 5, "n": 1, "mean_accuracy": 0.0, "se_accuracy": rows[2]["se_accuracy"]},
     ]
-
-    merged = merge_sparse_accuracy_buckets(buckets, min_bin_size=3)
-
-    assert len(merged) == 2
-    assert merged[0].lengths == [2, 2, 3]
-    assert merged[0].n == 3
-    assert merged[1].lengths == [4, 4, 4, 4]
-    assert merged[1].n == 4
+    assert select_l_star_from_accuracy_rows(rows) == 4
 
 
-def test_aggregate_stage1_outputs_writes_stage_e_artifacts(
-    monkeypatch,
-) -> None:
+def test_aggregate_stage1_outputs_writes_current_data_phase_artifacts(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
-    monkeypatch.setenv("RUN_NAME", "stage-e-test")
 
     run_dir = Path("tests") / f"_tmp_stage_e_{uuid.uuid4().hex}"
     try:
         run_dir.mkdir(parents=True, exist_ok=True)
         traces_path = run_dir / "traces.jsonl"
 
-        traces = [
-            _trace("q1", 2, True),
-            _trace("q1", 2, True),
-            _trace("q2", 2, True),
-            _trace("q2", 2, False),
-            _trace("q2", 2, True),
-            _trace("q3", 4, False),
-            _trace("q3", 4, True),
-            _trace("q4", 5, True),
-            _trace("q4", 5, True),
-            _trace("q4", 5, True),
-            _trace("q4", 5, True),
-            _trace("q4", 5, False),
-            _trace("q4", 5, True),
-            _trace("q4", 8, False),
-            _trace("q5", 8, False),
-            _trace("q5", 8, True),
-            _trace("q6", 8, False),
-            _trace("q6", 8, False),
-        ]
+        traces = []
+        for index in range(31):
+            traces.append(_trace(f"easy_{index:03d}", 4, True))
+        for index in range(130):
+            traces.append(_trace(f"medium_{index:03d}", 5, True))
+        for index in range(2):
+            traces.append(_trace(f"too_short_{index:03d}", 2, True))
+            traces.append(_trace(f"small_bin_{index:03d}", 6, True))
+
         with traces_path.open("w", encoding="utf-8") as handle:
             for trace in traces:
                 handle.write(json.dumps(trace) + "\n")
@@ -83,50 +71,48 @@ def test_aggregate_stage1_outputs_writes_stage_e_artifacts(
 
         accuracy_path = Path(artifacts["accuracy_by_length_path"])
         metadata_path = Path(artifacts["question_metadata_path"])
-        coarse_analysis_path = Path(artifacts["coarse_analysis_path"])
-        lstar_summary_path = Path(artifacts["lstar_summary_path"])
+        histogram_path = Path(artifacts["difficulty_histogram_path"])
         assert accuracy_path.exists()
         assert metadata_path.exists()
-        assert coarse_analysis_path.exists()
-        assert lstar_summary_path.exists()
+        assert histogram_path.exists()
+        assert "coarse_analysis_path" not in artifacts
+        assert "lstar_summary_path" not in artifacts
 
         with accuracy_path.open("r", encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
-
-        assert rows
-        assert set(rows[0]) == {"difficulty", "dedup_mode", "bucket_label", "n", "mean", "se"}
-        assert {row["dedup_mode"] for row in rows} <= {"dedup", "raw"}
+        assert set(rows[0]) == {"difficulty", "length", "n", "mean_accuracy", "se_accuracy"}
 
         metadata_rows = [
             json.loads(line)
             for line in metadata_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        metadata_by_question = {
-            row["question_id"]: row
-            for row in metadata_rows
+        metadata_by_question = {row["question_id"]: row for row in metadata_rows}
+        first_easy = metadata_by_question["easy_000"]
+        assert set(first_easy) == {
+            "question_id",
+            "difficulty_score",
+            "difficulty_bucket",
+            "accuracy",
+            "total_samples",
+            "correct_count",
+            "natural_length_distribution",
         }
+        assert first_easy["difficulty_bucket"] == "easy"
 
-        assert metadata_by_question["q1"]["difficulty_bucket"] == "easy"
-        assert metadata_by_question["q1"]["excluded_from_difficulty"] is False
-        assert metadata_by_question["q1"]["accuracy"] == 1.0
-        assert metadata_by_question["q1"]["optimal_length"] == 2
-        assert metadata_by_question["q1"]["natural_length_distribution"] == {"2": 2}
-        assert metadata_by_question["q4"]["optimal_length"] == 5
-        assert metadata_by_question["q5"]["natural_length_distribution"] == {"8": 2}
-
-        coarse = json.loads(coarse_analysis_path.read_text(encoding="utf-8"))
-        assert coarse["schema_version"] == "stage1_coarse_analysis_v4"
-        assert set(coarse["difficulties"]) == {"easy", "medium", "hard"}
+        easy_dir = run_dir / "difficulty" / "easy"
+        assert (easy_dir / "questions.jsonl").exists()
+        assert (easy_dir / "traces.jsonl").exists()
+        assert (easy_dir / "question_metadata.jsonl").exists()
+        assert (easy_dir / "bins" / "bin_4" / "selection.jsonl").exists()
+        assert not (easy_dir / "bins" / "bin_2").exists()
+        assert not (easy_dir / "bins" / "bin_6").exists()
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
 
 
-def test_aggregate_stage1_outputs_materializes_root_traces_from_shards(
-    monkeypatch,
-) -> None:
+def test_aggregate_stage1_outputs_materializes_root_traces_from_shards(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
-    monkeypatch.setenv("RUN_NAME", "stage-e-shards")
 
     run_dir = Path("tests") / f"_tmp_stage_e_shards_{uuid.uuid4().hex}"
     try:
@@ -135,7 +121,7 @@ def test_aggregate_stage1_outputs_materializes_root_traces_from_shards(
         shard_a.mkdir(parents=True, exist_ok=True)
         shard_b.mkdir(parents=True, exist_ok=True)
 
-        traces_a = [_trace("q1", 2, True), _trace("q2", 3, False)]
+        traces_a = [_trace("q1", 3, True), _trace("q2", 4, False)]
         traces_b = [_trace("q3", 4, True), _trace("q4", 5, True)]
         for shard_dir, rows in ((shard_a, traces_a), (shard_b, traces_b)):
             with (shard_dir / "traces.jsonl").open("w", encoding="utf-8") as handle:
@@ -162,14 +148,18 @@ def test_aggregate_stage1_outputs_materializes_root_traces_from_shards(
 
 
 def _trace(question_id: str, actual_num_steps: int, is_correct: bool) -> dict[str, object]:
+    steps = [
+        f"Step {index}: {index + 2} + 1 = {index + 3}."
+        for index in range(actual_num_steps)
+    ]
     return {
         "trace_id": f"{question_id}_{actual_num_steps}_{int(is_correct)}",
         "question_id": question_id,
         "question_text": f"Question {question_id}",
         "gold_answer": 1.0,
         "prompt_id": "icl_short",
-        "raw_completion": "stub",
-        "steps": ["stub"] * actual_num_steps,
+        "raw_completion": "\n".join(steps),
+        "steps": steps,
         "actual_num_steps": actual_num_steps,
         "final_answer_line": "#### 1",
         "extracted_answer": 1.0 if is_correct else 0.0,

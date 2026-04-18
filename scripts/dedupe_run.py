@@ -16,7 +16,7 @@ from src.data_phase2.corruption_layout import (
     resolve_corruption_artifact_dir,
     resolve_corruption_artifact_path,
 )
-from src.analysis_phase.nldd import summarize_corruption_records
+from src.analysis_phase1.nldd import summarize_corruption_records
 from src.data_phase2.aggregation import (
     aggregate_stage1_outputs,
     discover_stage1_shard_paths,

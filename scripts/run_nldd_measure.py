@@ -11,27 +11,36 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.analysis_phase.nldd import (
-    TraceSelectionConfig,
-    build_prompt_logit_fn,
-    compute_v4_measurement_artifacts,
-    load_coarse_analysis,
-    load_or_build_trace_selection,
-    load_question_metadata,
-)
+from src.analysis_phase1.analysis import run_analysis
+from src.analysis_phase1.backend import load_analysis_backend
 from src.common.runtime_env import select_runtime_device
-from src.common.settings import ExperimentConfig, require_config_value
+from src.common.settings import ExperimentConfig
 from src.data_phase1.generation import _load_tokenizer_with_fallback, _resolve_torch_dtype, ensure_model_available
-from src.data_phase1.pilot import build_token_counter
-from src.data_phase2.aggregation import load_stage1_traces
 
 
 def main() -> None:
-    """Run Stage D2 and persist v4 NLDD measurement artifacts."""
+    """Run Stage D2 when canonical inputs exist, otherwise fall back to the legacy analysis wrapper."""
 
     args = parse_args()
     config = ExperimentConfig.from_yaml(args.config)
     run_path = Path(args.run_dir)
+    if not _has_stage_d2_inputs(run_path):
+        _run_analysis_phase_compat(run_dir=args.run_dir, config=config)
+        return
+
+    from src.analysis_phase1.nldd_measurement import (
+        build_prompt_logit_fn,
+        compute_v4_measurement_artifacts,
+    )
+    from src.analysis_phase1.nldd_selection import (
+        TraceSelectionConfig,
+        load_coarse_analysis,
+        load_or_build_trace_selection,
+        load_question_metadata,
+    )
+    from src.common.settings import require_config_value
+    from src.data_phase1.pilot import build_token_counter
+    from src.data_phase2.aggregation import load_stage1_traces
 
     traces = load_stage1_traces(run_path)
     question_metadata = load_question_metadata(run_path / "question_metadata.jsonl")
@@ -159,6 +168,41 @@ def load_measurement_backend(config: ExperimentConfig) -> dict[str, Any]:
         "prompt_logits_fn": prompt_logits_fn,
         "runtime_selection": runtime_selection,
     }
+
+
+def _has_stage_d2_inputs(run_path: Path) -> bool:
+    """Return whether the run directory already contains the Stage C artifacts required for Stage D2."""
+
+    required = (
+        run_path / "traces.jsonl",
+        run_path / "question_metadata.jsonl",
+        run_path / "coarse_analysis.json",
+    )
+    return all(path.exists() for path in required)
+
+
+def _run_analysis_phase_compat(*, run_dir: str, config: ExperimentConfig) -> None:
+    """Preserve the legacy run_nldd_measure entrypoint for pre-Stage-D2 layouts."""
+
+    backend = load_analysis_backend(config)
+    artifacts = run_analysis(
+        run_dir=run_dir,
+        prompt_logits_fn=backend["prompt_logits_fn"],
+        tokenizer=backend["tokenizer"],
+        trace_trajectory_fn=backend["trace_trajectory_fn"],
+        ld_epsilon=config.nldd.ld_epsilon,
+        tas_plateau_threshold=config.tas.plateau_threshold,
+    )
+
+    print("compat_mode: analysis_phase1")
+    print(f"runtime_device_requested: {backend['runtime_selection'].requested_device}")
+    print(f"runtime_device_resolved: {backend['runtime_selection'].resolved_device}")
+    print(f"analysis_phase1_dir: {artifacts['analysis_dir']}")
+    print(f"sample_count: {artifacts['sample_count']}")
+    print(f"s_value: {artifacts['s_value']}")
+    print(f"nldd_per_trace_path: {artifacts['nldd_per_trace_path']}")
+    print(f"tas_per_trace_path: {artifacts['tas_per_trace_path']}")
+    print(f"tas_curve_per_trace_path: {artifacts['tas_curve_per_trace_path']}")
 
 
 if __name__ == "__main__":

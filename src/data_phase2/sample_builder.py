@@ -416,7 +416,6 @@ def _project_group_question_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "question_id": str(row["question_id"]),
         "accuracy": float(row["accuracy"]),
         "difficulty_score": float(difficulty_score),
-        "optimal_length": row.get("optimal_length"),
         "total_samples": int(row["total_samples"]),
         "correct_count": int(row["correct_count"]),
         "natural_length_distribution": dict(row["natural_length_distribution"]),

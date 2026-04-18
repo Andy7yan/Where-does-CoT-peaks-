@@ -17,8 +17,8 @@ from src.common.corruption import (
 from src.data_phase1.prompting import build_nldd_clean_prompt
 from src.data_phase2.pipeline import load_stage1_traces
 
-from src.analysis_phase.nldd_corruption import build_corruption_record, summarize_corruption_records
-from src.analysis_phase.nldd_shared import (
+from src.analysis_phase1.nldd_corruption import build_corruption_record, summarize_corruption_records
+from src.analysis_phase1.nldd_shared import (
     _compute_vector_std,
     _flatten_numeric_values,
     _flatten_token_ids,

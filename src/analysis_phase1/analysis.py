@@ -10,14 +10,14 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Callable, Sequence
 
-from src.analysis_phase.nldd_measurement import (
+from src.analysis_phase1.nldd_measurement import (
     build_correct_token_ids,
     compute_logit_margin,
     extract_trace_horizon,
     measure_nldd,
 )
-from src.analysis_phase.nldd_shared import _flatten_numeric_values, _write_jsonl
-from src.analysis_phase.io import SampleRecord, load_analysis_samples, load_analysis_traces_by_difficulty
+from src.analysis_phase1.nldd_shared import _flatten_numeric_values, _write_jsonl
+from src.analysis_phase1.io import SampleRecord, load_analysis_samples, load_analysis_traces_by_difficulty
 from src.data_phase1.prompting import build_nldd_clean_prompt
 from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER
 
@@ -63,10 +63,14 @@ def build_trace_trajectory_fn(
     """Create a `(question, steps)` -> prefix-trajectory encoder."""
 
     def encode_trace(question: str, steps: Sequence[str]) -> list[Any]:
-        return [
+        trajectory = [
+            prompt_hidden_state_fn(build_nldd_clean_prompt(question=question, steps=[]))
+        ]
+        trajectory.extend(
             prompt_hidden_state_fn(build_nldd_clean_prompt(question=question, steps=list(steps[:prefix_length])))
             for prefix_length in range(1, len(steps) + 1)
-        ]
+        )
+        return trajectory
 
     return encode_trace
 
@@ -186,8 +190,34 @@ def measure_sample_tas(
         "trace_tier": sample.trace_tier,
         "tas_value": tas_value,
         "plateau_step": plateau_step,
-        "num_prefixes": len(vectors),
+        "num_prefixes": max(len(vectors) - 1, 0),
     }
+
+
+def measure_sample_tas_curve(
+    sample: SampleRecord,
+    *,
+    trace_trajectory_fn: Callable[[str, Sequence[str]], list[Any]],
+    plateau_threshold: float | None,
+) -> list[dict[str, Any]]:
+    """Measure the prefix-by-prefix TAS curve for one clean sample."""
+
+    vectors = trace_trajectory_fn(sample.question_text, sample.clean_steps)
+    curve = compute_tas_curve_from_vectors(vectors, plateau_threshold=plateau_threshold)
+    return [
+        {
+            "sample_id": sample.sample_id,
+            "source_trace_id": sample.source_trace_id,
+            "question_id": sample.question_id,
+            "difficulty": sample.difficulty,
+            "length": sample.length,
+            "trace_tier": sample.trace_tier,
+            "step_index": point["step_index"],
+            "tas_value": point["tas_value"],
+            "plateau_step": point["plateau_step"],
+        }
+        for point in curve
+    ]
 
 
 def compute_tas_from_vectors(
@@ -195,26 +225,58 @@ def compute_tas_from_vectors(
     *,
     plateau_threshold: float | None,
 ) -> tuple[float, int | None]:
-    """Compute a simple trajectory arc score from consecutive prefix vectors."""
+    """Compute TAS as geometric efficiency over the prefix trajectory."""
 
     flattened = [_flatten_numeric_values(vector) for vector in vectors]
     if len(flattened) <= 1:
         return 0.0, None
 
-    distances = [
-        _cosine_distance(flattened[index], flattened[index + 1])
+    step_lengths = [
+        _l2_distance(flattened[index], flattened[index + 1])
         for index in range(len(flattened) - 1)
     ]
-    tas_value = mean(distances)
+    path_length = sum(step_lengths)
+    if path_length <= 0.0:
+        return 0.0, None
+
+    displacement = _l2_distance(flattened[0], flattened[-1])
+    tas_value = displacement / path_length
     plateau_step = None
     if plateau_threshold is not None:
         running_values: list[float] = []
-        for index, distance in enumerate(distances, start=2):
-            running_values.append(distance)
+        for index, step_length in enumerate(step_lengths, start=2):
+            running_values.append(step_length)
             if len(running_values) >= 2 and abs(running_values[-1] - running_values[-2]) <= plateau_threshold:
                 plateau_step = index
                 break
     return tas_value, plateau_step
+
+
+def compute_tas_curve_from_vectors(
+    vectors: Sequence[Any],
+    *,
+    plateau_threshold: float | None,
+) -> list[dict[str, Any]]:
+    """Compute TAS for each prefix endpoint, treating that endpoint as the final state."""
+
+    flattened = [_flatten_numeric_values(vector) for vector in vectors]
+    if len(flattened) <= 1:
+        return []
+
+    curve: list[dict[str, Any]] = []
+    for step_index in range(1, len(flattened)):
+        tas_value, plateau_step = compute_tas_from_vectors(
+            flattened[: step_index + 1],
+            plateau_threshold=plateau_threshold,
+        )
+        curve.append(
+            {
+                "step_index": step_index,
+                "tas_value": tas_value,
+                "plateau_step": plateau_step,
+            }
+        )
+    return curve
 
 
 def run_analysis(
@@ -229,7 +291,7 @@ def run_analysis(
     """Run the analysis flow over the canonical difficulty/sample layout."""
 
     run_path = Path(run_dir)
-    analysis_dir = run_path / "analysis"
+    analysis_dir = run_path / "analysis_phase1"
     analysis_dir.mkdir(parents=True, exist_ok=True)
 
     samples = load_analysis_samples(run_path)
@@ -240,6 +302,7 @@ def run_analysis(
     s_value = calibrate_s_on_samples(samples, prompt_logits_fn=prompt_logits_fn)
     nldd_rows: list[dict[str, Any]] = []
     tas_rows: list[dict[str, Any]] = []
+    tas_curve_rows: list[dict[str, Any]] = []
     for sample in samples:
         nldd_rows.extend(
             measure_sample_nldd(
@@ -257,11 +320,19 @@ def run_analysis(
                 plateau_threshold=tas_plateau_threshold,
             )
         )
+        tas_curve_rows.extend(
+            measure_sample_tas_curve(
+                sample,
+                trace_trajectory_fn=trace_trajectory_fn,
+                plateau_threshold=tas_plateau_threshold,
+            )
+        )
 
     accuracy_rows = build_accuracy_by_length_rows(traces_by_difficulty)
     lstar_rows = build_lstar_rows(accuracy_rows)
     nldd_surface_rows = build_nldd_surface_rows(nldd_rows)
     kstar_rows = build_kstar_rows(nldd_surface_rows)
+    tas_curve_summary_rows = build_tas_curve_summary_rows(tas_curve_rows)
     bin_status_rows = build_bin_status_rows(traces_by_difficulty, samples)
     failure_rows = build_failure_stats_rows(nldd_rows=nldd_rows, bin_status_rows=bin_status_rows)
 
@@ -281,10 +352,16 @@ def run_analysis(
     )
     _write_jsonl(analysis_dir / "nldd_per_trace.jsonl", nldd_rows)
     _write_jsonl(analysis_dir / "tas_per_trace.jsonl", tas_rows)
+    _write_jsonl(analysis_dir / "tas_curve_per_trace.jsonl", tas_curve_rows)
     _write_csv(
         analysis_dir / "nldd_surface.csv",
         rows=nldd_surface_rows,
         fieldnames=["difficulty", "length", "k", "n", "mean_nldd", "se_nldd"],
+    )
+    _write_csv(
+        analysis_dir / "tas_curve.csv",
+        rows=tas_curve_summary_rows,
+        fieldnames=["difficulty", "length", "step_index", "n", "mean_tas", "se_tas"],
     )
     _write_csv(
         analysis_dir / "k_star_by_L.csv",
@@ -323,6 +400,7 @@ def run_analysis(
         "accuracy_by_length_path": str(analysis_dir / "accuracy_by_length.csv"),
         "nldd_per_trace_path": str(analysis_dir / "nldd_per_trace.jsonl"),
         "tas_per_trace_path": str(analysis_dir / "tas_per_trace.jsonl"),
+        "tas_curve_per_trace_path": str(analysis_dir / "tas_curve_per_trace.jsonl"),
     }
 
 
@@ -437,6 +515,33 @@ def build_kstar_rows(surface_rows: Sequence[dict[str, Any]]) -> list[dict[str, A
     return kstar_rows
 
 
+def build_tas_curve_summary_rows(tas_curve_rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate TAS curves by difficulty, exact length, and prefix step index."""
+
+    grouped: dict[tuple[str, int, int], list[float]] = {}
+    for row in tas_curve_rows:
+        key = (str(row["difficulty"]), int(row["length"]), int(row["step_index"]))
+        grouped.setdefault(key, []).append(float(row["tas_value"]))
+
+    summary_rows: list[dict[str, Any]] = []
+    for difficulty, length, step_index in sorted(
+        grouped,
+        key=lambda item: (DIFFICULTY_ORDER.index(item[0]), item[1], item[2]),
+    ):
+        values = grouped[(difficulty, length, step_index)]
+        summary_rows.append(
+            {
+                "difficulty": difficulty,
+                "length": length,
+                "step_index": step_index,
+                "n": len(values),
+                "mean_tas": mean(values),
+                "se_tas": _standard_error(values),
+            }
+        )
+    return summary_rows
+
+
 def build_bin_status_rows(
     traces_by_difficulty: dict[str, list[dict[str, Any]]],
     samples: Sequence[SampleRecord],
@@ -519,16 +624,10 @@ def _compute_vector_std(logits: Any) -> float:
     return math.sqrt(variance)
 
 
-def _cosine_distance(left: Sequence[float], right: Sequence[float]) -> float:
+def _l2_distance(left: Sequence[float], right: Sequence[float]) -> float:
     if len(left) != len(right):
-        raise ValueError("Cosine distance expects vectors of equal length.")
-    dot = sum(l * r for l, r in zip(left, right))
-    left_norm = math.sqrt(sum(value * value for value in left))
-    right_norm = math.sqrt(sum(value * value for value in right))
-    if left_norm == 0.0 or right_norm == 0.0:
-        return 0.0
-    cosine = max(min(dot / (left_norm * right_norm), 1.0), -1.0)
-    return 1.0 - cosine
+        raise ValueError("L2 distance expects vectors of equal length.")
+    return math.sqrt(sum((l - r) ** 2 for l, r in zip(left, right)))
 
 
 def _standard_error(values: Sequence[float | int]) -> float:

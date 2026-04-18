@@ -9,7 +9,7 @@ import subprocess
 import sys
 import uuid
 
-from src.analysis_phase.nldd import summarize_corruption_records
+from src.analysis_phase1.nldd import summarize_corruption_records
 from src.data_phase2.aggregation import aggregate_stage1_outputs
 
 

@@ -28,7 +28,11 @@ def main() -> None:
     print(f"trace_id_unique: {validation['trace_id_unique']}")
     print(f"question_metadata_matches_traces: {validation['question_metadata_matches_traces']}")
     print(f"accuracy_csv_matches_traces: {validation['accuracy_csv_matches_traces']}")
-    print(f"corruption_summary_matches_records: {validation['corruption_summary_matches_records']}")
+    corruption_matches = validation["corruption_summary_matches_records"]
+    print(
+        "corruption_summary_matches_records: "
+        f"{'n/a' if corruption_matches is None else corruption_matches}"
+    )
     print(f"difficulty_exports_match_traces: {validation['difficulty_exports_match_traces']}")
     for mode_name, summary in validation["corruption_validation"].items():
         print(f"{mode_name}: records={summary['records']} failures={summary['failures']}")

@@ -18,7 +18,7 @@ from src.common.corruption import (
 from src.data_phase1.prompting import build_nldd_corrupt_prompt
 from src.data_phase2.pipeline import discover_stage1_shard_paths
 
-from src.analysis_phase.nldd_shared import _load_jsonl_records, _stable_seed, _write_jsonl
+from src.analysis_phase1.nldd_shared import _load_jsonl_records, _stable_seed, _write_jsonl
 
 
 @dataclass(frozen=True)
