@@ -115,6 +115,12 @@ class AnalysisConfig:
     min_bin_coverage_ratio: float | None
     num_full_analysis_questions: int | None
     max_extraction_fail_rate: float | None
+    per_question_lcurve_min_bin_size: int | None
+    per_question_min_retained_traces: int | None
+    per_question_max_retained_traces: int | None
+    per_question_lstar_smoothing_window: int | None
+    per_question_min_lcurve_bins: int | None
+    per_question_min_kstar_bins: int | None
 
 
 @dataclass
@@ -157,7 +163,6 @@ class ExperimentConfig:
         float_perturbation_range = _require_float_list(
             nldd,
             "float_perturbation_range",
-            expected_length=2,
         )
         _validate_float_perturbation_range(float_perturbation_range)
 
@@ -268,6 +273,30 @@ class ExperimentConfig:
                 max_extraction_fail_rate=_optional_float(
                     analysis,
                     "max_extraction_fail_rate",
+                ),
+                per_question_lcurve_min_bin_size=_optional_int(
+                    analysis,
+                    "per_question_lcurve_min_bin_size",
+                ),
+                per_question_min_retained_traces=_optional_int(
+                    analysis,
+                    "per_question_min_retained_traces",
+                ),
+                per_question_max_retained_traces=_optional_int(
+                    analysis,
+                    "per_question_max_retained_traces",
+                ),
+                per_question_lstar_smoothing_window=_optional_int(
+                    analysis,
+                    "per_question_lstar_smoothing_window",
+                ),
+                per_question_min_lcurve_bins=_optional_int(
+                    analysis,
+                    "per_question_min_lcurve_bins",
+                ),
+                per_question_min_kstar_bins=_optional_int(
+                    analysis,
+                    "per_question_min_kstar_bins",
                 ),
             ),
         )
@@ -522,12 +551,29 @@ def _validate_integer_perturbation_range(values: list[int]) -> None:
 
 
 def _validate_float_perturbation_range(values: list[float]) -> None:
-    low, high = values
-    if not (0.0 < low < high):
-        raise TypeError(
-            "Config field 'float_perturbation_range' must satisfy "
-            "0.0 < low < high."
-        )
+    if len(values) == 2:
+        low, high = values
+        if not (0.0 < low < high):
+            raise TypeError(
+                "Config field 'float_perturbation_range' must satisfy "
+                "0.0 < low < high."
+            )
+        return
+
+    if len(values) == 4:
+        low_a, high_a, low_b, high_b = values
+        if not (0.0 < low_a < high_a < 1.0 < low_b < high_b):
+            raise TypeError(
+                "Config field 'float_perturbation_range' must satisfy "
+                "0.0 < low_a < high_a < 1.0 < low_b < high_b when two "
+                "disjoint intervals are provided."
+            )
+        return
+
+    raise TypeError(
+        "Config field 'float_perturbation_range' must contain either 2 floats "
+        "(single interval) or 4 floats (two disjoint intervals)."
+    )
 
 
 __all__ = [

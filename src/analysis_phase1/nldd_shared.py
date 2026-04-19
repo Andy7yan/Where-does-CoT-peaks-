@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Iterable
 
 
@@ -73,6 +74,22 @@ def _format_gold_answer_variants(gold_answer: float | int | str) -> list[str]:
 def _flatten_token_ids(value: Any) -> list[int]:
     if value is None:
         return []
+    if hasattr(value, "get"):
+        input_ids = value.get("input_ids")
+        if input_ids is not None:
+            return _flatten_token_ids(input_ids)
+    if isinstance(value, Mapping):
+        if "input_ids" in value:
+            return _flatten_token_ids(value["input_ids"])
+        flattened: list[int] = []
+        for item in value.values():
+            flattened.extend(_flatten_token_ids(item))
+        return flattened
+    if hasattr(value, "items"):
+        flattened: list[int] = []
+        for _, item in value.items():
+            flattened.extend(_flatten_token_ids(item))
+        return flattened
     if hasattr(value, "tolist"):
         value = value.tolist()
     if isinstance(value, list):
@@ -110,7 +127,13 @@ def _compute_vector_std(logits: Any) -> float:
 
 
 def _move_model_inputs_to_device(model_inputs: Any, device: Any) -> dict[str, Any]:
-    if isinstance(model_inputs, dict):
+    if hasattr(model_inputs, "to"):
+        moved_inputs = model_inputs.to(device)
+        if isinstance(moved_inputs, Mapping):
+            return dict(moved_inputs)
+        if hasattr(moved_inputs, "items"):
+            return {key: value for key, value in moved_inputs.items()}
+    if isinstance(model_inputs, Mapping):
         return {
             key: value.to(device) if hasattr(value, "to") else value
             for key, value in model_inputs.items()

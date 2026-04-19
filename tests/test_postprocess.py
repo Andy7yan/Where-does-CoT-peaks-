@@ -63,7 +63,7 @@ def test_run_postprocess_pipeline_rebuilds_and_analyzes_legacy_layout(monkeypatc
 
         assert (run_dir / "difficulty" / "easy" / "questions.jsonl").exists()
         assert (run_dir / "difficulty_histogram.csv").exists()
-        assert (run_dir / "analysis" / "nldd_per_trace.jsonl").exists()
+        assert (run_dir / "analysis_phase1" / "nldd_per_trace.jsonl").exists()
         assert result["validation"]["difficulty_exports_match_traces"] is True
         assert result["analysis"]["sample_count"] >= 1
         assert result["runtime_selection"]["resolved_device"] == "cpu"

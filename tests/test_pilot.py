@@ -88,6 +88,33 @@ def test_discover_prompt_templates_prefers_configured_prompt_order() -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_pilot_discover_prompt_templates_uses_yaml_prompt_id_not_filename() -> None:
+    temp_dir = Path("tests") / f"_tmp_pilot_prompt_ids_from_yaml_{uuid.uuid4().hex}"
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        (temp_dir / "pilot_short_examples.yaml").write_text(
+            'prompt_id: "icl_short"\nversion: 1\nsystem: "s"\nfew_shot: []\nuser_template: "{question}"\n',
+            encoding="utf-8",
+        )
+        (temp_dir / "pilot_verbose_examples.yaml").write_text(
+            'prompt_id: "icl_verbose"\nversion: 1\nsystem: "v"\nfew_shot: []\nuser_template: "{question}"\n',
+            encoding="utf-8",
+        )
+
+        templates = discover_prompt_templates(
+            str(temp_dir),
+            expected_count=2,
+            preferred_prompt_ids=["icl_short", "icl_verbose"],
+        )
+
+        assert [template["prompt_id"] for template in templates] == [
+            "icl_short",
+            "icl_verbose",
+        ]
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def test_run_pilot_mock_writes_outputs_and_report(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
     monkeypatch.setenv("RUN_NAME", "pilot-mock")

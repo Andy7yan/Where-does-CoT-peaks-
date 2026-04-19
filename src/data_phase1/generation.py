@@ -535,14 +535,6 @@ def load_existing_trace_ids(output_path: str) -> set[str]:
     return trace_ids
 
 
-def generate_length_controlled(prompt: str, target_steps: int) -> str:
-    """Backward-compatible placeholder for older imports."""
-
-    raise NotImplementedError(
-        "Use LLMGenerator.generate() with build_generation_messages() for Stage 1 generation."
-    )
-
-
 def _resolve_torch_dtype(dtype_name: str, torch_module: Any) -> Any:
     normalized = dtype_name.lower()
     dtype_map = {

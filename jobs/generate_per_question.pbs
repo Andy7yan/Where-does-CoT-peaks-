@@ -1,0 +1,99 @@
+#!/bin/bash
+#PBS -N peak-cot-generate-per-question
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb
+#PBS -l walltime=02:30:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/generate_per_question.pbs.log
+#
+# Leave GPU model unconstrained to improve queueability.
+# Historical rerun logs recorded about 1h41m-1h56m for ~6000 traces/shard.
+# The per-question submit wrapper now targets roughly ~7200 traces/shard, which still fits inside 02:30:00 with headroom.
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${RUN_NAME:=per-question-$(date +%m%d_%H%M%S)}"
+: "${CONFIG_PATH:=configs/stage1_per_question.yaml}"
+: "${PROMPTS_DIR:=prompts/per_question}"
+: "${QUESTION_MANIFEST_PATH:=}"
+: "${START_IDX:=0}"
+: "${END_IDX:=}"
+: "${SHARD_ID:=q${START_IDX}_${END_IDX}}"
+: "${DEBUG:=0}"
+: "${PRESERVE_ROOT_SELECTION_INPUTS:=0}"
+: "${PEAK_COT_FORCE_DEVICE:=cuda}"
+: "${PEAK_COT_ALLOW_CPU_FALLBACK:=0}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HOME:?HF_HOME must be set by ${PROJECT_HOME}/.env}"
+: "${HF_HUB_CACHE:?HF_HUB_CACHE must be set by ${PROJECT_HOME}/.env}"
+: "${HF_DATASETS_CACHE:?HF_DATASETS_CACHE must be set by ${PROJECT_HOME}/.env}"
+: "${QUESTION_MANIFEST_PATH:?QUESTION_MANIFEST_PATH must be set for per-question generation}"
+
+export RUN_NAME
+export PEAK_COT_FORCE_DEVICE
+export PEAK_COT_ALLOW_CPU_FALLBACK
+SCRATCH_ROOT="${SCRATCH}"
+RUN_DIR="${SCRATCH_ROOT}/runs/${RUN_NAME}"
+VENV_DIR="${SCRATCH_ROOT}/.venv"
+LOG_PATH="${RUN_DIR}/logs/generation-${SHARD_ID}.log"
+
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH_ROOT}"
+echo "venv_dir=${VENV_DIR}"
+echo "run_dir=${RUN_DIR}"
+echo "log_path=${LOG_PATH}"
+echo "question_manifest_path=${QUESTION_MANIFEST_PATH}"
+echo "prompt_dir=${PROMPTS_DIR}"
+echo "shard_id=${SHARD_ID}"
+echo "start_idx=${START_IDX}"
+echo "end_idx=${END_IDX}"
+echo "preserve_root_selection_inputs=${PRESERVE_ROOT_SELECTION_INPUTS}"
+echo "force_device=${PEAK_COT_FORCE_DEVICE:-auto}"
+echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK:-0}"
+
+cmd=(
+  python scripts/run_generation_per_question.py
+  --config "${CONFIG_PATH}"
+  --output-dir "${RUN_DIR}"
+  --question-manifest "${QUESTION_MANIFEST_PATH}"
+  --prompts-dir "${PROMPTS_DIR}"
+  --shard-id "${SHARD_ID}"
+  --start-idx "${START_IDX}"
+)
+
+if [[ -n "${END_IDX}" ]]; then
+  cmd+=(--end-idx "${END_IDX}")
+fi
+
+if [[ "${DEBUG}" == "1" ]]; then
+  cmd+=(--debug)
+fi
+
+if [[ "${PRESERVE_ROOT_SELECTION_INPUTS}" == "1" ]]; then
+  cmd+=(--preserve-root-selection-inputs)
+fi
+
+printf 'command='
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+python scripts/check_runtime_device.py
+"${cmd[@]}"

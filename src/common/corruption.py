@@ -604,12 +604,20 @@ def _match_case(source: str, target: str) -> str:
 
 def _sample_multiplier(
     *,
-    float_perturbation_range: tuple[float, float],
+    float_perturbation_range: tuple[float, ...],
     rng: random.Random,
 ) -> float:
-    low, high = float_perturbation_range
     _validate_float_perturbation_range(float_perturbation_range)
-    return rng.uniform(low, high)
+    if len(float_perturbation_range) == 2:
+        low, high = float_perturbation_range
+        return rng.uniform(low, high)
+
+    low_a, high_a, low_b, high_b = float_perturbation_range
+    width_a = high_a - low_a
+    width_b = high_b - low_b
+    if rng.random() < (width_a / (width_a + width_b)):
+        return rng.uniform(low_a, high_a)
+    return rng.uniform(low_b, high_b)
 
 
 def _format_perturbed_value(raw: str, original_value: float, multiplier: float) -> str:
@@ -638,9 +646,26 @@ def _validate_integer_perturbation_range(values: tuple[int, int]) -> None:
         )
 
 
-def _validate_float_perturbation_range(values: tuple[float, float]) -> None:
-    low, high = values
-    if not (0.0 < low < high):
-        raise ValueError(
-            "float_perturbation_range must satisfy 0.0 < low < high."
-        )
+def _validate_float_perturbation_range(values: tuple[float, ...]) -> None:
+    if len(values) == 2:
+        low, high = values
+        if not (0.0 < low < high):
+            raise ValueError(
+                "float_perturbation_range must satisfy 0.0 < low < high."
+            )
+        return
+
+    if len(values) == 4:
+        low_a, high_a, low_b, high_b = values
+        if not (0.0 < low_a < high_a < 1.0 < low_b < high_b):
+            raise ValueError(
+                "float_perturbation_range must satisfy "
+                "0.0 < low_a < high_a < 1.0 < low_b < high_b when two "
+                "disjoint intervals are provided."
+            )
+        return
+
+    raise ValueError(
+        "float_perturbation_range must contain either 2 floats "
+        "(single interval) or 4 floats (two disjoint intervals)."
+    )

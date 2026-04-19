@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.run_generation import discover_prompt_templates
 from src.common.settings import ExperimentConfig
+from src.data_phase1.prompting import inspect_prompt_templates
 
 
 def main() -> None:
@@ -25,11 +26,23 @@ def main() -> None:
         config.generation.num_icl_groups,
     )
     prompt_ids = config.generation.icl_group_prompt_ids
-    templates = discover_prompt_templates(
-        prompts_dir=args.prompts_dir,
-        expected_count=num_icl_groups,
-        preferred_prompt_ids=prompt_ids or None,
-    )
+    try:
+        templates = discover_prompt_templates(
+            prompts_dir=args.prompts_dir,
+            expected_count=num_icl_groups,
+            preferred_prompt_ids=prompt_ids or None,
+        )
+    except Exception:
+        prompt_dir, inventory = inspect_prompt_templates(args.prompts_dir)
+        print(f"prompt_preflight_expected: {','.join(prompt_ids)}")
+        if inventory:
+            discovered_rows = [
+                f"{row['filename']}=>{row['prompt_id']}" for row in inventory
+            ]
+            print(f"prompt_preflight_inventory[{prompt_dir}]: {','.join(discovered_rows)}")
+        else:
+            print(f"prompt_preflight_inventory[{prompt_dir}]: <empty>")
+        raise
     discovered_prompt_ids = [template["prompt_id"] for template in templates]
     print(f"prompt_preflight_ok: {','.join(discovered_prompt_ids)}")
 

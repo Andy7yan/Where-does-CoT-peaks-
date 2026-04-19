@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import shutil
 from typing import Any
 
 from src.analysis_phase1.analysis import run_analysis
@@ -43,7 +42,6 @@ def run_postprocess_pipeline(
         ld_epsilon=config.nldd.ld_epsilon,
         tas_plateau_threshold=config.tas.plateau_threshold,
     )
-    _write_analysis_compat_exports(Path(analysis["analysis_dir"]))
     result["analysis"] = analysis
     result["runtime_selection"] = {
         "requested_device": backend["runtime_selection"].requested_device,
@@ -53,16 +51,6 @@ def run_postprocess_pipeline(
         "gpu_compute_capability": backend["runtime_selection"].gpu_compute_capability,
     }
     return result
-
-
-def _write_analysis_compat_exports(analysis_phase1_dir: Path) -> None:
-    """Mirror analysis_phase1 outputs to the legacy analysis/ directory expected by older tooling."""
-
-    compat_dir = analysis_phase1_dir.parent / "analysis"
-    compat_dir.mkdir(parents=True, exist_ok=True)
-    for path in analysis_phase1_dir.iterdir():
-        if path.is_file():
-            shutil.copy2(path, compat_dir / path.name)
 
 
 __all__ = ["run_postprocess_pipeline"]

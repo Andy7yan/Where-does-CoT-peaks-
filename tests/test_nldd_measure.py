@@ -1,14 +1,9 @@
-"""Tests for NLDD measurement helpers and the deprecated compatibility CLI."""
+"""Tests for NLDD measurement helpers."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-import shutil
-import sys
-from types import SimpleNamespace
-import uuid
-
 from src.analysis_phase1.nldd import (
     build_correct_token_ids,
     compute_logit_margin,
@@ -17,6 +12,7 @@ from src.analysis_phase1.nldd import (
     measure_trace_profile,
     validate_nldd_full_records,
 )
+from src.analysis_phase1.nldd_shared import _move_model_inputs_to_device
 from src.data_phase2.aggregation import aggregate_stage1_outputs
 
 
@@ -51,6 +47,34 @@ class FakeTokenizer:
         return [11]
 
 
+class FakeBatchEncoding:
+    """Small BatchEncoding-like stub for tokenizer output compatibility tests."""
+
+    def __init__(self, payload: dict[str, list[int]]) -> None:
+        self._payload = payload
+
+    def to(self, device: str) -> "FakeBatchEncoding":
+        del device
+        return self
+
+    def items(self):
+        return self._payload.items()
+
+
+class FakeBatchEncodingTokenizer(FakeTokenizer):
+    """Tokenizer stub that returns BatchEncoding-like objects instead of dicts."""
+
+    def __call__(
+        self,
+        text: str,
+        *,
+        add_special_tokens: bool = False,
+        return_tensors: str | None = None,
+    ) -> FakeBatchEncoding:
+        del add_special_tokens, return_tensors
+        return FakeBatchEncoding({"input_ids": self.encode(text, add_special_tokens=False)})
+
+
 def test_build_correct_token_ids_handles_integer_and_leading_space() -> None:
     tokenizer = FakeTokenizer()
 
@@ -67,12 +91,29 @@ def test_build_correct_token_ids_uses_first_token_for_multi_token_answers() -> N
     assert token_ids == [6, 8]
 
 
+def test_build_correct_token_ids_accepts_batch_encoding_like_tokenizer_output() -> None:
+    tokenizer = FakeBatchEncodingTokenizer()
+
+    token_ids = build_correct_token_ids(4.0, tokenizer)
+
+    assert token_ids == [0, 1]
+
+
 def test_compute_logit_margin_and_measure_nldd_handle_basic_cases() -> None:
     margin = compute_logit_margin([4.0, 3.0, 1.5, -1.0], [0, 1], 2.0)
 
     assert margin == 1.25
     assert round(measure_nldd(1.25, 0.25, ld_epsilon=1.0e-6), 4) == 80.0
     assert measure_nldd(1.0e-8, 0.0, ld_epsilon=1.0e-6) is None
+
+
+def test_move_model_inputs_to_device_accepts_batch_encoding_like_objects() -> None:
+    moved = _move_model_inputs_to_device(
+        FakeBatchEncoding({"input_ids": [1, 2], "attention_mask": [1, 1]}),
+        device="cuda",
+    )
+
+    assert moved == {"input_ids": [1, 2], "attention_mask": [1, 1]}
 
 
 def test_extract_trace_horizon_prefers_smallest_k_on_ties() -> None:
@@ -184,54 +225,6 @@ def test_measure_trace_profile_emits_failed_rows_with_null_nldd() -> None:
     assert rows[0]["corruption_failed"] is True
     assert rows[0]["nldd_value"] is None
     assert rows[0]["measurement_exclusion_reason"] == "corruption_failed"
-
-
-def test_run_nldd_measure_main_runs_analysis_phase1_compatibility_wrapper(monkeypatch) -> None:
-    monkeypatch.setenv("SCRATCH", "/tmp")
-
-    workspace = Path("tests") / f"_tmp_nldd_measure_{uuid.uuid4().hex}"
-    run_dir = workspace / "full_generation"
-    try:
-        shutil.copytree("tests/sample_data", run_dir)
-
-        import scripts.run_nldd_measure as runner
-
-        monkeypatch.setattr(
-            runner,
-            "load_analysis_backend",
-            lambda config: {
-                "tokenizer": FakeTokenizer(),
-                "prompt_logits_fn": _fake_prompt_logits,
-                "trace_trajectory_fn": _fake_trace_trajectory,
-                "runtime_selection": SimpleNamespace(
-                    requested_device="cpu",
-                    resolved_device="cpu",
-                ),
-            },
-        )
-        monkeypatch.setattr(
-            sys,
-            "argv",
-            [
-                "run_nldd_measure.py",
-                "--run-dir",
-                str(run_dir),
-                "--config",
-                "configs/stage1.yaml",
-            ],
-        )
-
-        runner.main()
-
-        analysis_dir = run_dir / "analysis_phase1"
-        assert (analysis_dir / "nldd_per_trace.jsonl").exists()
-        assert (analysis_dir / "tas_per_trace.jsonl").exists()
-        assert (analysis_dir / "tas_curve_per_trace.jsonl").exists()
-        assert not (run_dir / "trace_selection.csv").exists()
-        assert not (run_dir / "s_calibration.json").exists()
-        assert not (run_dir / "nldd_full.jsonl").exists()
-    finally:
-        shutil.rmtree(workspace, ignore_errors=True)
 
 
 def _build_stage_c_run(run_dir: Path) -> None:

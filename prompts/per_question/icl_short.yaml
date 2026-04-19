@@ -1,0 +1,59 @@
+prompt_id: icl_short
+version: 1
+system: |-
+  You are a careful math tutor.
+  Solve the user's problem clearly and finish with a new line in the form "#### <number>".
+few_shot:
+- user: A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?
+  assistant: |-
+    The white fiber is 2 / 2 = 1 bolt.
+    The total fiber is 2 + 1 = 3 bolts.
+    So the robe takes 3 bolts in total.
+    #### 3
+- user: James decides to run 3 sprints 3 times a week. He runs 60 meters each sprint. How many total meters does he run a week?
+  assistant: |-
+    He runs 3 * 3 = 9 sprints each week.
+    The total distance is 9 * 60 = 540 meters.
+    So James runs 540 meters in a week.
+    #### 540
+- user: Tracy used a piece of wire 4 feet long to support tomato plants in the garden. The wire was cut into pieces 6 inches long. How many pieces did she obtain?
+  assistant: |-
+    The wire is 12 * 4 = 48 inches long.
+    The number of pieces is 48 / 6 = 8.
+    So Tracy obtains 8 pieces.
+    #### 8
+- user: Marie ordered one chicken meal that costs $12, 5 packs of milk that costs $3 each, 4 apples that cost $1.50 each, and some boxes of pizza. Marie paid a total of $50. How many boxes of pizza did Marie order if each box costs $8.50?
+  assistant: |-
+    The milk and apples cost 5 * 3 + 4 * 1.5 = 15 + 6 = 21 dollars.
+    The total without pizza is 12 + 21 = 33 dollars.
+    So the pizza costs 50 - 33 = 17 dollars.
+    The number of pizza boxes is 17 / 8.5 = 2.
+    #### 2
+- user: Gunter is trying to count the jelly beans in a jar. He asks his friends how many they think are in the jar. One says 80. Another says 20 more than half the first one. A third says 25% more than the first one. What is their average guess?
+  assistant: |-
+    The 2nd guess is 20 + 80 / 2 = 20 + 40 = 60.
+    The 3rd guess is 80 * 1.25 = 100.
+    The total of the 3 guesses is 80 + 60 + 100 = 240.
+    The average guess is 240 / 3 = 80.
+    #### 80
+- user: When Freda cooks canned tomatoes into sauce, they lose half their volume. Each 16 ounce can of tomatoes that she uses contains three tomatoes. Freda's last batch of tomato sauce made 32 ounces of sauce. How many tomatoes did Freda use?
+  assistant: |-
+    The tomatoes started at 32 * 2 = 64 ounces.
+    That is 64 / 16 = 4 cans of tomatoes.
+    Each can has 3 tomatoes, so Freda used 4 * 3 = 12 tomatoes.
+    So the answer is 12.
+    #### 12
+- user: John buys twice as many red ties as blue ties. The red ties cost 50% more than blue ties. He spent $200 on blue ties that cost $40 each. How much did he spend on ties?
+  assistant: |-
+    He buys 200 / 40 = 5 blue ties and 5 * 2 = 10 red ties.
+    Each red tie costs 40 * 1.5 = 60 dollars.
+    He spends 10 * 60 = 600 dollars on red ties.
+    The total spending is 200 + 600 = 800 dollars.
+    #### 800
+- user: A football team played 22 games. They won 8 more than they lost. How many did they win?
+  assistant: |-
+    Let the number of losses be L and the number of wins be L + 8.
+    Then L + (L + 8) = 22, so 2 * L = 14 and L = 7.
+    That gives wins = 7 + 8 = 15.
+    #### 15
+user_template: '{question}'

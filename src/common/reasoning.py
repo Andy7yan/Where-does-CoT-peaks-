@@ -116,3 +116,24 @@ def _extract_after_marker(completion: str, marker: str) -> str | None:
             return match.group(0)
 
         start = marker_index + marker_len
+
+
+from src.common.corruption import (  # noqa: E402
+    corrupt_arithmetic,
+    corrupt_step_text,
+    corrupt_step_text_with_fallbacks,
+)
+
+
+__all__ = [
+    "DEFAULT_ANSWER_MARKERS",
+    "ExtractionResult",
+    "SegmentationResult",
+    "corrupt_arithmetic",
+    "corrupt_step_text",
+    "corrupt_step_text_with_fallbacks",
+    "extract_answer",
+    "judge",
+    "normalize_numeric",
+    "segment_steps",
+]

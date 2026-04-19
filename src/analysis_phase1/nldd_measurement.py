@@ -132,7 +132,7 @@ def build_correct_token_ids(gold_answer: float | int | str, tokenizer: Any) -> l
             variant,
             add_special_tokens=False,
         )
-        input_ids = encoded.get("input_ids") if isinstance(encoded, dict) else encoded
+        input_ids = encoded.get("input_ids") if hasattr(encoded, "get") else encoded
         flattened = _flatten_token_ids(input_ids)
         if flattened:
             token_ids.add(int(flattened[0]))

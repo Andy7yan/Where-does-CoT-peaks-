@@ -336,13 +336,25 @@ def run_analysis(
     bin_status_rows = build_bin_status_rows(traces_by_difficulty, samples)
     failure_rows = build_failure_stats_rows(nldd_rows=nldd_rows, bin_status_rows=bin_status_rows)
 
+    accuracy_path = analysis_dir / "accuracy_by_length.csv"
+    s_calibration_path = analysis_dir / "S_calibration.json"
+    nldd_per_trace_path = analysis_dir / "nldd_per_trace.jsonl"
+    tas_per_trace_path = analysis_dir / "tas_per_trace.jsonl"
+    tas_curve_per_trace_path = analysis_dir / "tas_curve_per_trace.jsonl"
+    nldd_surface_path = analysis_dir / "nldd_surface.csv"
+    tas_curve_path = analysis_dir / "tas_curve.csv"
+    k_star_by_l_path = analysis_dir / "k_star_by_L.csv"
+    l_star_path = analysis_dir / "L_star.csv"
+    bin_status_path = analysis_dir / "bin_status.csv"
+    failure_stats_path = analysis_dir / "failure_stats.csv"
+
     _write_csv(
-        analysis_dir / "accuracy_by_length.csv",
+        accuracy_path,
         rows=accuracy_rows,
         fieldnames=["difficulty", "length", "n", "mean_accuracy", "se_accuracy"],
     )
     _write_json(
-        analysis_dir / "S_calibration.json",
+        s_calibration_path,
         {
             "schema_version": "stage1_analysis_s_calibration_v1",
             "s_value": s_value,
@@ -350,31 +362,31 @@ def run_analysis(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
-    _write_jsonl(analysis_dir / "nldd_per_trace.jsonl", nldd_rows)
-    _write_jsonl(analysis_dir / "tas_per_trace.jsonl", tas_rows)
-    _write_jsonl(analysis_dir / "tas_curve_per_trace.jsonl", tas_curve_rows)
+    _write_jsonl(nldd_per_trace_path, nldd_rows)
+    _write_jsonl(tas_per_trace_path, tas_rows)
+    _write_jsonl(tas_curve_per_trace_path, tas_curve_rows)
     _write_csv(
-        analysis_dir / "nldd_surface.csv",
+        nldd_surface_path,
         rows=nldd_surface_rows,
         fieldnames=["difficulty", "length", "k", "n", "mean_nldd", "se_nldd"],
     )
     _write_csv(
-        analysis_dir / "tas_curve.csv",
+        tas_curve_path,
         rows=tas_curve_summary_rows,
         fieldnames=["difficulty", "length", "step_index", "n", "mean_tas", "se_tas"],
     )
     _write_csv(
-        analysis_dir / "k_star_by_L.csv",
+        k_star_by_l_path,
         rows=kstar_rows,
         fieldnames=["difficulty", "length", "k_star", "mean_nldd", "n"],
     )
     _write_csv(
-        analysis_dir / "L_star.csv",
+        l_star_path,
         rows=lstar_rows,
         fieldnames=["difficulty", "L_star", "mean_accuracy", "n"],
     )
     _write_csv(
-        analysis_dir / "bin_status.csv",
+        bin_status_path,
         rows=bin_status_rows,
         fieldnames=[
             "difficulty",
@@ -388,19 +400,42 @@ def run_analysis(
         ],
     )
     _write_csv(
-        analysis_dir / "failure_stats.csv",
+        failure_stats_path,
         rows=failure_rows,
         fieldnames=["category", "key", "count"],
+    )
+
+    _validate_analysis_outputs(
+        [
+            accuracy_path,
+            s_calibration_path,
+            nldd_per_trace_path,
+            tas_per_trace_path,
+            tas_curve_per_trace_path,
+            nldd_surface_path,
+            tas_curve_path,
+            k_star_by_l_path,
+            l_star_path,
+            bin_status_path,
+            failure_stats_path,
+        ]
     )
 
     return {
         "analysis_dir": str(analysis_dir),
         "sample_count": len(samples),
         "s_value": s_value,
-        "accuracy_by_length_path": str(analysis_dir / "accuracy_by_length.csv"),
-        "nldd_per_trace_path": str(analysis_dir / "nldd_per_trace.jsonl"),
-        "tas_per_trace_path": str(analysis_dir / "tas_per_trace.jsonl"),
-        "tas_curve_per_trace_path": str(analysis_dir / "tas_curve_per_trace.jsonl"),
+        "accuracy_by_length_path": str(accuracy_path),
+        "s_calibration_path": str(s_calibration_path),
+        "nldd_per_trace_path": str(nldd_per_trace_path),
+        "tas_per_trace_path": str(tas_per_trace_path),
+        "tas_curve_per_trace_path": str(tas_curve_per_trace_path),
+        "nldd_surface_path": str(nldd_surface_path),
+        "tas_curve_path": str(tas_curve_path),
+        "k_star_by_L_path": str(k_star_by_l_path),
+        "L_star_path": str(l_star_path),
+        "bin_status_path": str(bin_status_path),
+        "failure_stats_path": str(failure_stats_path),
     }
 
 
@@ -598,6 +633,14 @@ def build_failure_stats_rows(
         {"category": "nldd", "key": "null_nldd_rows", "count": null_nldd_count},
         {"category": "bins", "key": "insufficient_bins", "count": insufficient_bins},
     ]
+
+
+def _validate_analysis_outputs(paths: Sequence[Path]) -> None:
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"Expected analysis output was not written: {path}")
+        if path.stat().st_size <= 0:
+            raise ValueError(f"Analysis output is empty: {path}")
 
 
 def _resolve_hidden_layer_index(layer: str, num_hidden_states: int) -> int:

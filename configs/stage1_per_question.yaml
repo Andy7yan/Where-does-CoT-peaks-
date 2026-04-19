@@ -1,0 +1,79 @@
+experiment:
+  run_id: "peak-cot-stage1-per-question-gsm8k-platinum-llama31"
+  seed: 42
+
+dataset:
+  name: "madrylab/gsm8k-platinum"
+  hf_config: "main"
+  split: "test"
+  order_hash_seed: 42
+
+model:
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+  dtype: "float16"
+  hf_cache: "${SCRATCH}/hf-home/hub"
+
+generation:
+  num_icl_groups: 4
+  samples_per_group: 30
+  temperature: 0.6
+  icl_groups:
+    icl_short: {}
+    icl_medium: {}
+    icl_detailed: {}
+    icl_verbose: {}
+  max_new_tokens: 1024
+
+step_segmentation:
+  method: "newline"
+  answer_markers: ["####", "The answer is"]
+
+answer_extraction:
+  numeric_tolerance: 1e-3
+
+nldd:
+  corruption_type: "tiered_fallback"
+  integer_perturbation_range: [-1, 1]
+  float_perturbation_range: [0.7, 0.9, 1.1, 1.3]
+  enable_tier3_semantic_flip: false
+  corruption_token_delta_max: 2
+  corruption_retry_limit: 3
+  ld_epsilon: 1.0e-6
+  horizon_definition: "peak"
+
+pilot:
+  num_questions: 50
+  num_icl_groups: 4
+  samples_per_group: 5
+  temperature: 0.6
+  max_new_tokens: 512
+  max_extraction_fail_rate: 0.05
+
+tas:
+  layer: "middle"
+  plateau_threshold: 0.05
+
+analysis:
+  min_bin_size: 5
+  min_nldd_length: 3
+  hard_accuracy_threshold: 0.5
+  easy_accuracy_threshold: 0.8
+  num_length_bins: 3
+  length_bin_mode: "tertile"
+  target_traces_per_cell: 120
+  target_traces_near_lstar: 120
+  per_question_trace_cap: 2
+  primary_lstar_window: 1
+  fallback_lstar_window: 2
+  min_near_lstar_traces: 49
+  min_cell_size: 30
+  num_normalized_bins: 6
+  min_bin_coverage_ratio: 0.6
+  num_full_analysis_questions: 25
+  max_extraction_fail_rate: 0.05
+  per_question_lcurve_min_bin_size: 5
+  per_question_min_retained_traces: 5
+  per_question_max_retained_traces: 20
+  per_question_lstar_smoothing_window: 3
+  per_question_min_lcurve_bins: 3
+  per_question_min_kstar_bins: 2

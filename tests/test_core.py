@@ -54,6 +54,15 @@ def test_config_can_be_loaded(monkeypatch) -> None:
     assert config.analysis.max_extraction_fail_rate == 0.05
 
 
+def test_per_question_config_accepts_disjoint_float_perturbation_ranges(monkeypatch) -> None:
+    monkeypatch.setenv("SCRATCH", "/tmp")
+    monkeypatch.setenv("RUN_NAME", "test")
+
+    config = ExperimentConfig.from_yaml("configs/stage1_per_question.yaml")
+
+    assert config.nldd.float_perturbation_range == [0.7, 0.9, 1.1, 1.3]
+
+
 def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
     monkeypatch.setenv("SCRATCH", "/tmp")
     monkeypatch.setenv("RUN_NAME", "stage-a")
@@ -253,11 +262,28 @@ def test_corrupt_arithmetic_is_deterministic_with_fixed_seed() -> None:
 
 def test_corrupt_arithmetic_multiplier_stays_outside_exclusion_zone() -> None:
     for seed in range(20):
-        result = corrupt_arithmetic("Value: 100.0", rng=random.Random(seed))
+        result = corrupt_arithmetic(
+            "Value: 100.0",
+            rng=random.Random(seed),
+            float_perturbation_range=(0.7, 0.9, 1.1, 1.3),
+        )
         perturbed = normalize_numeric(result.perturbed_number)
         assert perturbed is not None
         ratio = perturbed / 100.0
         assert ratio <= 0.9 or ratio >= 1.1
+
+
+def test_corrupt_arithmetic_supports_disjoint_multiplier_ranges() -> None:
+    for seed in range(20):
+        result = corrupt_arithmetic(
+            "Value: 100.0",
+            rng=random.Random(seed),
+            float_perturbation_range=(0.7, 0.9, 1.1, 1.3),
+        )
+        perturbed = normalize_numeric(result.perturbed_number)
+        assert perturbed is not None
+        ratio = perturbed / 100.0
+        assert 0.7 <= ratio <= 0.9 or 1.1 <= ratio <= 1.3
 
 
 def test_corrupt_arithmetic_on_sample_step(sample_gsm8k: list[dict]) -> None:

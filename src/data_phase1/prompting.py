@@ -6,17 +6,68 @@ from typing import Any
 import yaml
 
 
+def resolve_prompt_templates_dir(prompts_dir: str = "prompts/") -> Path:
+    """Resolve the effective prompt directory, preserving the legacy root default."""
+
+    prompt_dir = Path(prompts_dir)
+    if any(prompt_dir.glob("*.yaml")):
+        return prompt_dir
+
+    # The legacy Stage 1 entrypoints historically defaulted to `prompts/`.
+    # In the current repo layout, those canonical prompts live under `prompts/first_run/`.
+    if prompt_dir.name == "prompts":
+        first_run_dir = prompt_dir / "first_run"
+        if any(first_run_dir.glob("*.yaml")):
+            return first_run_dir
+
+    return prompt_dir
+
+
 def load_prompt_template(prompt_id: str, prompts_dir: str = "prompts/") -> dict:
     """Load a YAML prompt template by id."""
 
-    template_path = Path(prompts_dir) / f"{prompt_id}.yaml"
+    prompt_dir = resolve_prompt_templates_dir(prompts_dir)
+    template_path = prompt_dir / f"{prompt_id}.yaml"
     if not template_path.exists():
+        for candidate_path in sorted(prompt_dir.glob("*.yaml")):
+            data = _load_prompt_template_file(candidate_path)
+            if data["prompt_id"] == prompt_id:
+                return data
         raise FileNotFoundError(f"Prompt template not found: {template_path}")
 
-    data = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise TypeError(f"Prompt template must be a mapping: {template_path}")
-    return data
+    return _load_prompt_template_file(template_path)
+
+
+def load_prompt_templates_by_id(prompts_dir: str = "prompts/") -> tuple[Path, dict[str, dict[str, Any]]]:
+    """Load every YAML prompt template in a directory and key them by prompt_id."""
+
+    prompt_dir = resolve_prompt_templates_dir(prompts_dir)
+    templates_by_id: dict[str, dict[str, Any]] = {}
+    for template_path in sorted(prompt_dir.glob("*.yaml")):
+        template = _load_prompt_template_file(template_path)
+        prompt_id = template["prompt_id"]
+        if prompt_id in templates_by_id:
+            raise ValueError(
+                f"Duplicate prompt_id '{prompt_id}' found in '{prompt_dir}'."
+            )
+        templates_by_id[prompt_id] = template
+    return prompt_dir, templates_by_id
+
+
+def inspect_prompt_templates(prompts_dir: str = "prompts/") -> tuple[Path, list[dict[str, str]]]:
+    """Return a file-by-file inventory of prompt templates for diagnostics."""
+
+    prompt_dir = resolve_prompt_templates_dir(prompts_dir)
+    inventory: list[dict[str, str]] = []
+    for template_path in sorted(prompt_dir.glob("*.yaml")):
+        template = _load_prompt_template_file(template_path)
+        inventory.append(
+            {
+                "filename": template_path.name,
+                "prompt_id": template["prompt_id"],
+            }
+        )
+    return prompt_dir, inventory
 
 
 def build_generation_messages(
@@ -85,6 +136,16 @@ def build_nldd_corrupt_prompt(
 
 def _format_steps_block(steps: list[str]) -> str:
     return "\n".join(f"Step {index}: {step}" for index, step in enumerate(steps, start=1))
+
+
+def _load_prompt_template_file(template_path: Path) -> dict[str, Any]:
+    data = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise TypeError(f"Prompt template must be a mapping: {template_path}")
+    prompt_id = data.get("prompt_id")
+    if not isinstance(prompt_id, str) or not prompt_id:
+        raise TypeError(f"Prompt template field 'prompt_id' must be a non-empty string: {template_path}")
+    return data
 
 
 def _require_string(mapping: dict[str, Any], key: str) -> str:

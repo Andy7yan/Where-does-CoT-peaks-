@@ -1,4 +1,4 @@
-"""Compatibility facade for NLDD helpers split across selection/corruption/measurement modules."""
+"""Public NLDD helpers for corruption and measurement workflows."""
 
 from src.analysis_phase1.nldd_corruption import (
     CorruptionSelectionConfig,
@@ -18,16 +18,9 @@ from src.analysis_phase1.nldd_measurement import (
     measure_trace_profile,
     validate_nldd_full_records,
 )
-from src.analysis_phase1.nldd_selection import (
-    TraceSelectionConfig,
-    load_coarse_analysis,
-    load_or_build_trace_selection,
-    load_question_metadata,
-)
 
 __all__ = [
     "CorruptionSelectionConfig",
-    "TraceSelectionConfig",
     "build_correct_token_ids",
     "build_corruption_record",
     "build_corruption_records",
@@ -35,9 +28,6 @@ __all__ = [
     "compute_logit_margin",
     "compute_v4_measurement_artifacts",
     "extract_trace_horizon",
-    "load_coarse_analysis",
-    "load_or_build_trace_selection",
-    "load_question_metadata",
     "load_trace_sources",
     "measure_nldd",
     "measure_trace_profile",

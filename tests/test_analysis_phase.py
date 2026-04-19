@@ -93,6 +93,14 @@ def test_run_analysis_phase_main_writes_analysis_outputs(monkeypatch) -> None:
         assert (analysis_dir / "L_star.csv").exists()
         assert (analysis_dir / "bin_status.csv").exists()
         assert (analysis_dir / "failure_stats.csv").exists()
+        assert "nldd_surface_path" in runner.run_analysis(
+            run_dir=str(run_dir),
+            prompt_logits_fn=_fake_prompt_logits,
+            tokenizer=FakeTokenizer(),
+            trace_trajectory_fn=_fake_trace_trajectory,
+            ld_epsilon=1.0e-6,
+            tas_plateau_threshold=None,
+        )
 
         with (analysis_dir / "nldd_per_trace.jsonl").open("r", encoding="utf-8") as handle:
             nldd_rows = [json.loads(line) for line in handle if line.strip()]

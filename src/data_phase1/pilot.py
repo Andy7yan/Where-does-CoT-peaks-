@@ -16,7 +16,7 @@ from src.data_phase1.generation import (
     write_run_metadata,
 )
 from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test, slice_question_records
-from src.data_phase1.prompting import load_prompt_template
+from src.data_phase1.prompting import load_prompt_templates_by_id
 from src.common.corruption import (
     DEFAULT_FLOAT_PERTURBATION_RANGE,
     DEFAULT_INTEGER_PERTURBATION_RANGE,
@@ -102,12 +102,7 @@ def discover_prompt_templates(
 ) -> list[dict[str, Any]]:
     """Load Pilot prompt groups in filename order."""
 
-    prompt_root = Path(prompts_dir)
-    prompt_paths = list(prompt_root.glob("icl_*.yaml"))
-    templates_by_id = {
-        path.stem: load_prompt_template(path.stem, prompts_dir=prompts_dir)
-        for path in prompt_paths
-    }
+    prompt_root, templates_by_id = load_prompt_templates_by_id(prompts_dir)
     if preferred_prompt_ids:
         missing_prompt_ids = [
             prompt_id for prompt_id in preferred_prompt_ids if prompt_id not in templates_by_id
