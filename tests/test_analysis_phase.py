@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import uuid
 
 from src.analysis_phase1.analysis import (
+    build_kstar_rows,
     build_trace_trajectory_fn,
     compute_tas_curve_from_vectors,
     compute_tas_from_vectors,
@@ -96,6 +97,7 @@ def test_run_analysis_phase_main_writes_analysis_outputs(monkeypatch) -> None:
         assert "nldd_surface_path" in runner.run_analysis(
             run_dir=str(run_dir),
             prompt_logits_fn=_fake_prompt_logits,
+            prompt_logits_batch_fn=_fake_prompt_logits_batch,
             tokenizer=FakeTokenizer(),
             trace_trajectory_fn=_fake_trace_trajectory,
             ld_epsilon=1.0e-6,
@@ -182,10 +184,102 @@ def test_compute_tas_curve_from_vectors_treats_each_prefix_as_endpoint() -> None
     assert round(curve[1]["tas_value"], 6) == round((2.0 ** 0.5) / 2.0, 6)
 
 
+def test_build_kstar_rows_uses_argmax_of_mean_curve_with_smallest_k_tie_break() -> None:
+    rows = [
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s1",
+            "k": 2,
+            "nldd_value": 50.0,
+            "k_star_trace": 2,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s1",
+            "k": 4,
+            "nldd_value": 10.0,
+            "k_star_trace": 2,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s1",
+            "k": 5,
+            "nldd_value": 0.0,
+            "k_star_trace": 2,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s2",
+            "k": 2,
+            "nldd_value": 10.0,
+            "k_star_trace": 5,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s2",
+            "k": 4,
+            "nldd_value": 40.0,
+            "k_star_trace": 5,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s2",
+            "k": 5,
+            "nldd_value": 50.0,
+            "k_star_trace": 5,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s3",
+            "k": 2,
+            "nldd_value": 10.0,
+            "k_star_trace": 4,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s3",
+            "k": 4,
+            "nldd_value": 45.0,
+            "k_star_trace": 4,
+        },
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "sample_id": "s3",
+            "k": 5,
+            "nldd_value": 0.0,
+            "k_star_trace": 4,
+        },
+    ]
+
+    kstar_rows = build_kstar_rows(rows)
+
+    assert kstar_rows == [
+        {
+            "difficulty": "easy",
+            "length": 5,
+            "k_star": 4,
+            "n": 3,
+        }
+    ]
+
+
 def _fake_prompt_logits(prompt: str) -> list[float]:
     checksum = sum(ord(char) for char in prompt)
     incorrect_max = 0.4 + ((checksum % 7) * 0.1)
     return [2.0, 1.8, incorrect_max, incorrect_max - 0.2, -0.5, -1.0]
+
+
+def _fake_prompt_logits_batch(prompts: list[str]) -> list[list[float]]:
+    return [_fake_prompt_logits(prompt) for prompt in prompts]
 
 
 def _fake_trace_trajectory(question: str, steps: tuple[str, ...]) -> list[list[float]]:

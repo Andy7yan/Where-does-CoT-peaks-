@@ -15,7 +15,7 @@ from src.common.corruption import (
     DEFAULT_INTEGER_PERTURBATION_RANGE,
     corrupt_step_text_with_fallbacks,
 )
-from src.data_phase1.prompting import build_nldd_corrupt_prompt
+from src.analysis_phase1.nldd_prompts import build_canonical_corrupt_prompt
 from src.data_phase2.pipeline import discover_stage1_shard_paths
 
 from src.analysis_phase1.nldd_shared import _load_jsonl_records, _stable_seed, _write_jsonl
@@ -75,7 +75,7 @@ def build_corruption_records(
         if not isinstance(steps, list) or not steps:
             continue
 
-        for step_index in range(1, len(steps) + 1):
+        for step_index in range(2, len(steps) + 1):
             step_text = str(steps[step_index - 1])
             rng = random.Random(
                 _stable_seed(f"{selection.seed}:all_steps:{trace.get('trace_id')}:{step_index}")
@@ -117,11 +117,11 @@ def build_corruption_record(
 
     prompt = None
     if not corruption.corruption_failed:
-        prompt = build_nldd_corrupt_prompt(
+        prompt = build_canonical_corrupt_prompt(
             question=str(trace["question_text"]),
             clean_steps=[str(step) for step in trace["steps"]],
+            corruption_step_index=step_index,
             corrupt_step=corruption.corrupt_text,
-            corrupt_index=step_index - 1,
         )
 
     return {

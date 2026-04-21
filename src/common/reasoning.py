@@ -118,11 +118,30 @@ def _extract_after_marker(completion: str, marker: str) -> str | None:
         start = marker_index + marker_len
 
 
-from src.common.corruption import (  # noqa: E402
-    corrupt_arithmetic,
-    corrupt_step_text,
-    corrupt_step_text_with_fallbacks,
-)
+def corrupt_arithmetic(*args, **kwargs):
+    """Backward-compatible lazy wrapper for arithmetic corruption."""
+
+    from src.common.corruption import corrupt_arithmetic as _corrupt_arithmetic
+
+    return _corrupt_arithmetic(*args, **kwargs)
+
+
+def corrupt_step_text(*args, **kwargs):
+    """Backward-compatible lazy wrapper for one-step corruption."""
+
+    from src.common.corruption import corrupt_step_text as _corrupt_step_text
+
+    return _corrupt_step_text(*args, **kwargs)
+
+
+def corrupt_step_text_with_fallbacks(*args, **kwargs):
+    """Backward-compatible lazy wrapper for tiered corruption."""
+
+    from src.common.corruption import (
+        corrupt_step_text_with_fallbacks as _corrupt_step_text_with_fallbacks,
+    )
+
+    return _corrupt_step_text_with_fallbacks(*args, **kwargs)
 
 
 __all__ = [

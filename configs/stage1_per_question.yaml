@@ -77,3 +77,5 @@ analysis:
   per_question_lstar_smoothing_window: 3
   per_question_min_lcurve_bins: 3
   per_question_min_kstar_bins: 2
+  prompt_batch_size: 1
+  hidden_state_batch_size: 1

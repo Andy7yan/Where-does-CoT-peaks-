@@ -71,3 +71,5 @@ analysis:
   min_bin_coverage_ratio: 0.6
   num_full_analysis_questions: 25  # Backfill after pilot review.
   max_extraction_fail_rate: 0.05
+  prompt_batch_size: 8
+  hidden_state_batch_size: 8

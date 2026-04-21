@@ -14,8 +14,10 @@ from src.analysis_phase1.analysis import (
     calibrate_s_on_samples,
     measure_sample_nldd,
     measure_sample_tas_curve,
+    resolve_mean_curve_kstar,
 )
 from src.analysis_phase1.io import SampleRecord
+from src.analysis_phase1.nldd_shared import _write_jsonl
 from src.analysis_phase1.pq_io import (
     PQ_ANALYSIS_DIRNAME,
     load_per_question_bin_summaries,
@@ -32,6 +34,7 @@ def run_per_question_analysis(
     *,
     run_dir: str,
     prompt_logits_fn: Callable[[str], Any],
+    prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
     tokenizer: Any,
     trace_trajectory_fn: Callable[[str, Sequence[str]], list[Any]],
     ld_epsilon: float,
@@ -60,6 +63,7 @@ def run_per_question_analysis(
     s_value = calibrate_s_on_samples(
         samples,
         prompt_logits_fn=prompt_logits_fn,
+        prompt_logits_batch_fn=prompt_logits_batch_fn,
     )
 
     nldd_rows: list[dict[str, Any]] = []
@@ -69,6 +73,7 @@ def run_per_question_analysis(
             measure_sample_nldd(
                 sample,
                 prompt_logits_fn=prompt_logits_fn,
+                prompt_logits_batch_fn=prompt_logits_batch_fn,
                 tokenizer=tokenizer,
                 s_value=s_value,
                 ld_epsilon=ld_epsilon,
@@ -81,6 +86,11 @@ def run_per_question_analysis(
                 plateau_threshold=tas_plateau_threshold,
             )
         )
+    trace_profile_rows = build_trace_profile_rows(
+        samples=samples,
+        nldd_rows=nldd_rows,
+        tas_curve_rows=tas_curve_rows,
+    )
 
     step_surface_rows = build_step_surface_rows(
         nldd_rows=nldd_rows,
@@ -104,13 +114,18 @@ def run_per_question_analysis(
         kstar_by_bin=kstar_by_bin,
         min_kstar_bins=min_kstar_bins,
     )
+    nldd_per_trace_path = output_dir / "nldd_per_trace.jsonl"
+    tas_curve_per_trace_path = output_dir / "tas_curve_per_trace.jsonl"
+    trace_profiles_path = output_dir / "trace_profiles.jsonl"
 
+    _write_jsonl(nldd_per_trace_path, nldd_rows)
+    _write_jsonl(tas_curve_per_trace_path, tas_curve_rows)
+    _write_jsonl(trace_profiles_path, trace_profile_rows)
     _write_csv(
         output_dir / "t1b_step_surface.csv",
         rows=step_surface_rows,
         fieldnames=[
-            "scope",
-            "pipeline",
+            "question_id",
             "L",
             "step",
             "mean_nldd",
@@ -188,6 +203,9 @@ def run_per_question_analysis(
         "analysis_dir": str(output_dir),
         "sample_count": len(samples),
         "s_value": s_value,
+        "nldd_per_trace_path": str(nldd_per_trace_path),
+        "tas_curve_per_trace_path": str(tas_curve_per_trace_path),
+        "trace_profiles_path": str(trace_profiles_path),
         "t1b_step_surface_path": str(output_dir / "t1b_step_surface.csv"),
         "t1c_kstar_ratio_path": str(output_dir / "t1c_kstar_ratio.csv"),
         "t2b_lstar_difficulty_path": str(output_dir / "t2b_lstar_difficulty.csv"),
@@ -237,8 +255,7 @@ def build_step_surface_rows(
             tas_values = tas_by_step.get((question_id, length, step), [])
             surface_rows.append(
                 {
-                    "scope": question_id,
-                    "pipeline": PQ_PIPELINE_NAME,
+                    "question_id": question_id,
                     "L": length,
                     "step": step,
                     "mean_nldd": mean(nldd_values) if nldd_values else None,
@@ -255,7 +272,7 @@ def build_step_surface_rows(
 def build_kstar_by_bin(
     nldd_rows: Sequence[dict[str, Any]],
 ) -> dict[tuple[str, int], dict[str, Any]]:
-    """Resolve k* for each valid per-question length bin."""
+    """Resolve k* for each per-question length bin from the aggregated mean NLDD curve."""
 
     grouped: dict[tuple[str, int, int], list[float]] = {}
     for row in nldd_rows:
@@ -269,26 +286,22 @@ def build_kstar_by_bin(
         )
         grouped.setdefault(key, []).append(float(value))
 
-    rows_by_bin: dict[tuple[str, int], list[dict[str, Any]]] = {}
-    for (question_id, length, step), values in grouped.items():
-        rows_by_bin.setdefault((question_id, length), []).append(
-            {
-                "k": step,
-                "mean_nldd": mean(values),
-                "n_clean": len(values),
-            }
-        )
+    values_by_bin: dict[tuple[str, int], dict[int, list[float]]] = {}
+    for question_id, length, k in sorted(
+        grouped,
+        key=lambda item: (item[0], item[1], item[2]),
+    ):
+        values_by_bin.setdefault((question_id, length), {})[k] = grouped[(question_id, length, k)]
 
     results: dict[tuple[str, int], dict[str, Any]] = {}
-    for key, rows in rows_by_bin.items():
-        best_row = max(
-            rows,
-            key=lambda row: (float(row["mean_nldd"]), -int(row["k"])),
-        )
+    for key, values_by_k in values_by_bin.items():
+        resolved = resolve_mean_curve_kstar(values_by_k)
+        if resolved is None:
+            continue
+        k_star, n = resolved
         results[key] = {
-            "k_star": int(best_row["k"]),
-            "mean_nldd": float(best_row["mean_nldd"]),
-            "n_clean": int(best_row["n_clean"]),
+            "k_star": k_star,
+            "n_clean": n,
         }
     return results
 
@@ -320,7 +333,7 @@ def build_kstar_ratio_rows(
                 "difficulty_score": float(meta["difficulty_score"]),
                 "L": length,
                 "k_star": int(kstar["k_star"]),
-                "k_star_ratio": float(kstar["k_star"]) / length,
+                "k_star_ratio": int(kstar["k_star"]) / length,
                 "n_clean": int(summary["n_retained"]),
             }
         )
@@ -350,6 +363,102 @@ def build_lstar_difficulty_rows(
             }
         )
     return rows
+
+
+def build_trace_profile_rows(
+    *,
+    samples: Sequence[SampleRecord],
+    nldd_rows: Sequence[dict[str, Any]],
+    tas_curve_rows: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Group PQ raw measurements by retained sample for downstream artifacting."""
+
+    nldd_by_sample: dict[tuple[str, int, str], list[dict[str, Any]]] = {}
+    for row in nldd_rows:
+        key = (
+            str(row["question_id"]),
+            int(row["length"]),
+            str(row["sample_id"]),
+        )
+        nldd_by_sample.setdefault(key, []).append(dict(row))
+
+    tas_by_sample: dict[tuple[str, int, str], list[dict[str, Any]]] = {}
+    for row in tas_curve_rows:
+        key = (
+            str(row["question_id"]),
+            int(row["length"]),
+            str(row["sample_id"]),
+        )
+        tas_by_sample.setdefault(key, []).append(dict(row))
+
+    profile_rows: list[dict[str, Any]] = []
+    for sample in samples:
+        key = (sample.question_id, sample.length, sample.sample_id)
+        sample_nldd_rows = sorted(
+            nldd_by_sample.get(key, []),
+            key=lambda row: int(row["k"]),
+        )
+        sample_tas_rows = sorted(
+            tas_by_sample.get(key, []),
+            key=lambda row: int(row["step_index"]),
+        )
+        corruption_profiles = []
+        for row in sample_nldd_rows:
+            k = int(row["k"])
+            corruption_payload = sample.corruptions_by_k.get(k, {})
+            corruption_profiles.append(
+                {
+                    "k": k,
+                    "corruption_tier": int(row["corruption_tier"]),
+                    "corruption_id": row["corruption_id"],
+                    "ld_clean": row["ld_clean"],
+                    "ld_corrupt": row["ld_corrupt"],
+                    "nldd_value": row["nldd_value"],
+                    "measurement_exclusion_reason": row["measurement_exclusion_reason"],
+                    "steps": list(corruption_payload.get("steps", [])),
+                    "raw_completion": str(corruption_payload.get("raw_completion", "")),
+                    "final_answer_line": corruption_payload.get("final_answer_line"),
+                }
+            )
+
+        k_star_trace = None
+        r_star_trace = None
+        if sample_nldd_rows:
+            k_star_trace = sample_nldd_rows[0].get("k_star_trace")
+            r_star_trace = sample_nldd_rows[0].get("r_star_trace")
+
+        profile_rows.append(
+            {
+                "pipeline": PQ_PIPELINE_NAME,
+                "question_id": sample.question_id,
+                "difficulty": sample.difficulty,
+                "length": sample.length,
+                "sample_id": sample.sample_id,
+                "source_trace_id": sample.source_trace_id,
+                "trace_tier": sample.trace_tier,
+                "actual_num_steps": sample.actual_num_steps,
+                "gold_answer": sample.gold_answer,
+                "question_text": sample.question_text,
+                "clean_trace": {
+                    "steps": list(sample.clean_steps),
+                    "raw_completion": sample.clean_raw_completion,
+                    "final_answer_line": sample.final_answer_line,
+                },
+                "k_star_trace": k_star_trace,
+                "r_star_trace": r_star_trace,
+                "corruption_profiles": corruption_profiles,
+                "tas_curve": [
+                    {
+                        "step_index": int(row["step_index"]),
+                        "tas_value": float(row["tas_value"]),
+                        "plateau_step": row.get("plateau_step"),
+                    }
+                    for row in sample_tas_rows
+                ],
+            }
+        )
+
+    return profile_rows
 
 
 def build_failure_rows(
@@ -427,5 +536,6 @@ __all__ = [
     "build_kstar_ratio_rows",
     "build_lstar_difficulty_rows",
     "build_step_surface_rows",
+    "build_trace_profile_rows",
     "run_per_question_analysis",
 ]

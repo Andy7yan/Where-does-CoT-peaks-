@@ -78,7 +78,7 @@ def aggregate_per_question_outputs(
     _validate_positive_odd_window(smoothing_window)
 
     traces_by_question = _group_traces_by_question(traces)
-    metadata_rows = build_per_question_metadata_rows(
+    metadata_rows, missing_question_ids = build_per_question_metadata_rows(
         traces_by_question=traces_by_question,
         manifest_by_question=manifest_by_question,
     )
@@ -95,7 +95,7 @@ def aggregate_per_question_outputs(
         str(row["question_id"]): row
         for row in metadata_rows
     }
-    for question_id in sorted(manifest_by_question):
+    for question_id in sorted(metadata_by_question):
         question_dir = per_question_root / question_id
         question_dir.mkdir(parents=True, exist_ok=True)
 
@@ -170,6 +170,8 @@ def aggregate_per_question_outputs(
         "per_question_root": str(per_question_root),
         "question_count": len(metadata_rows),
         "trace_count": len(traces),
+        "missing_question_count": len(missing_question_ids),
+        "missing_question_ids": missing_question_ids,
         "questions": question_summaries,
     }
 
@@ -178,16 +180,16 @@ def build_per_question_metadata_rows(
     *,
     traces_by_question: dict[str, list[dict[str, Any]]],
     manifest_by_question: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Build root metadata rows for each selected per-question item."""
 
     rows: list[dict[str, Any]] = []
+    missing_question_ids: list[str] = []
     for question_id in sorted(manifest_by_question):
         question_traces = traces_by_question.get(question_id, [])
         if not question_traces:
-            raise ValueError(
-                f"Per-question run is missing traces for manifest question_id '{question_id}'."
-            )
+            missing_question_ids.append(question_id)
+            continue
         correct_count = sum(1 for trace in question_traces if bool(trace["is_correct"]))
         total_traces = len(question_traces)
         acc_pq = correct_count / total_traces if total_traces else 0.0
@@ -211,7 +213,7 @@ def build_per_question_metadata_rows(
                 },
             }
         )
-    return rows
+    return rows, missing_question_ids
 
 
 def build_per_question_lcurve_rows(
@@ -417,6 +419,8 @@ def export_per_question_bins(
                 _write_json(sample_dir / "meta.json", bundle["meta_payload"])
                 for k, payload in bundle["corrupt_payloads"].items():
                     _write_json(sample_dir / f"corrupt_k{k}.json", payload)
+                for k, payload in bundle["corrupt_full_payloads"].items():
+                    _write_json(sample_dir / f"corrupt_k{k}_full.json", payload)
 
         summary = {
             "scope": question_id,

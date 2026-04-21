@@ -10,6 +10,7 @@ import uuid
 from src.data_phase2.curation import curate_data_phase
 from src.analysis_phase1.nldd import summarize_corruption_records
 from src.data_phase2.aggregation import aggregate_stage1_outputs
+from src.data_phase2.difficulty_groups import build_trace_sample_bundle
 
 
 def test_curate_data_phase_restructures_canonical_run(monkeypatch) -> None:
@@ -113,11 +114,79 @@ def test_aggregate_stage1_outputs_builds_per_length_full_analysis_exports(monkey
         assert sample_meta["trace_tier"] in {1, 2}
         assert sample_meta["k_values"] == [2, 3, 4]
         assert "source_trace_id" in sample_meta
-        assert all(set(item) == {"k", "tier", "corruption_id", "token_delta"} for item in sample_meta["per_k"])
+        assert all(
+            set(item) >= {"k", "tier", "corruption_id", "token_delta", "full_payload_filename"}
+            for item in sample_meta["per_k"]
+        )
         assert (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "clean.json").exists()
         assert (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "corrupt_k2.json").exists()
+        assert (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "corrupt_k2_full.json").exists()
+
+        canonical_corrupt = json.loads(
+            (bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "corrupt_k2.json").read_text(encoding="utf-8")
+        )
+        sidecar_corrupt = json.loads(
+            (
+                bin4_dir / "samples" / bin4_selection[0]["sample_id"] / "corrupt_k2_full.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert canonical_corrupt["truncation_applied"] is True
+        assert sidecar_corrupt["truncation_applied"] is False
+        assert len(canonical_corrupt["steps"]) == 2
+        assert len(sidecar_corrupt["steps"]) == 4
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
+
+
+def test_build_trace_sample_bundle_preserves_truncated_and_full_corruptions() -> None:
+    trace = _trace("q1", "icl_short", 1, True, 4)
+    corruption_rows = [
+        {
+            "trace_id": trace["trace_id"],
+            "step_index": 2,
+            "corruption_failed": False,
+            "corruption_tier": 1,
+            "corruption_id": "corr_k2",
+            "corrupt_step": "broken step 2",
+            "token_delta": 0,
+        },
+        {
+            "trace_id": trace["trace_id"],
+            "step_index": 3,
+            "corruption_failed": False,
+            "corruption_tier": 2,
+            "corruption_id": "corr_k3",
+            "corrupt_step": "broken step 3",
+            "token_delta": 1,
+        },
+        {
+            "trace_id": trace["trace_id"],
+            "step_index": 4,
+            "corruption_failed": False,
+            "corruption_tier": 2,
+            "corruption_id": "corr_k4",
+            "corrupt_step": "broken step 4",
+            "token_delta": 1,
+        },
+    ]
+
+    bundle = build_trace_sample_bundle(
+        trace=trace,
+        difficulty="easy",
+        corruption_rows=corruption_rows,
+    )
+
+    assert bundle is not None
+    assert bundle["corrupt_payloads"][2]["steps"] == [trace["steps"][0], "broken step 2"]
+    assert bundle["corrupt_payloads"][2]["truncation_applied"] is True
+    assert bundle["corrupt_full_payloads"][2]["steps"] == [
+        trace["steps"][0],
+        "broken step 2",
+        trace["steps"][2],
+        trace["steps"][3],
+    ]
+    assert bundle["corrupt_full_payloads"][2]["truncation_applied"] is False
+    assert bundle["meta_payload"]["per_k"][0]["full_payload_filename"] == "corrupt_k2_full.json"
 
 
 def test_curate_data_phase_rejects_duplicate_trace_ids(monkeypatch) -> None:

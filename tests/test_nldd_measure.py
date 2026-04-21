@@ -129,7 +129,7 @@ def test_extract_trace_horizon_prefers_smallest_k_on_ties() -> None:
     assert horizon["r_star_trace"] == 0.5
 
 
-def test_measure_trace_profile_is_deterministic_and_covers_all_steps() -> None:
+def test_measure_trace_profile_is_deterministic_and_covers_k_from_two_onward() -> None:
     tokenizer = FakeTokenizer()
     trace = _trace("q1", 3, True, steps=["2 + 2 = 4", "4 + 0 = 4", "Return 4"])
     selection_row = {
@@ -169,7 +169,7 @@ def test_measure_trace_profile_is_deterministic_and_covers_all_steps() -> None:
         retry_limit=3,
     )
 
-    assert [row["corruption_step_index"] for row in first] == [1, 2, 3]
+    assert [row["corruption_step_index"] for row in first] == [2, 3]
     assert [
         (
             row["corruption_step_index"],
@@ -195,7 +195,7 @@ def test_measure_trace_profile_is_deterministic_and_covers_all_steps() -> None:
 
 def test_measure_trace_profile_emits_failed_rows_with_null_nldd() -> None:
     tokenizer = FakeTokenizer()
-    trace = _trace("q2", 1, True, steps=["There are many apples"])
+    trace = _trace("q2", 2, True, steps=["2 + 2 = 4", "There are many apples"])
     selection_row = {
         "trace_id": trace["trace_id"],
         "question_id": trace["question_id"],
@@ -222,6 +222,7 @@ def test_measure_trace_profile_emits_failed_rows_with_null_nldd() -> None:
     )
 
     assert len(rows) == 1
+    assert rows[0]["corruption_step_index"] == 2
     assert rows[0]["corruption_failed"] is True
     assert rows[0]["nldd_value"] is None
     assert rows[0]["measurement_exclusion_reason"] == "corruption_failed"

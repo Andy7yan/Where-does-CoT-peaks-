@@ -211,6 +211,8 @@ def export_bins_for_difficulty(
             _write_json(sample_dir / "meta.json", bundle["meta_payload"])
             for k, payload in bundle["corrupt_payloads"].items():
                 _write_json(sample_dir / f"corrupt_k{k}.json", payload)
+            for k, payload in bundle["corrupt_full_payloads"].items():
+                _write_json(sample_dir / f"corrupt_k{k}_full.json", payload)
             selection_rows.append(bundle["selection_row"])
 
         _write_jsonl(bin_dir / "selection.jsonl", selection_rows)
@@ -310,18 +312,22 @@ def build_trace_sample_bundle(
     }
 
     corrupt_payloads: dict[int, dict[str, Any]] = {}
+    corrupt_full_payloads: dict[int, dict[str, Any]] = {}
     for row in selected_rows:
         k = int(row["step_index"])
-        corrupted_steps = list(steps)
-        corrupted_steps[k - 1] = str(row["corrupt_step"])
-        corrupted_completion = "\n".join(
-            corrupted_steps + ([str(trace["final_answer_line"])] if trace.get("final_answer_line") else [])
+        corrupt_step = str(row["corrupt_step"])
+        corrupt_payloads[k] = _build_truncated_corruption_payload(
+            steps=steps,
+            final_answer_line=trace.get("final_answer_line"),
+            step_index=k,
+            corrupt_step=corrupt_step,
         )
-        corrupt_payloads[k] = {
-            "step_index": k,
-            "steps": corrupted_steps,
-            "raw_completion": corrupted_completion,
-        }
+        corrupt_full_payloads[k] = _build_full_corruption_payload(
+            steps=steps,
+            final_answer_line=trace.get("final_answer_line"),
+            step_index=k,
+            corrupt_step=corrupt_step,
+        )
 
     meta_payload = {
         "sample_id": None,
@@ -336,6 +342,7 @@ def build_trace_sample_bundle(
                 "tier": int(row["corruption_tier"]),
                 "corruption_id": str(row["corruption_id"]),
                 "token_delta": row.get("token_delta"),
+                "full_payload_filename": f"corrupt_k{int(row['step_index'])}_full.json",
             }
             for row in selected_rows
         ],
@@ -353,9 +360,52 @@ def build_trace_sample_bundle(
         "sample_id": None,
         "clean_payload": clean_payload,
         "corrupt_payloads": corrupt_payloads,
+        "corrupt_full_payloads": corrupt_full_payloads,
         "meta_payload": meta_payload,
         "selection_row": selection_row,
     }
+
+
+def _build_truncated_corruption_payload(
+    *,
+    steps: list[str],
+    final_answer_line: Any,
+    step_index: int,
+    corrupt_step: str,
+) -> dict[str, Any]:
+    truncated_steps = list(steps[: step_index - 1]) + [str(corrupt_step)]
+    return {
+        "step_index": step_index,
+        "corrupt_step": str(corrupt_step),
+        "steps": truncated_steps,
+        "raw_completion": _join_completion_lines(truncated_steps, final_answer_line),
+        "final_answer_line": final_answer_line,
+        "truncation_applied": True,
+    }
+
+
+def _build_full_corruption_payload(
+    *,
+    steps: list[str],
+    final_answer_line: Any,
+    step_index: int,
+    corrupt_step: str,
+) -> dict[str, Any]:
+    full_steps = list(steps)
+    full_steps[step_index - 1] = str(corrupt_step)
+    return {
+        "step_index": step_index,
+        "corrupt_step": str(corrupt_step),
+        "steps": full_steps,
+        "raw_completion": _join_completion_lines(full_steps, final_answer_line),
+        "final_answer_line": final_answer_line,
+        "truncation_applied": False,
+    }
+
+
+def _join_completion_lines(steps: list[str], final_answer_line: Any) -> str:
+    suffix = [str(final_answer_line)] if final_answer_line else []
+    return "\n".join(list(steps) + suffix)
 
 
 def _build_question_rows(

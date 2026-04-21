@@ -121,6 +121,8 @@ class AnalysisConfig:
     per_question_lstar_smoothing_window: int | None
     per_question_min_lcurve_bins: int | None
     per_question_min_kstar_bins: int | None
+    prompt_batch_size: int | None
+    hidden_state_batch_size: int | None
 
 
 @dataclass
@@ -297,6 +299,14 @@ class ExperimentConfig:
                 per_question_min_kstar_bins=_optional_int(
                     analysis,
                     "per_question_min_kstar_bins",
+                ),
+                prompt_batch_size=_optional_int(
+                    analysis,
+                    "prompt_batch_size",
+                ),
+                hidden_state_batch_size=_optional_int(
+                    analysis,
+                    "hidden_state_batch_size",
                 ),
             ),
         )

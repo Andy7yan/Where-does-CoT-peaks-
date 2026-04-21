@@ -29,7 +29,8 @@ def test_build_corruption_records_emits_full_mode() -> None:
         selection=CorruptionSelectionConfig(seed=42),
     )
 
-    assert len(records["all_steps"]) == 2
+    assert len(records["all_steps"]) == 1
+    assert records["all_steps"][0]["step_index"] == 2
     assert all("corruption_tier" in record for record in records["all_steps"])
 
 
@@ -42,8 +43,8 @@ def test_build_corruption_records_disables_tier3_by_default() -> None:
                 "question_id": "gsm8k_0000",
                 "question_text": "Question?",
                 "prompt_id": "icl_short",
-                "steps": ["The price increased after the sale."],
-                "actual_num_steps": 1,
+                "steps": ["2 + 2 = 4", "The price increased after the sale."],
+                "actual_num_steps": 2,
                 "is_correct": True,
             },
         )
@@ -56,5 +57,7 @@ def test_build_corruption_records_disables_tier3_by_default() -> None:
         selection=CorruptionSelectionConfig(seed=42),
     )
 
+    assert len(records["all_steps"]) == 1
+    assert records["all_steps"][0]["step_index"] == 2
     assert records["all_steps"][0]["corruption_failed"] is True
     assert records["all_steps"][0]["failure_tier"] == "uncorruptible"

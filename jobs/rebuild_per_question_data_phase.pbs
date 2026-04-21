@@ -1,0 +1,65 @@
+#!/bin/bash
+#PBS -N peak-cot-rebuild-pq
+#PBS -l select=1:ncpus=4:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/rebuild_per_question_data_phase.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${CONFIG_PATH:=configs/stage1_per_question.yaml}"
+: "${SOURCE_RUN_NAME:?SOURCE_RUN_NAME must be set}"
+: "${RUN_NAME:?RUN_NAME must be set}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+SOURCE_RUN_DIR="${SCRATCH}/runs/${SOURCE_RUN_NAME}"
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+
+if [[ ! -d "${SOURCE_RUN_DIR}" ]]; then
+  echo "missing source run directory: ${SOURCE_RUN_DIR}"
+  exit 1
+fi
+
+if [[ -e "${RUN_DIR}" ]]; then
+  echo "target run already exists: ${RUN_DIR}"
+  exit 1
+fi
+
+mkdir -p "${RUN_DIR}/logs"
+LOG_PATH="${RUN_DIR}/logs/rebuild_per_question_data_phase.log"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "scratch_root=${SCRATCH}"
+echo "source_run_dir=${SOURCE_RUN_DIR}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+
+cp "${SOURCE_RUN_DIR}/traces.jsonl" "${RUN_DIR}/traces.jsonl"
+
+if [[ -f "${SOURCE_RUN_DIR}/run_meta.json" ]]; then
+  cp "${SOURCE_RUN_DIR}/run_meta.json" "${RUN_DIR}/run_meta.json"
+fi
+
+cp "${SOURCE_RUN_DIR}/per_question_manifest.jsonl" "${RUN_DIR}/per_question_manifest.jsonl"
+cp "${SOURCE_RUN_DIR}/per_question_selection_meta.json" "${RUN_DIR}/per_question_selection_meta.json"
+
+python scripts/run_per_question_data_phase.py \
+  --run-dir "${RUN_DIR}" \
+  --config "${CONFIG_PATH}"

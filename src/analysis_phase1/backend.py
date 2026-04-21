@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.analysis_phase1.analysis import build_prompt_hidden_state_fn, build_trace_trajectory_fn
-from src.analysis_phase1.nldd_measurement import build_prompt_logit_fn
+from src.analysis_phase1.analysis import (
+    build_prompt_hidden_state_batch_fn,
+    build_prompt_hidden_state_fn,
+    build_trace_trajectory_fn,
+)
+from src.analysis_phase1.nldd_measurement import (
+    build_prompt_logit_batch_fn,
+    build_prompt_logit_fn,
+)
 from src.common.runtime_env import select_runtime_device
 from src.common.settings import ExperimentConfig
 from src.data_phase1.generation import _load_tokenizer_with_fallback, _resolve_torch_dtype, ensure_model_available
@@ -29,6 +36,12 @@ def load_analysis_backend(config: ExperimentConfig) -> dict[str, Any]:
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
+    prompt_batch_size = 1 if config.analysis.prompt_batch_size is None else int(config.analysis.prompt_batch_size)
+    hidden_state_batch_size = (
+        1
+        if config.analysis.hidden_state_batch_size is None
+        else int(config.analysis.hidden_state_batch_size)
+    )
 
     model = AutoModelForCausalLM.from_pretrained(
         local_model_path,
@@ -43,11 +56,26 @@ def load_analysis_backend(config: ExperimentConfig) -> dict[str, Any]:
 
     print(f"model_cache_hit: {not downloaded}")
     print(f"resolved_model_path: {local_model_path}")
+    prompt_logits_batch_fn = build_prompt_logit_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch,
+        batch_size=prompt_batch_size,
+    )
     prompt_logits_fn = build_prompt_logit_fn(
         model=model,
         tokenizer=tokenizer,
         device=device,
         torch_module=torch,
+    )
+    prompt_hidden_state_batch_fn = build_prompt_hidden_state_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch,
+        layer=config.tas.layer,
+        batch_size=hidden_state_batch_size,
     )
     prompt_hidden_state_fn = build_prompt_hidden_state_fn(
         model=model,
@@ -61,9 +89,14 @@ def load_analysis_backend(config: ExperimentConfig) -> dict[str, Any]:
         "model": model,
         "tokenizer": tokenizer,
         "prompt_logits_fn": prompt_logits_fn,
+        "prompt_logits_batch_fn": prompt_logits_batch_fn,
         "trace_trajectory_fn": build_trace_trajectory_fn(
             prompt_hidden_state_fn=prompt_hidden_state_fn,
+            prompt_hidden_state_batch_fn=prompt_hidden_state_batch_fn,
         ),
+        "prompt_hidden_state_batch_fn": prompt_hidden_state_batch_fn,
+        "analysis_prompt_batch_size": prompt_batch_size,
+        "analysis_hidden_state_batch_size": hidden_state_batch_size,
         "runtime_selection": runtime_selection,
     }
 

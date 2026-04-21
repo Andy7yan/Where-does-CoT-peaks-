@@ -29,6 +29,7 @@ def main() -> None:
     artifacts = run_per_question_analysis(
         run_dir=args.run_dir,
         prompt_logits_fn=backend["prompt_logits_fn"],
+        prompt_logits_batch_fn=backend.get("prompt_logits_batch_fn"),
         tokenizer=backend["tokenizer"],
         trace_trajectory_fn=backend["trace_trajectory_fn"],
         ld_epsilon=config.nldd.ld_epsilon,
@@ -41,6 +42,9 @@ def main() -> None:
     print(f"pq_analysis_dir: {artifacts['analysis_dir']}")
     print(f"sample_count: {artifacts['sample_count']}")
     print(f"s_value: {artifacts['s_value']}")
+    print(f"nldd_per_trace_path: {artifacts['nldd_per_trace_path']}")
+    print(f"tas_curve_per_trace_path: {artifacts['tas_curve_per_trace_path']}")
+    print(f"trace_profiles_path: {artifacts['trace_profiles_path']}")
     print(f"t1b_step_surface_path: {artifacts['t1b_step_surface_path']}")
     print(f"t1c_kstar_ratio_path: {artifacts['t1c_kstar_ratio_path']}")
     print(f"t2b_lstar_difficulty_path: {artifacts['t2b_lstar_difficulty_path']}")

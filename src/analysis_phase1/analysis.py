@@ -16,6 +16,7 @@ from src.analysis_phase1.nldd_measurement import (
     extract_trace_horizon,
     measure_nldd,
 )
+from src.analysis_phase1.nldd_prompts import build_canonical_corrupt_prompt
 from src.analysis_phase1.nldd_shared import _flatten_numeric_values, _write_jsonl
 from src.analysis_phase1.io import SampleRecord, load_analysis_samples, load_analysis_traces_by_difficulty
 from src.data_phase1.prompting import build_nldd_clean_prompt
@@ -32,45 +33,92 @@ def build_prompt_hidden_state_fn(
 ) -> Callable[[str], Any]:
     """Create a prompt -> last-token hidden-state extractor."""
 
+    encode_prompts = build_prompt_hidden_state_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch_module,
+        layer=layer,
+        batch_size=1,
+    )
+
     def encode_prompt(prompt: str) -> Any:
-        model_inputs = tokenizer(
-            prompt,
-            return_tensors="pt",
-            add_special_tokens=False,
-        )
-        prepared_inputs = {
-            key: value.to(device) if hasattr(value, "to") else value
-            for key, value in model_inputs.items()
-        }
-        with torch_module.no_grad():
-            outputs = model(
-                **prepared_inputs,
-                output_hidden_states=True,
-            )
-        hidden_states = outputs.hidden_states
-        if hidden_states is None:
-            raise RuntimeError("Model backend did not return hidden states.")
-        layer_index = _resolve_hidden_layer_index(layer, len(hidden_states))
-        return hidden_states[layer_index][0, -1, :]
+        return encode_prompts([prompt])[0]
 
     return encode_prompt
 
 
+def build_prompt_hidden_state_batch_fn(
+    *,
+    model: Any,
+    tokenizer: Any,
+    device: Any,
+    torch_module: Any,
+    layer: str,
+    batch_size: int,
+) -> Callable[[Sequence[str]], list[Any]]:
+    """Create a prompt-batched last-token hidden-state extractor."""
+
+    effective_batch_size = max(int(batch_size), 1)
+
+    def encode_prompts(prompts: Sequence[str]) -> list[Any]:
+        prompt_list = [str(prompt) for prompt in prompts]
+        if not prompt_list:
+            return []
+
+        vectors: list[Any] = []
+        for start in range(0, len(prompt_list), effective_batch_size):
+            prompt_batch = prompt_list[start : start + effective_batch_size]
+            model_inputs = tokenizer(
+                prompt_batch,
+                return_tensors="pt",
+                add_special_tokens=False,
+                padding=True,
+            )
+            prepared_inputs = {
+                key: value.to(device) if hasattr(value, "to") else value
+                for key, value in model_inputs.items()
+            }
+            with torch_module.no_grad():
+                outputs = model(
+                    **prepared_inputs,
+                    output_hidden_states=True,
+                )
+            hidden_states = outputs.hidden_states
+            if hidden_states is None:
+                raise RuntimeError("Model backend did not return hidden states.")
+            layer_index = _resolve_hidden_layer_index(layer, len(hidden_states))
+            batch_hidden = hidden_states[layer_index][:, -1, :]
+            vectors.extend(
+                batch_hidden[row_index, :].detach().cpu()
+                for row_index in range(batch_hidden.shape[0])
+            )
+        return vectors
+
+    return encode_prompts
+
+
 def build_trace_trajectory_fn(
     *,
-    prompt_hidden_state_fn: Callable[[str], Any],
+    prompt_hidden_state_fn: Callable[[str], Any] | None = None,
+    prompt_hidden_state_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
 ) -> Callable[[str, Sequence[str]], list[Any]]:
     """Create a `(question, steps)` -> prefix-trajectory encoder."""
 
+    if prompt_hidden_state_batch_fn is None:
+        if prompt_hidden_state_fn is None:
+            raise ValueError("A hidden-state encoder must be provided.")
+
+        def prompt_hidden_state_batch_fn(prompts: Sequence[str]) -> list[Any]:
+            return [prompt_hidden_state_fn(prompt) for prompt in prompts]
+
     def encode_trace(question: str, steps: Sequence[str]) -> list[Any]:
-        trajectory = [
-            prompt_hidden_state_fn(build_nldd_clean_prompt(question=question, steps=[]))
-        ]
-        trajectory.extend(
-            prompt_hidden_state_fn(build_nldd_clean_prompt(question=question, steps=list(steps[:prefix_length])))
+        prompts = [build_nldd_clean_prompt(question=question, steps=[])]
+        prompts.extend(
+            build_nldd_clean_prompt(question=question, steps=list(steps[:prefix_length]))
             for prefix_length in range(1, len(steps) + 1)
         )
-        return trajectory
+        return prompt_hidden_state_batch_fn(prompts)
 
     return encode_trace
 
@@ -79,18 +127,26 @@ def calibrate_s_on_samples(
     samples: Sequence[SampleRecord],
     *,
     prompt_logits_fn: Callable[[str], Any],
+    prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
 ) -> float:
     """Calibrate S on all selected clean samples in the canonical layout."""
 
     std_values: list[float] = []
+    prompts: list[str] = []
     for sample in samples:
         if not sample.clean_steps:
             continue
-        prompt = build_nldd_clean_prompt(
-            question=sample.question_text,
-            steps=list(sample.clean_steps),
+        prompts.append(
+            build_nldd_clean_prompt(
+                question=sample.question_text,
+                steps=list(sample.clean_steps),
+            )
         )
-        logits = prompt_logits_fn(prompt)
+    if prompt_logits_batch_fn is not None:
+        logits_rows = prompt_logits_batch_fn(prompts)
+    else:
+        logits_rows = [prompt_logits_fn(prompt) for prompt in prompts]
+    for logits in logits_rows:
         std_values.append(_compute_vector_std(logits))
     if not std_values:
         raise ValueError("Cannot calibrate S without at least one non-empty clean sample.")
@@ -101,6 +157,7 @@ def measure_sample_nldd(
     sample: SampleRecord,
     *,
     prompt_logits_fn: Callable[[str], Any],
+    prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
     tokenizer: Any,
     s_value: float,
     ld_epsilon: float,
@@ -115,24 +172,43 @@ def measure_sample_nldd(
         steps=list(sample.clean_steps),
     )
     correct_token_ids = build_correct_token_ids(sample.gold_answer, tokenizer)
-    clean_logits = prompt_logits_fn(clean_prompt)
+    corrupt_prompt_by_k = {
+        k: build_canonical_corrupt_prompt(
+            question=sample.question_text,
+            clean_steps=sample.clean_steps,
+            corruption_step_index=k,
+            corruption_payload=sample.corruptions_by_k[k],
+        )
+        for k in sample.k_values
+    }
+    if prompt_logits_batch_fn is not None:
+        batched_logits = prompt_logits_batch_fn(
+            [clean_prompt, *[corrupt_prompt_by_k[k] for k in sample.k_values]]
+        )
+        clean_logits = batched_logits[0]
+        corrupt_logits_by_k = {
+            k: batched_logits[index]
+            for index, k in enumerate(sample.k_values, start=1)
+        }
+    else:
+        clean_logits = prompt_logits_fn(clean_prompt)
+        corrupt_logits_by_k = {}
     ld_clean = compute_logit_margin(clean_logits, correct_token_ids, s_value)
     low_ld_clean = abs(ld_clean) < ld_epsilon
 
     rows: list[dict[str, Any]] = []
     for k in sample.k_values:
-        corrupt_payload = sample.corruptions_by_k[k]
-        corrupt_prompt = build_nldd_clean_prompt(
-            question=sample.question_text,
-            steps=[str(step) for step in corrupt_payload.get("steps", [])],
-        )
         ld_corrupt: float | None = None
         nldd_value: float | None = None
         exclusion_reason: str | None = None
         if low_ld_clean:
             exclusion_reason = "low_ld_clean"
         else:
-            corrupt_logits = prompt_logits_fn(corrupt_prompt)
+            corrupt_logits = (
+                corrupt_logits_by_k[k]
+                if prompt_logits_batch_fn is not None
+                else prompt_logits_fn(corrupt_prompt_by_k[k])
+            )
             ld_corrupt = compute_logit_margin(corrupt_logits, correct_token_ids, s_value)
             nldd_value = measure_nldd(ld_clean, ld_corrupt, ld_epsilon=ld_epsilon)
             if nldd_value is None:
@@ -283,6 +359,7 @@ def run_analysis(
     *,
     run_dir: str,
     prompt_logits_fn: Callable[[str], Any],
+    prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
     tokenizer: Any,
     trace_trajectory_fn: Callable[[str, Sequence[str]], list[Any]],
     ld_epsilon: float,
@@ -299,7 +376,11 @@ def run_analysis(
     if not samples:
         raise ValueError("No analysis samples were discovered under difficulty/*/bins/*/samples.")
 
-    s_value = calibrate_s_on_samples(samples, prompt_logits_fn=prompt_logits_fn)
+    s_value = calibrate_s_on_samples(
+        samples,
+        prompt_logits_fn=prompt_logits_fn,
+        prompt_logits_batch_fn=prompt_logits_batch_fn,
+    )
     nldd_rows: list[dict[str, Any]] = []
     tas_rows: list[dict[str, Any]] = []
     tas_curve_rows: list[dict[str, Any]] = []
@@ -308,6 +389,7 @@ def run_analysis(
             measure_sample_nldd(
                 sample,
                 prompt_logits_fn=prompt_logits_fn,
+                prompt_logits_batch_fn=prompt_logits_batch_fn,
                 tokenizer=tokenizer,
                 s_value=s_value,
                 ld_epsilon=ld_epsilon,
@@ -331,7 +413,7 @@ def run_analysis(
     accuracy_rows = build_accuracy_by_length_rows(traces_by_difficulty)
     lstar_rows = build_lstar_rows(accuracy_rows)
     nldd_surface_rows = build_nldd_surface_rows(nldd_rows)
-    kstar_rows = build_kstar_rows(nldd_surface_rows)
+    kstar_rows = build_kstar_rows(nldd_rows)
     tas_curve_summary_rows = build_tas_curve_summary_rows(tas_curve_rows)
     bin_status_rows = build_bin_status_rows(traces_by_difficulty, samples)
     failure_rows = build_failure_stats_rows(nldd_rows=nldd_rows, bin_status_rows=bin_status_rows)
@@ -378,7 +460,7 @@ def run_analysis(
     _write_csv(
         k_star_by_l_path,
         rows=kstar_rows,
-        fieldnames=["difficulty", "length", "k_star", "mean_nldd", "n"],
+        fieldnames=["difficulty", "length", "k_star", "n"],
     )
     _write_csv(
         l_star_path,
@@ -521,33 +603,60 @@ def build_nldd_surface_rows(nldd_rows: Sequence[dict[str, Any]]) -> list[dict[st
     return surface_rows
 
 
-def build_kstar_rows(surface_rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Resolve k*(L) from the aggregated NLDD surface."""
+def build_kstar_rows(nldd_rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Resolve bin-level k*(L) as the peak of the aggregated mean NLDD curve."""
 
-    grouped: dict[tuple[str, int], list[dict[str, Any]]] = {}
-    for row in surface_rows:
-        grouped.setdefault((str(row["difficulty"]), int(row["length"])), []).append(dict(row))
+    grouped: dict[tuple[str, int, int], list[float]] = {}
+    for row in nldd_rows:
+        value = row.get("nldd_value")
+        if value is None:
+            continue
+        key = (str(row["difficulty"]), int(row["length"]), int(row["k"]))
+        grouped.setdefault(key, []).append(float(value))
+
+    values_by_bin: dict[tuple[str, int], dict[int, list[float]]] = {}
+    for difficulty, length, k in sorted(
+        grouped,
+        key=lambda item: (DIFFICULTY_ORDER.index(item[0]), item[1], item[2]),
+    ):
+        values_by_bin.setdefault((difficulty, length), {})[k] = grouped[(difficulty, length, k)]
 
     kstar_rows: list[dict[str, Any]] = []
     for difficulty, length in sorted(
-        grouped,
+        values_by_bin,
         key=lambda item: (DIFFICULTY_ORDER.index(item[0]), item[1]),
     ):
-        rows = grouped[(difficulty, length)]
-        best_row = max(
-            rows,
-            key=lambda row: (float(row["mean_nldd"]), -int(row["k"])),
-        )
+        resolved = resolve_mean_curve_kstar(values_by_bin[(difficulty, length)])
+        if resolved is None:
+            continue
+        k_star, n = resolved
         kstar_rows.append(
             {
                 "difficulty": difficulty,
                 "length": length,
-                "k_star": int(best_row["k"]),
-                "mean_nldd": float(best_row["mean_nldd"]),
-                "n": int(best_row["n"]),
+                "k_star": k_star,
+                "n": n,
             }
         )
     return kstar_rows
+
+
+def resolve_mean_curve_kstar(values_by_k: dict[int, Sequence[float]]) -> tuple[int, int] | None:
+    """Select the smallest-k argmax from an aggregated NLDD mean curve."""
+
+    valid_items = [
+        (int(k), [float(value) for value in values])
+        for k, values in values_by_k.items()
+        if int(k) > 1 and values
+    ]
+    if not valid_items:
+        return None
+
+    best_k, best_values = max(
+        valid_items,
+        key=lambda item: (mean(item[1]), -item[0]),
+    )
+    return best_k, len(best_values)
 
 
 def build_tas_curve_summary_rows(tas_curve_rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:

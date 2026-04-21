@@ -235,7 +235,7 @@ def build_t1a_overview_rows_from_legacy(legacy_dir: Path) -> list[dict[str, Any]
                 "L": length,
                 "accuracy": float(row["mean_accuracy"]),
                 "accuracy_se": float(row["se_accuracy"]),
-                "k_star": int(kstar_row["k_star"]) if kstar_row and bin_status == "ok" else None,
+                "k_star": float(kstar_row["k_star"]) if kstar_row and bin_status == "ok" else None,
                 "mean_tas": sum(tas_values) / len(tas_values) if tas_values else None,
                 "tas_se": _standard_error(tas_values) if tas_values else None,
                 "l_star": lstar_by_difficulty.get(difficulty) == length,
@@ -336,19 +336,17 @@ def select_representative_questions(
     *,
     max_questions: int,
 ) -> list[str]:
-    """Pick representative PQ questions by ok-bin coverage, then by scope id."""
+    """Pick representative PQ questions by ok-bin coverage, then by question id."""
 
     coverage: dict[str, int] = {}
     for row in rows:
-        if str(row.get("pipeline")) != "pq":
-            continue
         if str(row.get("bin_status")) != "ok":
             continue
-        scope = str(row["scope"])
-        coverage[scope] = coverage.get(scope, 0) + 1
+        question_id = str(row["question_id"])
+        coverage[question_id] = coverage.get(question_id, 0) + 1
     ordered = sorted(
         coverage,
-        key=lambda scope: (-coverage[scope], scope),
+        key=lambda question_id: (-coverage[question_id], question_id),
     )
     return ordered[: max(max_questions, 0)]
 
@@ -358,7 +356,7 @@ def plot_t1a_overview(
     rows: Sequence[dict[str, Any]],
     output_dir: Path,
 ) -> list[str]:
-    """Render the three overall T1-A multi-axis figures."""
+    """Render the three overall T1-A figures as single-panel multi-axis plots."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     frame = pd.DataFrame(rows)
@@ -379,33 +377,91 @@ def plot_t1a_overview(
         subset = frame[frame["difficulty"] == difficulty].sort_values("L")
         if subset.empty:
             continue
-        fig, ax1 = plt.subplots(figsize=(8, 5))
-        ax2 = ax1.twinx()
+        fig, ax_accuracy = plt.subplots(figsize=(9.5, 5.8))
+        ax_tas = ax_accuracy.twinx()
+        ax_kstar = ax_accuracy.twinx()
+        ax_kstar.spines["right"].set_position(("outward", 48))
+        ax_kstar.spines["right"].set_visible(True)
 
-        ax1.plot(subset["L"], subset["accuracy"], marker="o", color="#1f6feb", label="accuracy")
-        ax1.plot(subset["L"], subset["mean_tas"], marker="s", color="#ff7f0e", label="mean_tas")
-        ax2.plot(subset["L"], subset["k_star"], marker="^", color="#2ca02c", label="k_star")
-        ax2.plot(subset["L"], subset["L"], linestyle="--", color="#666666", label="y=x")
+        accuracy_line = ax_accuracy.plot(
+            subset["L"],
+            subset["accuracy"],
+            marker="o",
+            linewidth=2.0,
+            color="#1f6feb",
+            label="accuracy",
+        )[0]
+        tas_line = ax_tas.plot(
+            subset["L"],
+            subset["mean_tas"],
+            marker="s",
+            linewidth=2.0,
+            color="#ff7f0e",
+            label="mean_tas",
+        )[0]
+        kstar_line = ax_kstar.plot(
+            subset["L"],
+            subset["k_star"],
+            marker="^",
+            linewidth=2.0,
+            color="#2ca02c",
+            label="k_star",
+        )[0]
+        reference_line = ax_kstar.plot(
+            subset["L"],
+            subset["L"],
+            linestyle="--",
+            linewidth=1.5,
+            color="#666666",
+            label="y=x",
+        )[0]
 
         lstar_rows = subset[subset["l_star"]]
         if not lstar_rows.empty:
-            ax1.axvline(
-                float(lstar_rows.iloc[0]["L"]),
-                linestyle=":",
-                color="#aa3377",
-                linewidth=1.5,
-            )
+            lstar_value = float(lstar_rows.iloc[0]["L"])
+            for axis in (ax_accuracy, ax_tas, ax_kstar):
+                axis.axvline(
+                    lstar_value,
+                    linestyle=":",
+                    color="#aa3377",
+                    linewidth=1.5,
+                )
 
-        ax1.set_title(f"T1-A Overview: {difficulty}")
-        ax1.set_xlabel("L")
-        ax1.set_ylabel("accuracy / mean_tas")
-        ax2.set_ylabel("k_star")
+        ax_accuracy.set_title(f"T1-A Overview: {difficulty}")
+        ax_accuracy.set_ylabel("accuracy")
+        ax_accuracy.set_ylim(0.0, 1.05)
+        ax_accuracy.set_xlabel("L")
 
-        handles1, labels1 = ax1.get_legend_handles_labels()
-        handles2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(handles1 + handles2, labels1 + labels2, loc="best")
+        finite_tas = subset["mean_tas"].dropna()
+        if not finite_tas.empty:
+            tas_min = max(float(finite_tas.min()) - 0.05, 0.0)
+            tas_max = min(float(finite_tas.max()) + 0.05, 1.05)
+            if tas_max <= tas_min:
+                tas_max = tas_min + 0.1
+            ax_tas.set_ylim(tas_min, tas_max)
+        ax_tas.set_ylabel("mean_tas")
+        ax_tas.tick_params(axis="y", colors="#ff7f0e")
+        ax_tas.yaxis.label.set_color("#ff7f0e")
 
-        fig.tight_layout()
+        finite_k = subset["k_star"].dropna()
+        if not finite_k.empty:
+            k_upper = max(float(finite_k.max()), float(subset["L"].max())) + 1.0
+            ax_kstar.set_ylim(0.0, k_upper)
+        ax_kstar.set_ylabel("k_star")
+        ax_kstar.tick_params(axis="y", colors="#2ca02c")
+        ax_kstar.yaxis.label.set_color("#2ca02c")
+
+        for axis in (ax_accuracy, ax_tas, ax_kstar):
+            axis.grid(True, alpha=0.25)
+            axis.set_axisbelow(True)
+
+        fig.subplots_adjust(right=0.82)
+        ax_accuracy.legend(
+            [accuracy_line, tas_line, kstar_line, reference_line],
+            ["accuracy", "mean_tas", "k_star", "y=x"],
+            loc="best",
+        )
+
         output_path = output_dir / f"t1a_{difficulty}.png"
         fig.savefig(output_path, dpi=160)
         plt.close(fig)
@@ -425,7 +481,7 @@ def plot_t1b_heatmaps(
     frame = pd.DataFrame(rows)
     if frame.empty:
         return []
-    frame = frame[(frame["pipeline"] == "pq") & (frame["scope"].isin(question_ids))].copy()
+    frame = frame[frame["question_id"].isin(question_ids)].copy()
     if frame.empty:
         return []
     frame["L"] = pd.to_numeric(frame["L"], errors="coerce")
@@ -435,7 +491,7 @@ def plot_t1b_heatmaps(
 
     generated: list[str] = []
     for question_id in question_ids:
-        subset = frame[frame["scope"] == question_id].copy()
+        subset = frame[frame["question_id"] == question_id].copy()
         if subset.empty:
             continue
         fig, axes = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
@@ -473,7 +529,7 @@ def plot_t1b_normalized_heatmaps(
     frame = pd.DataFrame(rows)
     if frame.empty:
         return []
-    frame = frame[(frame["pipeline"] == "pq") & (frame["scope"].isin(question_ids))].copy()
+    frame = frame[frame["question_id"].isin(question_ids)].copy()
     if frame.empty:
         return []
     frame["L"] = pd.to_numeric(frame["L"], errors="coerce")
@@ -491,7 +547,7 @@ def plot_t1b_normalized_heatmaps(
 
     generated: list[str] = []
     for question_id in question_ids:
-        subset = frame[frame["scope"] == question_id].copy()
+        subset = frame[frame["question_id"] == question_id].copy()
         if subset.empty:
             continue
         fig, axes = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)

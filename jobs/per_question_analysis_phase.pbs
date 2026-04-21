@@ -1,17 +1,17 @@
 #!/bin/bash
-#PBS -N peak-cot-analysis-phase1
+#PBS -N peak-cot-pq-analysis-phase1
 #PBS -l select=1:ncpus=4:ngpus=1:mem=64gb
 #PBS -l walltime=04:00:00
 #PBS -j oe
 #PBS -V
-#PBS -o /srv/scratch/${USER}/peak-CoT/analysis_phase.pbs.log
+#PBS -o /srv/scratch/${USER}/peak-CoT/per_question_analysis_phase.pbs.log
 
 set -euo pipefail
 
 PROJECT_NAME="peak-CoT"
 : "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
-: "${CONFIG_PATH:=configs/stage1.yaml}"
-: "${RUN_NAME:=full_generation}"
+: "${CONFIG_PATH:=configs/stage1_per_question.yaml}"
+: "${RUN_NAME:=per-question-0419_143551}"
 
 cd "${PROJECT_HOME}" || exit 1
 if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
@@ -28,7 +28,7 @@ set -u
 : "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
 
 RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
-LOG_PATH="${RUN_DIR}/logs/analysis_phase.log"
+LOG_PATH="${RUN_DIR}/logs/per_question_analysis_phase.log"
 
 mkdir -p "${RUN_DIR}/logs"
 exec > >(tee -a "${LOG_PATH}") 2>&1
@@ -39,6 +39,6 @@ echo "run_dir=${RUN_DIR}"
 echo "config_path=${CONFIG_PATH}"
 
 python scripts/check_runtime_device.py
-python scripts/run_analysis_phase.py \
+python scripts/run_per_question_analysis.py \
   --run-dir "${RUN_DIR}" \
   --config "${CONFIG_PATH}"

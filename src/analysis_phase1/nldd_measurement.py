@@ -38,18 +38,57 @@ def build_prompt_logit_fn(
 ) -> Callable[[str], Any]:
     """Create a prompt -> final-token-logits scorer."""
 
+    score_prompts = build_prompt_logit_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch_module,
+        batch_size=1,
+    )
+
     def score_prompt(prompt: str) -> Any:
-        model_inputs = tokenizer(
-            prompt,
-            return_tensors="pt",
-            add_special_tokens=False,
-        )
-        prepared_inputs = _move_model_inputs_to_device(model_inputs, device)
-        with torch_module.no_grad():
-            outputs = model(**prepared_inputs)
-        return outputs.logits[0, -1, :]
+        return score_prompts([prompt])[0]
 
     return score_prompt
+
+
+def build_prompt_logit_batch_fn(
+    *,
+    model: Any,
+    tokenizer: Any,
+    device: Any,
+    torch_module: Any,
+    batch_size: int,
+) -> Callable[[Sequence[str]], list[Any]]:
+    """Create a prompt-batched final-token-logits scorer."""
+
+    effective_batch_size = max(int(batch_size), 1)
+
+    def score_prompts(prompts: Sequence[str]) -> list[Any]:
+        prompt_list = [str(prompt) for prompt in prompts]
+        if not prompt_list:
+            return []
+
+        rows: list[Any] = []
+        for start in range(0, len(prompt_list), effective_batch_size):
+            prompt_batch = prompt_list[start : start + effective_batch_size]
+            model_inputs = tokenizer(
+                prompt_batch,
+                return_tensors="pt",
+                add_special_tokens=False,
+                padding=True,
+            )
+            prepared_inputs = _move_model_inputs_to_device(model_inputs, device)
+            with torch_module.no_grad():
+                outputs = model(**prepared_inputs)
+            logits = outputs.logits[:, -1, :]
+            rows.extend(
+                logits[row_index, :].detach().cpu()
+                for row_index in range(logits.shape[0])
+            )
+        return rows
+
+    return score_prompts
 
 
 def calibrate_s(
@@ -174,7 +213,7 @@ def measure_trace_profile(
     low_ld_clean = abs(ld_clean) < ld_epsilon
 
     rows: list[dict[str, Any]] = []
-    for step_index in range(1, actual_clean_length + 1):
+    for step_index in range(2, actual_clean_length + 1):
         step_text = steps[step_index - 1]
         rng = random.Random(_stable_seed(f"{seed}:full:{trace['trace_id']}:{step_index}"))
         corruption = corrupt_step_text_with_fallbacks(
@@ -368,7 +407,7 @@ def validate_nldd_full_records(
         raise ValueError(f"nldd_full.jsonl is missing selected traces: {sample}")
 
     for trace_id, expected_length in expected_by_trace_id.items():
-        expected_steps = set(range(1, expected_length + 1))
+        expected_steps = set(range(2, expected_length + 1))
         actual_steps = actual_steps_by_trace_id[trace_id]
         if actual_steps != expected_steps:
             missing_steps = sorted(expected_steps - actual_steps)

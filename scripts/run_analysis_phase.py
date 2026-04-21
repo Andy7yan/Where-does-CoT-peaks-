@@ -24,6 +24,7 @@ def main() -> None:
     artifacts = run_analysis(
         run_dir=args.run_dir,
         prompt_logits_fn=backend["prompt_logits_fn"],
+        prompt_logits_batch_fn=backend.get("prompt_logits_batch_fn"),
         tokenizer=backend["tokenizer"],
         trace_trajectory_fn=backend["trace_trajectory_fn"],
         ld_epsilon=config.nldd.ld_epsilon,
