@@ -137,7 +137,10 @@ def test_build_trace_trajectory_fn_includes_h0_state() -> None:
     vectors = trajectory_fn("Question?", ("step one", "step two"))
 
     assert len(vectors) == 3
-    assert seen_prompts[0] == "Question?\n\n\n\n#### "
+    assert seen_prompts[0] == (
+        "Solve the math problem step by step. Provide your final numerical answer."
+        "\n\nQuestion: Question?\nFinal Answer: "
+    )
 
 
 def test_compute_tas_from_vectors_uses_l2_geometric_efficiency() -> None:

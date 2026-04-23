@@ -11,6 +11,7 @@ from statistics import mean
 from typing import Any, Callable, Sequence
 
 from src.analysis_phase1.nldd_measurement import (
+    PromptMeasurement,
     build_correct_token_ids,
     compute_logit_margin,
     extract_trace_horizon,
@@ -72,7 +73,6 @@ def build_prompt_hidden_state_batch_fn(
             model_inputs = tokenizer(
                 prompt_batch,
                 return_tensors="pt",
-                add_special_tokens=False,
                 padding=True,
             )
             prepared_inputs = {
@@ -158,9 +158,13 @@ def measure_sample_nldd(
     *,
     prompt_logits_fn: Callable[[str], Any],
     prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
+    prompt_measurement_batch_fn: Callable[[Sequence[str]], list[PromptMeasurement]] | None = None,
     tokenizer: Any,
     s_value: float,
     ld_epsilon: float,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
     """Measure all NLDD rows for one complete sample."""
 
@@ -181,7 +185,23 @@ def measure_sample_nldd(
         )
         for k in sample.k_values
     }
-    if prompt_logits_batch_fn is not None:
+    measurement_by_k: dict[int, PromptMeasurement] = {}
+    clean_measurement: PromptMeasurement | None = None
+    if prompt_measurement_batch_fn is not None:
+        batched_measurements = prompt_measurement_batch_fn(
+            [clean_prompt, *[corrupt_prompt_by_k[k] for k in sample.k_values]]
+        )
+        clean_measurement = batched_measurements[0]
+        clean_logits = clean_measurement.logits
+        measurement_by_k = {
+            k: batched_measurements[index]
+            for index, k in enumerate(sample.k_values, start=1)
+        }
+        corrupt_logits_by_k = {
+            k: measurement_by_k[k].logits
+            for k in sample.k_values
+        }
+    elif prompt_logits_batch_fn is not None:
         batched_logits = prompt_logits_batch_fn(
             [clean_prompt, *[corrupt_prompt_by_k[k] for k in sample.k_values]]
         )
@@ -191,24 +211,53 @@ def measure_sample_nldd(
             for index, k in enumerate(sample.k_values, start=1)
         }
     else:
-        clean_logits = prompt_logits_fn(clean_prompt)
+        if prompt_measurement_fn is not None:
+            clean_measurement = prompt_measurement_fn(clean_prompt)
+            clean_logits = clean_measurement.logits
+        else:
+            clean_logits = prompt_logits_fn(clean_prompt)
         corrupt_logits_by_k = {}
     ld_clean = compute_logit_margin(clean_logits, correct_token_ids, s_value)
     low_ld_clean = abs(ld_clean) < ld_epsilon
+    clean_perplexity = (
+        clean_measurement.perplexity
+        if clean_measurement is not None
+        else None
+    )
 
     rows: list[dict[str, Any]] = []
     for k in sample.k_values:
         ld_corrupt: float | None = None
         nldd_value: float | None = None
         exclusion_reason: str | None = None
+        corrupt_perplexity: float | None = None
+        perplexity_ratio: float | None = None
         if low_ld_clean:
             exclusion_reason = "low_ld_clean"
         else:
-            corrupt_logits = (
-                corrupt_logits_by_k[k]
-                if prompt_logits_batch_fn is not None
-                else prompt_logits_fn(corrupt_prompt_by_k[k])
-            )
+            if prompt_measurement_batch_fn is not None:
+                corrupt_measurement = measurement_by_k[k]
+                corrupt_logits = corrupt_measurement.logits
+                corrupt_perplexity = corrupt_measurement.perplexity
+            elif prompt_measurement_fn is not None:
+                corrupt_measurement = prompt_measurement_fn(corrupt_prompt_by_k[k])
+                corrupt_logits = corrupt_measurement.logits
+                corrupt_perplexity = corrupt_measurement.perplexity
+            else:
+                corrupt_logits = (
+                    corrupt_logits_by_k[k]
+                    if prompt_logits_batch_fn is not None
+                    else prompt_logits_fn(corrupt_prompt_by_k[k])
+                )
+            if (
+                perplexity_filter_enabled
+                and clean_perplexity is not None
+                and corrupt_perplexity is not None
+                and perplexity_ratio_threshold is not None
+            ):
+                perplexity_ratio = corrupt_perplexity / (clean_perplexity + 1e-6)
+                if perplexity_ratio > perplexity_ratio_threshold:
+                    continue
             ld_corrupt = compute_logit_margin(corrupt_logits, correct_token_ids, s_value)
             nldd_value = measure_nldd(ld_clean, ld_corrupt, ld_epsilon=ld_epsilon)
             if nldd_value is None:
@@ -226,6 +275,9 @@ def measure_sample_nldd(
                 "corruption_id": sample.per_k_meta[k]["corruption_id"],
                 "ld_clean": ld_clean,
                 "ld_corrupt": ld_corrupt,
+                "clean_perplexity": clean_perplexity,
+                "corrupt_perplexity": corrupt_perplexity,
+                "perplexity_ratio": perplexity_ratio,
                 "nldd_value": nldd_value,
                 "measurement_exclusion_reason": exclusion_reason,
             }
@@ -360,10 +412,14 @@ def run_analysis(
     run_dir: str,
     prompt_logits_fn: Callable[[str], Any],
     prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
+    prompt_measurement_batch_fn: Callable[[Sequence[str]], list[PromptMeasurement]] | None = None,
     tokenizer: Any,
     trace_trajectory_fn: Callable[[str, Sequence[str]], list[Any]],
     ld_epsilon: float,
     tas_plateau_threshold: float | None,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Run the analysis flow over the canonical difficulty/sample layout."""
 
@@ -390,9 +446,13 @@ def run_analysis(
                 sample,
                 prompt_logits_fn=prompt_logits_fn,
                 prompt_logits_batch_fn=prompt_logits_batch_fn,
+                prompt_measurement_fn=prompt_measurement_fn,
+                prompt_measurement_batch_fn=prompt_measurement_batch_fn,
                 tokenizer=tokenizer,
                 s_value=s_value,
                 ld_epsilon=ld_epsilon,
+                perplexity_filter_enabled=perplexity_filter_enabled,
+                perplexity_ratio_threshold=perplexity_ratio_threshold,
             )
         )
         tas_rows.append(

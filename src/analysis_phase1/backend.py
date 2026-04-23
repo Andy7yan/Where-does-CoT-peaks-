@@ -10,6 +10,8 @@ from src.analysis_phase1.analysis import (
     build_trace_trajectory_fn,
 )
 from src.analysis_phase1.nldd_measurement import (
+    build_prompt_measurement_batch_fn,
+    build_prompt_measurement_fn,
     build_prompt_logit_batch_fn,
     build_prompt_logit_fn,
 )
@@ -56,6 +58,19 @@ def load_analysis_backend(config: ExperimentConfig) -> dict[str, Any]:
 
     print(f"model_cache_hit: {not downloaded}")
     print(f"resolved_model_path: {local_model_path}")
+    prompt_measurement_batch_fn = build_prompt_measurement_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch,
+        batch_size=prompt_batch_size,
+    )
+    prompt_measurement_fn = build_prompt_measurement_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch,
+    )
     prompt_logits_batch_fn = build_prompt_logit_batch_fn(
         model=model,
         tokenizer=tokenizer,
@@ -88,6 +103,8 @@ def load_analysis_backend(config: ExperimentConfig) -> dict[str, Any]:
         "device": device,
         "model": model,
         "tokenizer": tokenizer,
+        "prompt_measurement_fn": prompt_measurement_fn,
+        "prompt_measurement_batch_fn": prompt_measurement_batch_fn,
         "prompt_logits_fn": prompt_logits_fn,
         "prompt_logits_batch_fn": prompt_logits_batch_fn,
         "trace_trajectory_fn": build_trace_trajectory_fn(

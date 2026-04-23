@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -29,6 +30,93 @@ from src.analysis_phase1.nldd_shared import (
 )
 
 
+@dataclass(frozen=True)
+class PromptMeasurement:
+    """One prompt-scoring result from a single forward pass."""
+
+    logits: Any
+    perplexity: float
+
+
+def build_prompt_measurement_fn(
+    *,
+    model: Any,
+    tokenizer: Any,
+    device: Any,
+    torch_module: Any,
+) -> Callable[[str], PromptMeasurement]:
+    """Create a prompt -> (final-token logits, perplexity) scorer."""
+
+    score_prompts = build_prompt_measurement_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch_module,
+        batch_size=1,
+    )
+
+    def score_prompt(prompt: str) -> PromptMeasurement:
+        return score_prompts([prompt])[0]
+
+    return score_prompt
+
+
+def build_prompt_measurement_batch_fn(
+    *,
+    model: Any,
+    tokenizer: Any,
+    device: Any,
+    torch_module: Any,
+    batch_size: int,
+) -> Callable[[Sequence[str]], list[PromptMeasurement]]:
+    """Create a prompt-batched scorer that returns logits and perplexity together."""
+
+    effective_batch_size = max(int(batch_size), 1)
+
+    def score_prompts(prompts: Sequence[str]) -> list[PromptMeasurement]:
+        prompt_list = [str(prompt) for prompt in prompts]
+        if not prompt_list:
+            return []
+
+        rows: list[PromptMeasurement] = []
+        for start in range(0, len(prompt_list), effective_batch_size):
+            prompt_batch = prompt_list[start : start + effective_batch_size]
+            model_inputs = tokenizer(
+                prompt_batch,
+                return_tensors="pt",
+                padding=True,
+            )
+            prepared_inputs = _move_model_inputs_to_device(model_inputs, device)
+            with torch_module.no_grad():
+                outputs = model(**prepared_inputs)
+
+            logits = outputs.logits
+            final_logits = logits[:, -1, :]
+            input_ids = prepared_inputs["input_ids"]
+            attention_mask = prepared_inputs.get("attention_mask")
+            if attention_mask is None:
+                attention_mask = torch_module.ones_like(input_ids)
+            shift_logits = logits[:, :-1, :]
+            shift_labels = input_ids[:, 1:]
+            shift_mask = attention_mask[:, 1:]
+            log_probs = torch_module.nn.functional.log_softmax(shift_logits, dim=-1)
+            gathered = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
+            token_counts = shift_mask.sum(dim=1).clamp_min(1)
+            nll = -((gathered * shift_mask).sum(dim=1) / token_counts)
+            perplexities = torch_module.exp(nll)
+
+            rows.extend(
+                PromptMeasurement(
+                    logits=final_logits[row_index, :].detach().cpu(),
+                    perplexity=float(perplexities[row_index].detach().cpu().item()),
+                )
+                for row_index in range(final_logits.shape[0])
+            )
+        return rows
+
+    return score_prompts
+
+
 def build_prompt_logit_fn(
     *,
     model: Any,
@@ -38,7 +126,7 @@ def build_prompt_logit_fn(
 ) -> Callable[[str], Any]:
     """Create a prompt -> final-token-logits scorer."""
 
-    score_prompts = build_prompt_logit_batch_fn(
+    score_prompts = build_prompt_measurement_batch_fn(
         model=model,
         tokenizer=tokenizer,
         device=device,
@@ -47,7 +135,7 @@ def build_prompt_logit_fn(
     )
 
     def score_prompt(prompt: str) -> Any:
-        return score_prompts([prompt])[0]
+        return score_prompts([prompt])[0].logits
 
     return score_prompt
 
@@ -62,31 +150,19 @@ def build_prompt_logit_batch_fn(
 ) -> Callable[[Sequence[str]], list[Any]]:
     """Create a prompt-batched final-token-logits scorer."""
 
-    effective_batch_size = max(int(batch_size), 1)
+    score_measurements = build_prompt_measurement_batch_fn(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        torch_module=torch_module,
+        batch_size=batch_size,
+    )
 
     def score_prompts(prompts: Sequence[str]) -> list[Any]:
-        prompt_list = [str(prompt) for prompt in prompts]
-        if not prompt_list:
-            return []
-
-        rows: list[Any] = []
-        for start in range(0, len(prompt_list), effective_batch_size):
-            prompt_batch = prompt_list[start : start + effective_batch_size]
-            model_inputs = tokenizer(
-                prompt_batch,
-                return_tensors="pt",
-                add_special_tokens=False,
-                padding=True,
-            )
-            prepared_inputs = _move_model_inputs_to_device(model_inputs, device)
-            with torch_module.no_grad():
-                outputs = model(**prepared_inputs)
-            logits = outputs.logits[:, -1, :]
-            rows.extend(
-                logits[row_index, :].detach().cpu()
-                for row_index in range(logits.shape[0])
-            )
-        return rows
+        return [
+            measurement.logits
+            for measurement in score_measurements(prompts)
+        ]
 
     return score_prompts
 
@@ -185,6 +261,7 @@ def measure_trace_profile(
     trace: dict[str, Any],
     selection_row: dict[str, Any],
     prompt_logits_fn: Callable[[str], Any],
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
     tokenizer: Any,
     token_counter: Callable[[str], int],
     s_value: float,
@@ -193,8 +270,10 @@ def measure_trace_profile(
     token_delta_max: int,
     retry_limit: int,
     integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
-    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, ...] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     enable_tier3_semantic_flip: bool = False,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
     """Measure the full NLDD profile for one selected clean trace."""
 
@@ -208,9 +287,15 @@ def measure_trace_profile(
         question=str(trace["question_text"]),
         steps=steps,
     )
-    clean_logits = prompt_logits_fn(clean_prompt)
+    clean_measurement = (
+        prompt_measurement_fn(clean_prompt)
+        if prompt_measurement_fn is not None
+        else None
+    )
+    clean_logits = clean_measurement.logits if clean_measurement is not None else prompt_logits_fn(clean_prompt)
     ld_clean = compute_logit_margin(clean_logits, correct_token_ids, s_value)
     low_ld_clean = abs(ld_clean) < ld_epsilon
+    clean_perplexity = clean_measurement.perplexity if clean_measurement is not None else None
 
     rows: list[dict[str, Any]] = []
     for step_index in range(2, actual_clean_length + 1):
@@ -239,12 +324,28 @@ def measure_trace_profile(
         ld_corrupt: float | None = None
         nldd_value: float | None = None
         exclusion_reason: str | None = None
+        corrupt_perplexity: float | None = None
+        perplexity_ratio: float | None = None
         if low_ld_clean:
             exclusion_reason = "low_ld_clean"
         elif corruption.corruption_failed:
             exclusion_reason = "corruption_failed"
         else:
-            corrupt_logits = prompt_logits_fn(str(corruption_record["corrupt_prompt"]))
+            if prompt_measurement_fn is not None:
+                corrupt_measurement = prompt_measurement_fn(str(corruption_record["corrupt_prompt"]))
+                corrupt_logits = corrupt_measurement.logits
+                corrupt_perplexity = corrupt_measurement.perplexity
+            else:
+                corrupt_logits = prompt_logits_fn(str(corruption_record["corrupt_prompt"]))
+            if (
+                perplexity_filter_enabled
+                and clean_perplexity is not None
+                and corrupt_perplexity is not None
+                and perplexity_ratio_threshold is not None
+            ):
+                perplexity_ratio = corrupt_perplexity / (clean_perplexity + 1e-6)
+                if perplexity_ratio > perplexity_ratio_threshold:
+                    continue
             ld_corrupt = compute_logit_margin(corrupt_logits, correct_token_ids, s_value)
             nldd_value = measure_nldd(
                 ld_clean,
@@ -270,6 +371,9 @@ def measure_trace_profile(
                 "failure_tier": corruption.failure_tier,
                 "ld_clean": ld_clean,
                 "ld_corrupt": ld_corrupt,
+                "clean_perplexity": clean_perplexity,
+                "corrupt_perplexity": corrupt_perplexity,
+                "perplexity_ratio": perplexity_ratio,
                 "nldd_value": nldd_value,
                 "measurement_exclusion_reason": exclusion_reason,
                 "selection_mode": selection_row.get("selection_mode"),
@@ -317,6 +421,7 @@ def measure_selected_traces(
     traces_by_id: dict[str, dict[str, Any]],
     selection_rows: list[dict[str, Any]],
     prompt_logits_fn: Callable[[str], Any],
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
     tokenizer: Any,
     token_counter: Callable[[str], int],
     s_value: float,
@@ -325,8 +430,10 @@ def measure_selected_traces(
     token_delta_max: int,
     retry_limit: int,
     integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
-    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, ...] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     enable_tier3_semantic_flip: bool = False,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Measure all selected traces and return rows plus a compact summary."""
 
@@ -346,6 +453,7 @@ def measure_selected_traces(
                 trace=trace,
                 selection_row=selection_row,
                 prompt_logits_fn=prompt_logits_fn,
+                prompt_measurement_fn=prompt_measurement_fn,
                 tokenizer=tokenizer,
                 token_counter=token_counter,
                 s_value=s_value,
@@ -356,6 +464,8 @@ def measure_selected_traces(
                 integer_perturbation_range=integer_perturbation_range,
                 float_perturbation_range=float_perturbation_range,
                 enable_tier3_semantic_flip=enable_tier3_semantic_flip,
+                perplexity_filter_enabled=perplexity_filter_enabled,
+                perplexity_ratio_threshold=perplexity_ratio_threshold,
             )
         )
 
@@ -455,6 +565,7 @@ def compute_v4_measurement_artifacts(
     question_metadata: list[dict[str, Any]],
     selection_rows: list[dict[str, Any]],
     prompt_logits_fn: Callable[[str], Any],
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
     tokenizer: Any,
     token_counter: Callable[[str], int],
     seed: int,
@@ -462,8 +573,10 @@ def compute_v4_measurement_artifacts(
     retry_limit: int,
     ld_epsilon: float,
     integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
-    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, ...] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     enable_tier3_semantic_flip: bool = False,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Compute and persist the v4 Stage D measurement artifacts for one run."""
 
@@ -489,6 +602,7 @@ def compute_v4_measurement_artifacts(
         traces_by_id=traces_by_id,
         selection_rows=selection_rows,
         prompt_logits_fn=prompt_logits_fn,
+        prompt_measurement_fn=prompt_measurement_fn,
         tokenizer=tokenizer,
         token_counter=token_counter,
         s_value=s_value,
@@ -499,6 +613,8 @@ def compute_v4_measurement_artifacts(
         integer_perturbation_range=integer_perturbation_range,
         float_perturbation_range=float_perturbation_range,
         enable_tier3_semantic_flip=enable_tier3_semantic_flip,
+        perplexity_filter_enabled=perplexity_filter_enabled,
+        perplexity_ratio_threshold=perplexity_ratio_threshold,
     )
     validate_nldd_full_records(
         selection_rows=selection_rows,

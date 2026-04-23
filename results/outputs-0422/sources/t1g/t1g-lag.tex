@@ -1,0 +1,139 @@
+
+\documentclass[tikz,border=6pt]{standalone}
+
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\usepackage{xcolor}
+\pgfplotsset{compat=1.18}
+
+\newcommand{\LagCSV}{t1c_kstar_ratio.csv}
+
+\definecolor{MedCol}{RGB}{70,110,170}
+\definecolor{HardCol}{RGB}{150,90,40}
+\definecolor{GuideCol}{RGB}{150,150,150}
+
+\begin{document}
+
+\pgfplotstableread[col sep=comma]{\LagCSV}\datatable
+
+\begin{tikzpicture}
+\begin{axis}[
+    width=15.2cm,
+    height=9.6cm,
+    xmin=2.7, xmax=12.3,
+    ymin=-0.4, ymax=8.4,
+    xlabel={$L$},
+    ylabel={$L-k^*$},
+    xtick={3,4,5,6,7,8,9,10,11,12},
+    ytick={0,1,2,3,4,5,6,7,8},
+    grid=major,
+    grid style={draw=gray!20},
+    tick label style={font=\footnotesize},
+    label style={font=\small},
+    legend style={
+        draw=none,
+        fill=none,
+        font=\small,
+        at={(0.02,0.98)},
+        anchor=north west,
+        cells={anchor=west}
+    },
+]
+
+% constant-lag guides
+\foreach \yy in {1,2,3,4,5,6,7,8} {
+    \addplot[
+        domain=2.7:12.3,
+        samples=2,
+        dashed,
+        line width=0.9pt,
+        color=GuideCol!70
+    ] {\yy};
+}
+
+% medium: slight left shift
+\addplot[
+    only marks,
+    scatter,
+    scatter src=explicit symbolic,
+    mark=*,
+    mark size=2.0pt,
+    draw=MedCol!85!black,
+    fill=MedCol!85!black,
+    opacity=0.60,
+] table[
+    x expr=\thisrow{L}-0.08,
+    y expr=\thisrow{L}-\thisrow{k_star},
+    meta expr={\thisrow{difficulty}},
+] {\LagCSV};
+
+% hard: overplot with manual filter by row predicate is cumbersome in raw TeX;
+% instead draw a second layer from a temporary table prepared in CSV terms:
+\addplot[
+    only marks,
+    mark=triangle*,
+    mark size=2.6pt,
+    draw=HardCol!90!black,
+    fill=HardCol!90!black,
+    opacity=0.60,
+    visualization depends on={\thisrow{difficulty} \as \difficulty},
+    filter discard warning=false,
+    x filter/.code={
+        \edef\tempdiff{\difficulty}
+        \def\hardword{hard}
+        \ifx\tempdiff\hardword
+        \else
+            \def\pgfmathresult{inf}
+        \fi
+    },
+] table[
+    x expr=\thisrow{L}+0.08,
+    y expr=\thisrow{L}-\thisrow{k_star},
+] {\LagCSV};
+
+% redraw medium properly with filter
+\addplot[
+    only marks,
+    mark=*,
+    mark size=2.0pt,
+    draw=MedCol!85!black,
+    fill=MedCol!85!black,
+    opacity=0.60,
+    visualization depends on={\thisrow{difficulty} \as \difficulty},
+    filter discard warning=false,
+    x filter/.code={
+        \edef\tempdiff{\difficulty}
+        \def\medword{medium}
+        \ifx\tempdiff\medword
+        \else
+            \def\pgfmathresult{inf}
+        \fi
+    },
+] table[
+    x expr=\thisrow{L}-0.08,
+    y expr=\thisrow{L}-\thisrow{k_star},
+] {\LagCSV};
+
+\addlegendimage{dashed, draw=GuideCol!70, line width=0.9pt}
+\addlegendentry{constant-lag guides}
+
+\addlegendimage{only marks, mark=*, mark size=2.0pt, draw=MedCol!85!black, fill=MedCol!85!black}
+\addlegendentry{Medium}
+
+\addlegendimage{only marks, mark=triangle*, mark size=2.6pt, draw=HardCol!90!black, fill=HardCol!90!black}
+\addlegendentry{Hard}
+
+\node[
+    anchor=south east,
+    font=\scriptsize,
+    align=right,
+    fill=white,
+    fill opacity=0.85,
+    text opacity=1,
+    inner sep=2pt
+] at (rel axis cs:0.98,0.04) {Each point is one valid $(q,L)$ bin\\Vertical coordinate is tail lag $L-k^*$};
+
+\end{axis}
+\end{tikzpicture}
+
+\end{document}

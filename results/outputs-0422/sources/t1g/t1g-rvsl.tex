@@ -1,0 +1,109 @@
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplotstable}
+\usepgfplotslibrary{statistics,fillbetween}
+\usepackage{xcolor}
+
+\definecolor{BandFill}{RGB}{225,230,240}
+\definecolor{PtClr}{RGB}{70,70,70}
+\definecolor{FitClr}{RGB}{0,0,0}
+\definecolor{RefClr}{RGB}{120,120,120}
+
+\makeatletter
+\newcommand{\ResolveCSVPath}[3]{%
+  \ifx#2\@empty
+    \IfFileExists{#3/#1}{\edef#2{#3/#1}}{}%
+  \fi
+}
+\newcommand{\ResolveCSV}[2]{%
+  \def#2{}%
+  \ResolveCSVPath{#1}{#2}{.}%
+  \ResolveCSVPath{#1}{#2}{data}%
+  \ResolveCSVPath{#1}{#2}{csv}%
+  \ResolveCSVPath{#1}{#2}{tables}%
+  \ResolveCSVPath{#1}{#2}{analysis}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase1}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase2}%
+  \ResolveCSVPath{#1}{#2}{plots}%
+  \ResolveCSVPath{#1}{#2}{plot}%
+  \ResolveCSVPath{#1}{#2}{fig_data}%
+  \ResolveCSVPath{#1}{#2}{fig-data}%
+  \ResolveCSVPath{#1}{#2}{t1f_splits}%
+  \ResolveCSVPath{#1}{#2}{t1g_splits}%
+  \ifx#2\@empty
+    \PackageError{t1g-rvsl}{Could not locate `#1'}%
+      {Put the file in the project root or add its folder to \string\ResolveCSV.}%
+  \fi
+}
+\makeatother
+
+\newcommand{\FmtTwo}[1]{\pgfmathprintnumber[fixed,precision=2]{#1}}
+\newcommand{\FmtThree}[1]{\pgfmathprintnumber[fixed,precision=3]{#1}}
+
+\begin{document}
+
+\ResolveCSV{t1c_kstar_ratio.csv}{\TOneCPath}
+\pgfplotstableread[col sep=comma]{\TOneCPath}\LoadedTable
+
+\begin{tikzpicture}
+\begin{axis}[
+  width=13.4cm,
+  height=9.1cm,
+  xlabel={$L$},
+  ylabel={$k^*/L$},
+  xmin=2.5,
+  xmax=12.5,
+  ymin=0.2,
+  ymax=1.0,
+  xtick={3,4,5,6,7,8,9,10,11,12},
+  ytick={0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0},
+  xmajorgrids=true,
+  ymajorgrids=true,
+  grid style={draw=black!10},
+  axis line style={black},
+  tick label style={font=\footnotesize},
+  label style={font=\small},
+  legend style={font=\footnotesize, draw=none, fill=white, fill opacity=0.85, at={(0.02,0.98)}, anchor=north west},
+  legend cell align=left,
+]
+  % NLDD-paper reference band: 0.70-0.85
+  \addplot[name path=reflo, draw=none, domain=2.5:12.5, samples=2] {0.70};
+  \addplot[name path=refhi, draw=none, domain=2.5:12.5, samples=2] {0.85};
+  \addplot[BandFill, draw=none, fill opacity=0.65] fill between[of=reflo and refhi];
+  \addlegendimage{area legend, draw=none, fill=BandFill, fill opacity=0.65}
+  \addlegendentry{NLDD paper band (0.70--0.85)}
+
+  \addplot[RefClr, densely dashed, line width=0.9pt, domain=2.5:12.5, samples=2] {0.70};
+  \addplot[RefClr, densely dashed, line width=0.9pt, domain=2.5:12.5, samples=2] {0.85};
+
+  % pooled OLS regression computed directly in TeX
+  \addplot [draw=none] table[x=L,y={create col/linear regression={y=k_star_ratio}}] {\LoadedTable};
+  \xdef\OLSa{\pgfplotstableregressiona}
+  \xdef\OLSb{\pgfplotstableregressionb}
+
+  \addplot+[
+    only marks,
+    mark=*,
+    mark size=1.25pt,
+    draw=PtClr,
+    fill=PtClr,
+    opacity=0.28,
+  ] table[x=L,y=k_star_ratio,col sep=comma] {\TOneCPath};
+  \addlegendentry{Per-$(q,L)$ bin}
+
+  \addplot[
+    FitClr,
+    line width=1.5pt,
+    domain=2.5:12.5,
+    samples=2,
+  ] {\OLSa*x + \OLSb};
+  \addlegendentry{OLS fit}
+
+  \node[anchor=south east, align=right, font=\footnotesize, fill=white, fill opacity=0.85, text opacity=1, inner sep=2pt]
+    at (rel axis cs:0.97,0.05)
+    {$k^*/L=\FmtThree{\OLSa}L+\FmtThree{\OLSb}$};
+\end{axis}
+\end{tikzpicture}
+
+\end{document}

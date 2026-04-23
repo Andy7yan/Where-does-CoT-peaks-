@@ -25,10 +25,14 @@ def main() -> None:
         run_dir=args.run_dir,
         prompt_logits_fn=backend["prompt_logits_fn"],
         prompt_logits_batch_fn=backend.get("prompt_logits_batch_fn"),
+        prompt_measurement_fn=backend.get("prompt_measurement_fn"),
+        prompt_measurement_batch_fn=backend.get("prompt_measurement_batch_fn"),
         tokenizer=backend["tokenizer"],
         trace_trajectory_fn=backend["trace_trajectory_fn"],
         ld_epsilon=config.nldd.ld_epsilon,
         tas_plateau_threshold=config.tas.plateau_threshold,
+        perplexity_filter_enabled=config.nldd.perplexity_filter_enabled,
+        perplexity_ratio_threshold=config.nldd.perplexity_ratio_threshold,
     )
 
     print(f"runtime_device_requested: {backend['runtime_selection'].requested_device}")

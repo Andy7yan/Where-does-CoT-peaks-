@@ -60,7 +60,9 @@ def test_per_question_config_accepts_disjoint_float_perturbation_ranges(monkeypa
 
     config = ExperimentConfig.from_yaml("configs/stage1_per_question.yaml")
 
-    assert config.nldd.float_perturbation_range == [0.7, 0.9, 1.1, 1.3]
+    assert config.nldd.float_perturbation_range == [0.1, 0.5, 2.0, 10.0]
+    assert config.nldd.perplexity_filter_enabled is True
+    assert config.nldd.perplexity_ratio_threshold == 1.5
 
 
 def test_load_settings_keeps_null_pilot_fields(monkeypatch) -> None:
@@ -230,7 +232,7 @@ def test_corrupt_arithmetic_prefers_rhs_result_without_min_threshold() -> None:
     assert result.corruption_failed is False
     assert result.original_number == "15"
     assert result.perturbed_number != "15"
-    assert result.corruption_type == "numeric_result"
+    assert result.corruption_type == "perturbation"
     assert result.corrupt_text == f"So 5 * 3 = {result.perturbed_number}"
 
 

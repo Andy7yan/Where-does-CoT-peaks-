@@ -1,4 +1,4 @@
-"""Step-level corruption utilities for NLDD and pilot diagnostics."""
+"""Paper-aligned step-level corruption utilities for NLDD workflows."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from src.common.reasoning import normalize_numeric, segment_steps
 
 ARITHMETIC_NUMBER_RE = re.compile(r"[-+]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)")
 DEFAULT_INTEGER_PERTURBATION_RANGE = (-1, 1)
-DEFAULT_FLOAT_PERTURBATION_RANGE = (0.9, 1.1)
-OPERATOR_CHARS = {"+", "-", "*", "/", "脳", "梅"}
+DEFAULT_FLOAT_PERTURBATION_RANGE = (0.1, 0.5, 2.0, 10.0)
+OPERATOR_CHARS = {"+", "-", "*", "/"}
 SEMANTIC_FLIP_PAIRS = [
     ("more", "less"),
     ("fewer", "more"),
@@ -34,7 +34,7 @@ SEMANTIC_FLIP_PAIRS = [
 
 @dataclass(frozen=True)
 class CorruptionResult:
-    """Structured result for a step-level corruption attempt."""
+    """Structured result for one corruption attempt."""
 
     corrupt_text: str
     original_number: str
@@ -58,14 +58,13 @@ class _NumberMatch:
     end: int
     raw: str
     value: float
-    match_role: str
 
 
 def corrupt_arithmetic(
     step_text: str,
     *,
     integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
-    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, ...] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     rng: random.Random | None = None,
     min_value: float = 0.0,
     token_counter: Callable[[str], int] | None = None,
@@ -74,13 +73,17 @@ def corrupt_arithmetic(
     perplexity_scorer: Callable[[str, str], float] | None = None,
     max_perplexity_ratio: float | None = None,
 ) -> CorruptionResult:
-    """Apply Tier 1 numeric corruption with token-budget-aware retries."""
+    """Apply the paper-style numeric fallback to the last number in the step."""
+
+    del integer_perturbation_range  # Kept for config compatibility.
 
     generator = rng or random.Random()
-    candidates = [
-        match for match in _find_numeric_matches(step_text) if abs(match.value) >= min_value
+    matches = [
+        match
+        for match in _find_numeric_matches(step_text)
+        if abs(match.value) >= min_value
     ]
-    if not candidates:
+    if not matches:
         return CorruptionResult(
             corrupt_text=step_text,
             original_number="",
@@ -89,97 +92,52 @@ def corrupt_arithmetic(
             failure_tier="uncorruptible",
         )
 
-    prioritized = _prioritize_numeric_candidates(candidates, rng=generator)
+    selected = matches[-1]
     saw_budget_failure = False
-
-    for selected in prioritized:
-        if _is_integer_like(selected.raw, selected.value):
-            deltas = _valid_integer_deltas(
-                selected.value,
-                integer_perturbation_range=integer_perturbation_range,
-            )
-            generator.shuffle(deltas)
-            for attempt_index, delta in enumerate(deltas[: max(retry_limit, 1)], start=1):
-                perturbed_value = int(round(selected.value)) + delta
-                perturbed_number = _format_integer_like(selected.raw, perturbed_value)
-                corrupt_text = _replace_fragment(
-                    step_text,
-                    selected.start,
-                    selected.end,
-                    perturbed_number,
-                )
-                validation = _validate_corruption_candidate(
-                    clean_text=step_text,
-                    corrupt_text=corrupt_text,
-                    expected_change="numeric",
-                    token_counter=token_counter,
-                    token_delta_max=token_delta_max,
-                    perplexity_scorer=perplexity_scorer,
-                    max_perplexity_ratio=max_perplexity_ratio,
-                )
-                if validation is None:
-                    saw_budget_failure = True
-                    continue
-                token_delta, perplexity_ratio = validation
-                return CorruptionResult(
-                    corrupt_text=corrupt_text,
-                    original_number=selected.raw,
-                    perturbed_number=perturbed_number,
-                    corruption_failed=False,
-                    corruption_tier=1,
-                    corruption_type=_numeric_corruption_type(selected),
-                    original_fragment=selected.raw,
-                    corrupted_fragment=perturbed_number,
-                    token_delta=token_delta,
-                    attempts=attempt_index,
-                    perplexity_ratio=perplexity_ratio,
-                )
+    for attempt_index in range(1, max(retry_limit, 1) + 1):
+        multiplier = _sample_multiplier(
+            float_perturbation_range=float_perturbation_range,
+            rng=generator,
+        )
+        perturbed_number = _format_pipeline_perturbed_value(
+            selected.raw,
+            selected.value,
+            multiplier,
+        )
+        if perturbed_number == selected.raw:
             continue
-
-        for attempt_index in range(1, max(retry_limit, 1) + 1):
-            multiplier = _sample_multiplier(
-                float_perturbation_range=float_perturbation_range,
-                rng=generator,
-            )
-            perturbed_number = _format_perturbed_value(
-                selected.raw,
-                selected.value,
-                multiplier,
-            )
-            if perturbed_number == selected.raw:
-                continue
-            corrupt_text = _replace_fragment(
-                step_text,
-                selected.start,
-                selected.end,
-                perturbed_number,
-            )
-            validation = _validate_corruption_candidate(
-                clean_text=step_text,
-                corrupt_text=corrupt_text,
-                expected_change="numeric",
-                token_counter=token_counter,
-                token_delta_max=token_delta_max,
-                perplexity_scorer=perplexity_scorer,
-                max_perplexity_ratio=max_perplexity_ratio,
-            )
-            if validation is None:
-                saw_budget_failure = True
-                continue
-            token_delta, perplexity_ratio = validation
-            return CorruptionResult(
-                corrupt_text=corrupt_text,
-                original_number=selected.raw,
-                perturbed_number=perturbed_number,
-                corruption_failed=False,
-                corruption_tier=1,
-                corruption_type=_numeric_corruption_type(selected),
-                original_fragment=selected.raw,
-                corrupted_fragment=perturbed_number,
-                token_delta=token_delta,
-                attempts=attempt_index,
-                perplexity_ratio=perplexity_ratio,
-            )
+        corrupt_text = _replace_fragment(
+            step_text,
+            selected.start,
+            selected.end,
+            perturbed_number,
+        )
+        validation = _validate_corruption_candidate(
+            clean_text=step_text,
+            corrupt_text=corrupt_text,
+            expected_change="numeric",
+            token_counter=token_counter,
+            token_delta_max=token_delta_max,
+            perplexity_scorer=perplexity_scorer,
+            max_perplexity_ratio=max_perplexity_ratio,
+        )
+        if validation is None:
+            saw_budget_failure = True
+            continue
+        token_delta, perplexity_ratio = validation
+        return CorruptionResult(
+            corrupt_text=corrupt_text,
+            original_number=selected.raw,
+            perturbed_number=perturbed_number,
+            corruption_failed=False,
+            corruption_tier=1,
+            corruption_type="perturbation",
+            original_fragment=selected.raw,
+            corrupted_fragment=perturbed_number,
+            token_delta=token_delta,
+            attempts=attempt_index,
+            perplexity_ratio=perplexity_ratio,
+        )
 
     return CorruptionResult(
         corrupt_text=step_text,
@@ -195,7 +153,7 @@ def corrupt_step_text_with_fallbacks(
     *,
     rng: random.Random | None = None,
     integer_perturbation_range: tuple[int, int] = DEFAULT_INTEGER_PERTURBATION_RANGE,
-    float_perturbation_range: tuple[float, float] = DEFAULT_FLOAT_PERTURBATION_RANGE,
+    float_perturbation_range: tuple[float, ...] = DEFAULT_FLOAT_PERTURBATION_RANGE,
     enable_tier3_semantic_flip: bool = False,
     token_counter: Callable[[str], int] | None = None,
     token_delta_max: int = 2,
@@ -204,11 +162,24 @@ def corrupt_step_text_with_fallbacks(
     perplexity_scorer: Callable[[str, str], float] | None = None,
     max_perplexity_ratio: float | None = None,
 ) -> CorruptionResult:
-    """Apply the layered corruption strategy with tiered fallback."""
+    """Apply the paper-aligned order: operator swap, then numeric fallback."""
 
     generator = rng or random.Random()
     tier3_enabled = enable_tier3_semantic_flip or bool(use_tier3)
-    tier1 = corrupt_arithmetic(
+
+    operator_swap = _corrupt_operator(
+        step_text,
+        rng=generator,
+        token_counter=token_counter,
+        token_delta_max=token_delta_max,
+        retry_limit=retry_limit,
+        perplexity_scorer=perplexity_scorer,
+        max_perplexity_ratio=max_perplexity_ratio,
+    )
+    if not operator_swap.corruption_failed:
+        return operator_swap
+
+    numeric_fallback = corrupt_arithmetic(
         step_text,
         integer_perturbation_range=integer_perturbation_range,
         float_perturbation_range=float_perturbation_range,
@@ -220,20 +191,8 @@ def corrupt_step_text_with_fallbacks(
         perplexity_scorer=perplexity_scorer,
         max_perplexity_ratio=max_perplexity_ratio,
     )
-    if not tier1.corruption_failed:
-        return tier1
-
-    tier2 = _corrupt_operator(
-        step_text,
-        rng=generator,
-        token_counter=token_counter,
-        token_delta_max=token_delta_max,
-        retry_limit=retry_limit,
-        perplexity_scorer=perplexity_scorer,
-        max_perplexity_ratio=max_perplexity_ratio,
-    )
-    if not tier2.corruption_failed:
-        return tier2
+    if not numeric_fallback.corruption_failed:
+        return numeric_fallback
 
     tier3_failure_tier: str | None = None
     if tier3_enabled:
@@ -248,18 +207,22 @@ def corrupt_step_text_with_fallbacks(
             return tier3
         tier3_failure_tier = tier3.failure_tier
 
-    failure_tier = tier1.failure_tier or tier2.failure_tier or tier3_failure_tier or "uncorruptible"
     return CorruptionResult(
         corrupt_text=step_text,
         original_number="",
         perturbed_number="",
         corruption_failed=True,
-        failure_tier=failure_tier,
+        failure_tier=(
+            operator_swap.failure_tier
+            or numeric_fallback.failure_tier
+            or tier3_failure_tier
+            or "uncorruptible"
+        ),
     )
 
 
 def corrupt_step_text(step_text: str) -> str | None:
-    """Backward-compatible wrapper around arithmetic corruption."""
+    """Backward-compatible wrapper around the numeric fallback."""
 
     result = corrupt_arithmetic(step_text)
     if result.corruption_failed:
@@ -280,67 +243,9 @@ def _find_numeric_matches(text: str) -> list[_NumberMatch]:
                 end=match.end(),
                 raw=raw,
                 value=value,
-                match_role="result" if _is_rhs_of_equals(text, match.start()) else "operand",
             )
         )
     return matches
-
-
-def _prioritize_numeric_candidates(
-    candidates: list[_NumberMatch],
-    *,
-    rng: random.Random,
-) -> list[_NumberMatch]:
-    results = [candidate for candidate in candidates if candidate.match_role == "result"]
-    operands = [candidate for candidate in candidates if candidate.match_role != "result"]
-    rng.shuffle(results)
-    rng.shuffle(operands)
-    return [*results, *operands]
-
-
-def _is_rhs_of_equals(text: str, start_index: int) -> bool:
-    cursor = start_index - 1
-    while cursor >= 0 and text[cursor].isspace():
-        cursor -= 1
-    if cursor >= 0 and text[cursor] == "=":
-        return True
-
-    prefix = text[max(0, start_index - 4):start_index]
-    if prefix.endswith(">>"):
-        return text.rfind("=", 0, start_index) != -1 and text.rfind("<<", 0, start_index) != -1
-    return False
-
-
-def _numeric_corruption_type(match: _NumberMatch) -> str:
-    if match.match_role == "result":
-        return "numeric_result"
-    return "numeric_operand"
-
-
-def _is_integer_like(raw: str, value: float) -> bool:
-    return float(value).is_integer() and "." not in raw
-
-
-def _valid_integer_deltas(
-    value: float,
-    *,
-    integer_perturbation_range: tuple[int, int],
-) -> list[int]:
-    low, high = integer_perturbation_range
-    _validate_integer_perturbation_range(integer_perturbation_range)
-
-    rounded = int(round(value))
-    return [
-        delta
-        for delta in range(low, high + 1)
-        if delta != 0 and rounded + delta >= 0
-    ]
-
-
-def _format_integer_like(raw: str, value: int) -> str:
-    if "," in raw:
-        return f"{value:,}"
-    return str(value)
 
 
 def _replace_fragment(text: str, start: int, end: int, replacement: str) -> str:
@@ -434,10 +339,8 @@ def _corrupt_operator(
     replacements = {
         "+": "-",
         "-": "+",
-        "*": "+",
-        "脳": "+",
+        "*": "/",
         "/": "*",
-        "梅": "脳",
     }
     candidates = _find_operator_matches(step_text, replacements)
     if not candidates:
@@ -620,15 +523,28 @@ def _sample_multiplier(
     return rng.uniform(low_b, high_b)
 
 
-def _format_perturbed_value(raw: str, original_value: float, multiplier: float) -> str:
-    precision = _decimal_places(raw)
+def _format_pipeline_perturbed_value(raw: str, original_value: float, multiplier: float) -> str:
     perturbed_value = original_value * multiplier
+    if _is_integer_like(raw, original_value):
+        rounded_up = int(math.ceil(perturbed_value))
+        return _format_integer_like(raw, rounded_up)
 
-    if precision == 0:
-        return str(int(round(perturbed_value)))
-
+    precision = max(_decimal_places(raw), 2)
     rounded = round(perturbed_value, precision)
-    return f"{rounded:.{precision}f}"
+    formatted = f"{rounded:.{precision}f}"
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted
+
+
+def _is_integer_like(raw: str, value: float) -> bool:
+    return float(value).is_integer() and "." not in raw
+
+
+def _format_integer_like(raw: str, value: int) -> str:
+    if "," in raw:
+        return f"{value:,}"
+    return str(value)
 
 
 def _decimal_places(raw: str) -> int:
@@ -641,18 +557,14 @@ def _decimal_places(raw: str) -> int:
 def _validate_integer_perturbation_range(values: tuple[int, int]) -> None:
     low, high = values
     if not (low < 0 < high):
-        raise ValueError(
-            "integer_perturbation_range must satisfy low < 0 < high."
-        )
+        raise ValueError("integer_perturbation_range must satisfy low < 0 < high.")
 
 
 def _validate_float_perturbation_range(values: tuple[float, ...]) -> None:
     if len(values) == 2:
         low, high = values
         if not (0.0 < low < high):
-            raise ValueError(
-                "float_perturbation_range must satisfy 0.0 < low < high."
-            )
+            raise ValueError("float_perturbation_range must satisfy 0.0 < low < high.")
         return
 
     if len(values) == 4:

@@ -32,12 +32,14 @@ answer_extraction:
   numeric_tolerance: 1e-3
 
 nldd:
-  corruption_type: "tiered_fallback"
+  corruption_type: "paper_aligned"
   integer_perturbation_range: [-1, 1]
-  float_perturbation_range: [0.9, 1.1]
+  float_perturbation_range: [0.1, 0.5, 2.0, 10.0]
   enable_tier3_semantic_flip: false
   corruption_token_delta_max: 2
   corruption_retry_limit: 3
+  perplexity_filter_enabled: true
+  perplexity_ratio_threshold: 1.5
   ld_epsilon: 1.0e-6
   horizon_definition: "peak"
 

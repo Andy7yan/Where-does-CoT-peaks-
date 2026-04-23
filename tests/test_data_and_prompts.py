@@ -198,8 +198,12 @@ def test_build_nldd_clean_prompt_has_answer_suffix_space() -> None:
         steps=["Add 2 and 2 to get 4."],
     )
 
-    assert prompt.endswith("#### ")
-    assert "Step 1: Add 2 and 2 to get 4." in prompt
+    assert prompt.endswith("Final Answer: ")
+    assert prompt.startswith(
+        "Solve the math problem step by step. Provide your final numerical answer."
+    )
+    assert "Question: What is 2 + 2?" in prompt
+    assert "Add 2 and 2 to get 4." in prompt
 
 
 def test_build_nldd_corrupt_prompt_truncates_after_corrupt_index() -> None:
@@ -210,9 +214,9 @@ def test_build_nldd_corrupt_prompt_truncates_after_corrupt_index() -> None:
         corrupt_index=1,
     )
 
-    assert "Step 1: A" in prompt
-    assert "Step 2: X" in prompt
-    assert "Step 3" not in prompt
+    assert "Question: Question?" in prompt
+    assert "\nA\nX\nFinal Answer: " in prompt
+    assert "\nC\n" not in prompt
 
 
 def test_build_nldd_corrupt_prompt_from_first_step() -> None:
@@ -223,5 +227,5 @@ def test_build_nldd_corrupt_prompt_from_first_step() -> None:
         corrupt_index=0,
     )
 
-    assert "Step 1: X" in prompt
-    assert "Step 2" not in prompt
+    assert "\nX\nFinal Answer: " in prompt
+    assert "\nB\n" not in prompt

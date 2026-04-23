@@ -1,0 +1,111 @@
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{statistics}
+\usepackage{pgfplotstable}
+\usepackage{xcolor}
+
+\definecolor{SigMedium}{RGB}{20,72,160}
+\definecolor{SigHard}{RGB}{210,75,25}
+
+\makeatletter
+\newcommand{\ResolveCSVPath}[3]{%
+  \ifx#2\@empty
+    \IfFileExists{#3/#1}{\edef#2{#3/#1}}{}%
+  \fi
+}
+\newcommand{\ResolveCSV}[2]{%
+  \def#2{}%
+  \ResolveCSVPath{#1}{#2}{.}%
+  \ResolveCSVPath{#1}{#2}{data}%
+  \ResolveCSVPath{#1}{#2}{csv}%
+  \ResolveCSVPath{#1}{#2}{plots}%
+  \ResolveCSVPath{#1}{#2}{plot}%
+  \ResolveCSVPath{#1}{#2}{fig_data}%
+  \ResolveCSVPath{#1}{#2}{fig-data}%
+  \ResolveCSVPath{#1}{#2}{tables}%
+  \ResolveCSVPath{#1}{#2}{stats}%
+  \ResolveCSVPath{#1}{#2}{analysis}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase1}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase2}%
+  \ResolveCSVPath{#1}{#2}{split}%
+  \ResolveCSVPath{#1}{#2}{splits}%
+  \ResolveCSVPath{#1}{#2}{t1a_splits}%
+  \ResolveCSVPath{#1}{#2}{t1b_splits}%
+  \ResolveCSVPath{#1}{#2}{t1c_splits}%
+  \ResolveCSVPath{#1}{#2}{t1d_splits}%
+  \ifx#2\@empty
+    \PackageError{t1e-dlt}{Could not locate `#1'}%
+      {Put the file in the project root or add its folder to \string\ResolveCSV.}%
+  \fi
+}
+\makeatother
+
+\newcommand{\FmtTwo}[1]{\pgfmathprintnumber[fixed,precision=2]{#1}}
+
+\begin{document}
+
+\ResolveCSV{plot_src_fig_b_delta.csv}{\FigBRawPath}
+\ResolveCSV{plot_src_fig_b_delta_stats.csv}{\FigBStatsPath}
+\pgfplotstableread[col sep=comma]{\FigBRawPath}\LoadedTable
+\pgfplotstableread[col sep=comma]{\FigBStatsPath}\FigBStats
+\pgfplotstablegetelem{0}{median_delta}\of{\FigBStats}\edef\MedianDelta{\pgfplotsretval}
+\pgfplotstablegetelem{1}{n}\of{\FigBStats}\edef\NMediumB{\pgfplotsretval}
+\pgfplotstablegetelem{2}{n}\of{\FigBStats}\edef\NHardB{\pgfplotsretval}
+\pgfmathsetmacro{\MedianDeltaFrac}{\MedianDelta + 0.5}
+\gdef\HardDeltaData{}
+\gdef\MediumDeltaData{}
+\pgfplotstableforeachcolumnelement{delta}\of\LoadedTable\as\ThisDelta{%
+  \pgfplotstablegetelem{\pgfplotstablerow}{difficulty}\of{\LoadedTable}%
+  \edef\ThisDiff{\pgfplotsretval}%
+  \ifnum\pdfstrcmp{\ThisDiff}{hard}=0\relax
+    \xdef\HardDeltaData{\HardDeltaData (\ThisDelta,0)}%
+  \fi
+  \ifnum\pdfstrcmp{\ThisDiff}{medium}=0\relax
+    \xdef\MediumDeltaData{\MediumDeltaData (\ThisDelta,0)}%
+  \fi
+}
+
+\begin{tikzpicture}
+\begin{axis}[
+  width=13.2cm,
+  height=8.6cm,
+  xlabel={$\Delta(k^*/L)$},
+  ylabel={Number of questions},
+  xmin=-0.5, xmax=0.5,
+  xtick={-0.5,-0.25,0,0.25,0.5},
+  ymin=0,
+  ymajorgrids=true,
+  grid style={draw=black!10},
+  axis line style={black},
+  tick label style={font=\footnotesize},
+  label style={font=\small},
+  legend style={font=\footnotesize, draw=none, fill=white, fill opacity=0.85, at={(0.98,0.98)}, anchor=north east},
+  legend cell align=left,
+]
+  \addplot+[
+    hist={data min=-0.5, data max=0.5, bins=20},
+    fill=SigHard,
+    draw=SigHard,
+    fill opacity=0.45,
+    mark=none,
+  ] coordinates {\HardDeltaData};
+  \addlegendentry{Hard}
+
+  \addplot+[
+    hist={data min=-0.5, data max=0.5, bins=20},
+    fill=SigMedium,
+    draw=SigMedium,
+    fill opacity=0.55,
+    mark=none,
+  ] coordinates {\MediumDeltaData};
+  \addlegendentry{Medium}
+
+  \draw[dashed, black, line width=0.8pt] (rel axis cs:0.5,0) -- (rel axis cs:0.5,1);
+  \draw[red, line width=1.2pt] (rel axis cs:\MedianDeltaFrac,0) -- (rel axis cs:\MedianDeltaFrac,1);
+  \node[anchor=west, font=\footnotesize, text=red] at (rel axis cs:{min(0.80,\MedianDeltaFrac+0.03)},0.93)
+    {$\tilde{\Delta}=\FmtTwo{\MedianDelta}$};
+\end{axis}
+\end{tikzpicture}
+
+\end{document}

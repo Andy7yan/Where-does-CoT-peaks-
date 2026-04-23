@@ -1,0 +1,111 @@
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{statistics}
+\usepackage{pgfplotstable}
+\usepackage{xcolor}
+
+\definecolor{SigMedium}{RGB}{20,72,160}
+\definecolor{SigHard}{RGB}{210,75,25}
+
+\makeatletter
+\newcommand{\ResolveCSVPath}[3]{%
+  \ifx#2\@empty
+    \IfFileExists{#3/#1}{\edef#2{#3/#1}}{}%
+  \fi
+}
+\newcommand{\ResolveCSV}[2]{%
+  \def#2{}%
+  \ResolveCSVPath{#1}{#2}{.}%
+  \ResolveCSVPath{#1}{#2}{data}%
+  \ResolveCSVPath{#1}{#2}{csv}%
+  \ResolveCSVPath{#1}{#2}{plots}%
+  \ResolveCSVPath{#1}{#2}{plot}%
+  \ResolveCSVPath{#1}{#2}{fig_data}%
+  \ResolveCSVPath{#1}{#2}{fig-data}%
+  \ResolveCSVPath{#1}{#2}{tables}%
+  \ResolveCSVPath{#1}{#2}{stats}%
+  \ResolveCSVPath{#1}{#2}{analysis}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase1}%
+  \ResolveCSVPath{#1}{#2}{analysis_phase2}%
+  \ResolveCSVPath{#1}{#2}{split}%
+  \ResolveCSVPath{#1}{#2}{splits}%
+  \ResolveCSVPath{#1}{#2}{t1a_splits}%
+  \ResolveCSVPath{#1}{#2}{t1b_splits}%
+  \ResolveCSVPath{#1}{#2}{t1c_splits}%
+  \ResolveCSVPath{#1}{#2}{t1d_splits}%
+  \ifx#2\@empty
+    \PackageError{t1e-rho}{Could not locate `#1'}%
+      {Put the file in the project root or add its folder to \string\ResolveCSV.}%
+  \fi
+}
+\makeatother
+
+\newcommand{\FmtTwo}[1]{\pgfmathprintnumber[fixed,precision=2]{#1}}
+
+\begin{document}
+
+\ResolveCSV{plot_src_fig_a_rho.csv}{\FigARawPath}
+\ResolveCSV{plot_src_fig_a_rho_stats.csv}{\FigAStatsPath}
+\pgfplotstableread[col sep=comma]{\FigARawPath}\LoadedTable
+\pgfplotstableread[col sep=comma]{\FigAStatsPath}\FigAStats
+\pgfplotstablegetelem{0}{median_rho}\of{\FigAStats}\edef\MedianRho{\pgfplotsretval}
+\pgfplotstablegetelem{1}{n}\of{\FigAStats}\edef\NMediumA{\pgfplotsretval}
+\pgfplotstablegetelem{2}{n}\of{\FigAStats}\edef\NHardA{\pgfplotsretval}
+\pgfmathsetmacro{\MedianRhoFrac}{(\MedianRho + 1.0)/2.0}
+\gdef\HardRhoData{}
+\gdef\MediumRhoData{}
+\pgfplotstableforeachcolumnelement{rho}\of\LoadedTable\as\ThisRho{%
+  \pgfplotstablegetelem{\pgfplotstablerow}{difficulty}\of{\LoadedTable}%
+  \edef\ThisDiff{\pgfplotsretval}%
+  \ifnum\pdfstrcmp{\ThisDiff}{hard}=0\relax
+    \xdef\HardRhoData{\HardRhoData (\ThisRho,0)}%
+  \fi
+  \ifnum\pdfstrcmp{\ThisDiff}{medium}=0\relax
+    \xdef\MediumRhoData{\MediumRhoData (\ThisRho,0)}%
+  \fi
+}
+
+\begin{tikzpicture}
+\begin{axis}[
+  width=13.2cm,
+  height=8.6cm,
+  xlabel={Spearman $\rho$},
+  ylabel={Number of questions},
+  xmin=-1, xmax=1,
+  xtick={-1,-0.5,0,0.5,1},
+  ymin=0,
+  ymajorgrids=true,
+  grid style={draw=black!10},
+  axis line style={black},
+  tick label style={font=\footnotesize},
+  label style={font=\small},
+  legend style={font=\footnotesize, draw=none, fill=white, fill opacity=0.85, at={(0.98,0.98)}, anchor=north east},
+  legend cell align=left,
+]
+  \addplot+[
+    hist={data min=-1, data max=1, bins=20},
+    fill=SigHard,
+    draw=SigHard,
+    fill opacity=0.45,
+    mark=none,
+  ] coordinates {\HardRhoData};
+  \addlegendentry{Hard}
+
+  \addplot+[
+    hist={data min=-1, data max=1, bins=20},
+    fill=SigMedium,
+    draw=SigMedium,
+    fill opacity=0.55,
+    mark=none,
+  ] coordinates {\MediumRhoData};
+  \addlegendentry{Medium}
+
+  \draw[dashed, black, line width=0.8pt] (rel axis cs:0.5,0) -- (rel axis cs:0.5,1);
+  \draw[red, line width=1.2pt] (rel axis cs:\MedianRhoFrac,0) -- (rel axis cs:\MedianRhoFrac,1);
+  \node[anchor=west, font=\footnotesize, text=red] at (rel axis cs:{min(0.82,\MedianRhoFrac+0.02)},0.93)
+    {$\tilde{\rho}=\FmtTwo{\MedianRho}$};
+\end{axis}
+\end{tikzpicture}
+
+\end{document}

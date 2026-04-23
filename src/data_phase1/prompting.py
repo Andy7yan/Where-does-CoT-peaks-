@@ -109,12 +109,17 @@ def build_generation_messages(
 def build_nldd_clean_prompt(
     question: str,
     steps: list[str],
-    answer_suffix: str = "####",
+    answer_suffix: str = "\nFinal Answer:",
 ) -> str:
-    """Build the NLDD clean-condition prompt text."""
+    """Build the paper-aligned NLDD clean-condition prompt text."""
 
-    steps_block = _format_steps_block(steps)
-    return f"{question}\n\n{steps_block}\n\n{answer_suffix} "
+    prompt = (
+        "Solve the math problem step by step. Provide your final numerical answer."
+        f"\n\nQuestion: {question}\n"
+    )
+    if steps:
+        prompt += _format_steps_block(steps) + "\n"
+    return prompt.rstrip() + answer_suffix + " "
 
 
 def build_nldd_corrupt_prompt(
@@ -122,20 +127,23 @@ def build_nldd_corrupt_prompt(
     clean_steps: list[str],
     corrupt_step: str,
     corrupt_index: int,
-    answer_suffix: str = "####",
+    answer_suffix: str = "\nFinal Answer:",
 ) -> str:
-    """Build the NLDD corrupt-condition prompt text."""
+    """Build the paper-aligned NLDD corrupt-condition prompt text."""
 
     if corrupt_index < 0 or corrupt_index >= len(clean_steps):
         raise IndexError("corrupt_index must reference an existing clean step.")
 
     prompt_steps = clean_steps[:corrupt_index] + [corrupt_step]
-    steps_block = _format_steps_block(prompt_steps)
-    return f"{question}\n\n{steps_block}\n\n{answer_suffix} "
+    return build_nldd_clean_prompt(
+        question=question,
+        steps=prompt_steps,
+        answer_suffix=answer_suffix,
+    )
 
 
 def _format_steps_block(steps: list[str]) -> str:
-    return "\n".join(f"Step {index}: {step}" for index, step in enumerate(steps, start=1))
+    return "\n".join(str(step).strip() for step in steps if str(step).strip())
 
 
 def _load_prompt_template_file(template_path: Path) -> dict[str, Any]:

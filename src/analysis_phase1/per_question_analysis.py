@@ -17,6 +17,7 @@ from src.analysis_phase1.analysis import (
     resolve_mean_curve_kstar,
 )
 from src.analysis_phase1.io import SampleRecord
+from src.analysis_phase1.nldd_measurement import PromptMeasurement
 from src.analysis_phase1.nldd_shared import _write_jsonl
 from src.analysis_phase1.pq_io import (
     PQ_ANALYSIS_DIRNAME,
@@ -35,11 +36,15 @@ def run_per_question_analysis(
     run_dir: str,
     prompt_logits_fn: Callable[[str], Any],
     prompt_logits_batch_fn: Callable[[Sequence[str]], list[Any]] | None = None,
+    prompt_measurement_fn: Callable[[str], PromptMeasurement] | None = None,
+    prompt_measurement_batch_fn: Callable[[Sequence[str]], list[PromptMeasurement]] | None = None,
     tokenizer: Any,
     trace_trajectory_fn: Callable[[str, Sequence[str]], list[Any]],
     ld_epsilon: float,
     tas_plateau_threshold: float | None,
     min_kstar_bins: int,
+    perplexity_filter_enabled: bool = False,
+    perplexity_ratio_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Run per-question analysis and write the pq_analysis output contract."""
 
@@ -74,9 +79,13 @@ def run_per_question_analysis(
                 sample,
                 prompt_logits_fn=prompt_logits_fn,
                 prompt_logits_batch_fn=prompt_logits_batch_fn,
+                prompt_measurement_fn=prompt_measurement_fn,
+                prompt_measurement_batch_fn=prompt_measurement_batch_fn,
                 tokenizer=tokenizer,
                 s_value=s_value,
                 ld_epsilon=ld_epsilon,
+                perplexity_filter_enabled=perplexity_filter_enabled,
+                perplexity_ratio_threshold=perplexity_ratio_threshold,
             )
         )
         tas_curve_rows.extend(

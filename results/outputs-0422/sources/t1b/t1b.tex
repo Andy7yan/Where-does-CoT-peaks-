@@ -1,0 +1,225 @@
+% t1b_heatmap.tex
+% Compile:
+%   latexmk -pdf t1b_heatmap.tex
+%
+% Expected CSV:
+%   A single-question, already-filtered CSV with columns:
+%   question_id, L, step, mean_nldd, nldd_se, mean_tas, tas_t_se, n_clean, bin_status
+%
+% Recommended pre-filter:
+%   - keep exactly one question_id
+%   - keep pipeline = pq
+%   - keep bin_status = ok
+%
+% Notes:
+%   - The left panel keeps step = 1 as empty base cells, because mean_nldd is null there by spec.
+%   - The right panel uses mean_tas (your local field name). If your exported file uses mean_tas_t,
+%     replace every "mean_tas" below with "mean_tas_t".
+
+\documentclass[tikz,border=5pt]{standalone}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\usepgfplotslibrary{groupplots}
+\usetikzlibrary{calc}
+\pgfplotsset{compat=1.18}
+
+% ------------------------------------------------------------------
+% Colours
+% ------------------------------------------------------------------
+\definecolor{PosOneColor}{RGB}{255,255,0}
+\definecolor{ZeroColor}{RGB}{255,70,100}
+\definecolor{NegOneColor}{RGB}{80,30,200}
+
+\definecolor{InvalidCell}{RGB}{244,244,246}
+\definecolor{EmptyCell}{RGB}{252,252,252}
+\definecolor{AxisGrey}{RGB}{95,95,95}
+
+% ------------------------------------------------------------------
+% User config
+% ------------------------------------------------------------------
+\newcommand{\DataFile}{t1b_single_question.csv}
+\newcommand{\QuestionLabel}{gsm8k\_0123}
+
+% Axis extent. Set these to the actual range you want to show.
+\newcommand{\LMin}{3}
+\newcommand{\LMax}{12}
+\newcommand{\StepMax}{12}
+
+% NLDD colour clipping. Values outside [-NLDDClip, +NLDDClip] are saturated.
+% Tune this once for your paper-wide style so figures are comparable.
+\newcommand{\NLDDClip}{150}
+
+% Figure size
+\newcommand{\PanelW}{7.1cm}
+\newcommand{\PanelH}{7.1cm}
+
+% ------------------------------------------------------------------
+% Helpers
+% ------------------------------------------------------------------
+\newcommand{\PaintCell}[3]{%
+  \pgfmathsetmacro{\xa}{#1 - 0.5}%
+  \pgfmathsetmacro{\xb}{#1 + 0.5}%
+  \pgfmathsetmacro{\ya}{#2 - 0.5}%
+  \pgfmathsetmacro{\yb}{#2 + 0.5}%
+  \path[fill=#3, draw=white, line width=0.28pt]
+    (axis cs:\xa,\ya) rectangle (axis cs:\xb,\yb);%
+}
+
+\newcommand{\DrawBaseGrid}{%
+  \pgfmathtruncatemacro{\LMinInt}{\LMin}%
+  \pgfmathtruncatemacro{\LMaxInt}{\LMax}%
+  \pgfmathtruncatemacro{\StepMaxInt}{\StepMax}%
+  \foreach \yy in {\LMinInt,...,\LMaxInt}{%
+    \foreach \xx in {1,...,\StepMaxInt}{%
+      \ifnum\xx>\yy
+        \PaintCell{\xx}{\yy}{InvalidCell}%
+      \else
+        \PaintCell{\xx}{\yy}{EmptyCell}%
+      \fi
+    }%
+  }%
+}
+
+% Map a normalised scalar in [-1, 1] to the requested diverging palette.
+\newcommand{\NormToFill}[1]{%
+  \pgfmathsetmacro{\NormVal}{max(-1,min(1,#1))}%
+  \pgfmathsetmacro{\MixPct}{100*abs(\NormVal)}%
+  \ifdim \NormVal pt < 0pt
+    \edef\ThisFill{ZeroColor!\MixPct!NegOneColor}%
+  \else
+    \edef\ThisFill{ZeroColor!\MixPct!PosOneColor}%
+  \fi
+}
+
+\newcommand{\DrawNLDDCells}[1]{%
+  \pgfplotstablegetrowsof{#1}%
+  \pgfmathtruncatemacro{\RowMax}{\pgfplotsretval - 1}%
+  \pgfplotsinvokeforeach{0,...,\RowMax}{%
+    \pgfplotstablegetelem{##1}{L}\of{#1}\edef\CellLRaw{\pgfplotsretval}%
+    \pgfplotstablegetelem{##1}{step}\of{#1}\edef\CellStepRaw{\pgfplotsretval}%
+    \pgfmathtruncatemacro{\CellL}{\CellLRaw}%
+    \pgfmathtruncatemacro{\CellStep}{\CellStepRaw}%
+    % NLDD at step=1 is intentionally blank by spec.
+    \ifnum\CellStep>1
+      \pgfplotstablegetelem{##1}{mean_nldd}\of{#1}\edef\CellValRaw{\pgfplotsretval}%
+      \NormToFill{\CellValRaw / \NLDDClip}%
+      \PaintCell{\CellStep}{\CellL}{\ThisFill}%
+    \fi
+  }%
+}
+
+\newcommand{\DrawTASCells}[1]{%
+  \pgfplotstablegetrowsof{#1}%
+  \pgfmathtruncatemacro{\RowMax}{\pgfplotsretval - 1}%
+  \pgfplotsinvokeforeach{0,...,\RowMax}{%
+    \pgfplotstablegetelem{##1}{L}\of{#1}\edef\CellLRaw{\pgfplotsretval}%
+    \pgfplotstablegetelem{##1}{step}\of{#1}\edef\CellStepRaw{\pgfplotsretval}%
+    \pgfmathtruncatemacro{\CellL}{\CellLRaw}%
+    \pgfmathtruncatemacro{\CellStep}{\CellStepRaw}%
+    \pgfplotstablegetelem{##1}{mean_tas}\of{#1}\edef\CellValRaw{\pgfplotsretval}%
+    % mean_tas is assumed in [0,1]; remap to [-1,1] so the same diverging palette is used.
+    \NormToFill{2*\CellValRaw - 1}%
+    \PaintCell{\CellStep}{\CellL}{\ThisFill}%
+  }%
+}
+
+\newcommand{\DrawManualColourbar}[4]{%
+  % #1 x, #2 y, #3 width, #4 label
+  \begin{scope}[shift={(#1,#2)}]
+    \shade[left color=NegOneColor, middle color=ZeroColor, right color=PosOneColor]
+      (0,0) rectangle (#3,0.22);
+    \draw[AxisGrey, line width=0.3pt] (0,0) rectangle (#3,0.22);
+    \node[font=\scriptsize, anchor=north] at (0,0) {-1};
+    \node[font=\scriptsize, anchor=north] at ({0.5*#3},0) {0};
+    \node[font=\scriptsize, anchor=north] at (#3,0) {1};
+    \node[font=\scriptsize, anchor=south] at ({0.5*#3},0.26) {#4};
+  \end{scope}
+}
+
+% ------------------------------------------------------------------
+% Data
+% ------------------------------------------------------------------
+\pgfplotstableread[col sep=comma]{\DataFile}\datatable
+
+% ------------------------------------------------------------------
+% Plot styles
+% ------------------------------------------------------------------
+\pgfplotsset{
+  t1b axis/.style={
+    width=\PanelW,
+    height=\PanelH,
+    scale only axis,
+    axis equal image,
+    xmin=0.5, xmax=\StepMax + 0.5,
+    ymin=\LMin - 0.5, ymax=\LMax + 0.5,
+    y dir=reverse,
+    axis x line*=top,
+    axis y line*=left,
+    axis line style={AxisGrey, line width=0.45pt},
+    tick style={AxisGrey, line width=0.45pt},
+    xtick={1,...,\StepMax},
+    ytick={\LMin,...,\LMax},
+    tick label style={font=\scriptsize},
+    title style={font=\small, yshift=2pt},
+    xlabel={step},
+    ylabel={$L$},
+    xlabel style={font=\small, at={(axis description cs:0.5,1.08)}, anchor=south},
+    ylabel style={font=\small},
+    clip=false,
+    enlargelimits=false,
+  }
+}
+
+\begin{document}
+\begin{tikzpicture}
+
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=1.25cm},
+  t1b axis
+]
+
+% ------------------------------------------------------------------
+% Left panel: NLDD
+% ------------------------------------------------------------------
+\nextgroupplot[
+  title={NLDD},
+]
+  \DrawBaseGrid
+  \DrawNLDDCells{\datatable}
+
+% ------------------------------------------------------------------
+% Right panel: TAS
+% ------------------------------------------------------------------
+\nextgroupplot[
+  title={TAS},
+]
+  \DrawBaseGrid
+  \DrawTASCells{\datatable}
+
+\end{groupplot}
+
+% Figure title
+\node[font=\small, anchor=south]
+  at ($(group c1r1.north)!0.5!(group c2r1.north)+(0,0.72cm)$)
+  {\QuestionLabel};
+
+% Colour bars
+\DrawManualColourbar
+  {$((group c1r1.south west)!0.5!(group c1r1.south east)$)}
+  {$((group c1r1.south west)+(0,-0.95cm)$)}
+  {2.6cm}
+  {normalised colour scale};
+
+\DrawManualColourbar
+  {$((group c2r1.south west)!0.5!(group c2r1.south east)$)}
+  {$((group c2r1.south west)+(0,-0.95cm)$)}
+  {2.6cm}
+  {normalised colour scale};
+
+% Small notes
+\node[font=\scriptsize, anchor=north, text=AxisGrey]
+  at ($(group c1r1.south)!0.5!(group c2r1.south)+(0,-1.55cm)$)
+  {NLDD colours clipped at $\pm \NLDDClip$; TAS colours use $2\cdot\mathrm{TAS}-1$};
+
+\end{tikzpicture}
+\end{document}

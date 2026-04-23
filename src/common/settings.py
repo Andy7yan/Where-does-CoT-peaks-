@@ -75,6 +75,8 @@ class NLDDConfig:
     enable_tier3_semantic_flip: bool
     corruption_token_delta_max: int
     corruption_retry_limit: int
+    perplexity_filter_enabled: bool
+    perplexity_ratio_threshold: float | None
     ld_epsilon: float
     horizon_definition: str
 
@@ -212,6 +214,14 @@ class ExperimentConfig:
                     "corruption_token_delta_max",
                 ),
                 corruption_retry_limit=_require_int(nldd, "corruption_retry_limit"),
+                perplexity_filter_enabled=_require_bool(
+                    nldd,
+                    "perplexity_filter_enabled",
+                ),
+                perplexity_ratio_threshold=_optional_float(
+                    nldd,
+                    "perplexity_ratio_threshold",
+                ),
                 ld_epsilon=_require_float(nldd, "ld_epsilon"),
                 horizon_definition=_require_string(nldd, "horizon_definition"),
             ),
