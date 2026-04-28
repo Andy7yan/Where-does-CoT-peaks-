@@ -1,0 +1,57 @@
+#!/bin/bash
+#PBS -N peak-cot-targeted-rerun-process
+#PBS -l select=1:ncpus=4:ngpus=1:mem=64gb:gpu_model=L40S
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/targeted_rerun_process.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${SOURCE_RUN_NAME:=per-question-0419_143551}"
+: "${SUPPLEMENTAL_RUN_NAME:?SUPPLEMENTAL_RUN_NAME must be the targeted generation run name}"
+: "${MERGED_RUN_NAME:=targeted-rerun-relaxed-merged-$(date +%m%d_%H%M%S)}"
+: "${CONFIG_PATH:=configs/targeted_rerun_short_long_relaxed.yaml}"
+: "${SUPPLEMENTAL_SUFFIX:=${SUPPLEMENTAL_RUN_NAME}}"
+: "${PEAK_COT_FORCE_DEVICE:=cuda}"
+: "${PEAK_COT_ALLOW_CPU_FALLBACK:=0}"
+
+cd "${PROJECT_HOME}" || exit 1
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+export PEAK_COT_FORCE_DEVICE
+export PEAK_COT_ALLOW_CPU_FALLBACK
+
+SOURCE_RUN_DIR="${SCRATCH}/runs/${SOURCE_RUN_NAME}"
+SUPPLEMENTAL_RUN_DIR="${SCRATCH}/runs/${SUPPLEMENTAL_RUN_NAME}"
+MERGED_RUN_DIR="${SCRATCH}/runs/${MERGED_RUN_NAME}"
+LOG_PATH="${MERGED_RUN_DIR}/logs/targeted_process_analysis.log"
+
+mkdir -p "${MERGED_RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+python scripts/merge_targeted_rerun.py \
+  --source-run-dir "${SOURCE_RUN_DIR}" \
+  --supplemental-run-dir "${SUPPLEMENTAL_RUN_DIR}" \
+  --output-dir "${MERGED_RUN_DIR}" \
+  --supplemental-suffix "${SUPPLEMENTAL_SUFFIX}"
+
+python scripts/run_per_question_data_phase.py \
+  --run-dir "${MERGED_RUN_DIR}" \
+  --config "${CONFIG_PATH}"
+
+python scripts/check_runtime_device.py
+python scripts/run_per_question_analysis.py \
+  --run-dir "${MERGED_RUN_DIR}" \
+  --config "${CONFIG_PATH}"

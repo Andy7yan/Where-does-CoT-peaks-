@@ -170,7 +170,7 @@ def run_per_question_generation(
             generator=generator,
             question_id=str(record["question_id"]),
             question_text=str(record["question_text"]),
-            gold_answer=float(record["gold_answer"]),
+            gold_answer=record["gold_answer"],
             prompt_templates=prompt_templates,
             samples_per_group=default_samples_per_group,
             max_new_tokens=max_new_tokens,

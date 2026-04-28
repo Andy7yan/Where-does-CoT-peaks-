@@ -46,9 +46,6 @@ def build_question_metadata_v4(
 ) -> list[dict[str, Any]]:
     """Build per-question metadata from all traces."""
 
-    raw_by_question = _group_traces_by_question(traces)
-    question_ids = sorted(raw_by_question)
-
     if not 0.0 <= hard_accuracy_threshold <= 1.0:
         raise ValueError("analysis.hard_accuracy_threshold must lie in [0, 1].")
     if not 0.0 <= easy_accuracy_threshold <= 1.0:
@@ -57,29 +54,41 @@ def build_question_metadata_v4(
         raise ValueError("analysis.hard_accuracy_threshold must be smaller than analysis.easy_accuracy_threshold.")
 
     metadata_rows: list[dict[str, Any]] = []
-    for question_id in question_ids:
-        raw_rows = raw_by_question.get(question_id, [])
-        accuracy = _compute_accuracy(raw_rows)
-        difficulty_score = 1.0 - accuracy
+    for row in build_question_difficulty_profile(traces=traces):
+        accuracy = float(row["accuracy"])
         if accuracy > easy_accuracy_threshold:
             difficulty_bucket = "easy"
         elif accuracy < hard_accuracy_threshold:
             difficulty_bucket = "hard"
         else:
             difficulty_bucket = "medium"
+        row["difficulty_bucket"] = difficulty_bucket
+        metadata_rows.append(row)
 
+    return metadata_rows
+
+
+def build_question_difficulty_profile(
+    *,
+    traces: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build per-question accuracy/difficulty rows before bucket boundaries are applied."""
+
+    raw_by_question = _group_traces_by_question(traces)
+    metadata_rows: list[dict[str, Any]] = []
+    for question_id in sorted(raw_by_question):
+        raw_rows = raw_by_question.get(question_id, [])
+        accuracy = _compute_accuracy(raw_rows)
         metadata_rows.append(
             {
                 "question_id": question_id,
-                "difficulty_score": difficulty_score,
-                "difficulty_bucket": difficulty_bucket,
+                "difficulty_score": 1.0 - accuracy,
                 "accuracy": accuracy,
                 "total_samples": len(raw_rows),
                 "correct_count": sum(1 for trace in raw_rows if trace["is_correct"]),
                 "natural_length_distribution": _length_distribution(raw_rows),
             }
         )
-
     return metadata_rows
 
 

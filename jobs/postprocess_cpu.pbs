@@ -49,8 +49,22 @@ echo "run_dir=${RUN_DIR}"
 echo "config_path=${CONFIG_PATH}"
 echo "force_device=${PEAK_COT_FORCE_DEVICE}"
 echo "allow_cpu_fallback=${PEAK_COT_ALLOW_CPU_FALLBACK}"
+echo "hard_accuracy_threshold=${HARD_ACCURACY_THRESHOLD:-<config>}"
+echo "easy_accuracy_threshold=${EASY_ACCURACY_THRESHOLD:-<config>}"
+
+cmd=(
+  python scripts/run_postprocess.py
+  --run-dir "${RUN_DIR}"
+  --config "${CONFIG_PATH}"
+)
+
+if [[ -n "${HARD_ACCURACY_THRESHOLD:-}" ]]; then
+  cmd+=(--hard-accuracy-threshold "${HARD_ACCURACY_THRESHOLD}")
+fi
+
+if [[ -n "${EASY_ACCURACY_THRESHOLD:-}" ]]; then
+  cmd+=(--easy-accuracy-threshold "${EASY_ACCURACY_THRESHOLD}")
+fi
 
 python scripts/check_runtime_device.py
-python scripts/run_postprocess.py \
-  --run-dir "${RUN_DIR}" \
-  --config "${CONFIG_PATH}"
+"${cmd[@]}"

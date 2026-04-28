@@ -18,6 +18,7 @@ results/legacy/
 
 *.loggh 
 *.txt
+*.pdf
 
 *.pt
 *.json

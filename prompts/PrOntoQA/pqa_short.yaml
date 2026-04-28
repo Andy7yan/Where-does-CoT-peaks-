@@ -1,0 +1,91 @@
+prompt_id: icl_short
+version: 1
+system: |-
+  You are a careful logic tutor.
+  Solve the user's true-or-false reasoning problem clearly and finish with a new line in the form "Final Answer: <A or B>".
+few_shot:
+- user: 'Context: Sam is a wumpus. Every wumpus is a zumpus. Every zumpus is a rompus. Every rompus is a tumpus. Every tumpus is a gorpus. Every gorpus is a nimpus. Every nimpus is a jorpet. Question: Is the following statement true or false? Sam is a jorpet. Options: A) True B) False'
+  assistant: |-
+    Step 1: Sam is a wumpus.
+    Step 2: Since Sam is a wumpus and every wumpus is a zumpus, Sam is a zumpus.
+    Step 3: Since Sam is a zumpus and every zumpus is a rompus, Sam is a rompus.
+    Step 4: Since Sam is a rompus and every rompus is a tumpus, Sam is a tumpus.
+    Step 5: Since Sam is a tumpus and every tumpus is a gorpus, Sam is a gorpus.
+    Step 6: Since Sam is a gorpus and every gorpus is a nimpus, Sam is a nimpus.
+    Step 7: Since Sam is a nimpus and every nimpus is a jorpet, Sam is a jorpet.
+    Final Answer: A
+- user: 'Context: Alex is a dax. Every dax is a blicket. Every blicket is a lorpet. Every lorpet is a crivet. Every crivet is a flamet. Every flamet is a storpus. Every storpus is a yumpus. Question: Is the following statement true or false? Alex is not a yumpus. Options: A) True B) False'
+  assistant: |-
+    Step 1: Alex is a dax.
+    Step 2: Since Alex is a dax and every dax is a blicket, Alex is a blicket.
+    Step 3: Since Alex is a blicket and every blicket is a lorpet, Alex is a lorpet.
+    Step 4: Since Alex is a lorpet and every lorpet is a crivet, Alex is a crivet.
+    Step 5: Since Alex is a crivet and every crivet is a flamet, Alex is a flamet.
+    Step 6: Since Alex is a flamet and every flamet is a storpus, Alex is a storpus.
+    Step 7: Since Alex is a storpus and every storpus is a yumpus, Alex is a yumpus.
+    Final Answer: B
+- user: 'Context: Riley is a daxen. Every daxen is a wuglet. Every wuglet is a zhorp. Every zhorp is a kintus. Every kintus is a merpin. Every merpin is a lorbit. Every lorbit is a plicket. Question: Is the following statement true or false? Riley is a plicket. Options: A) True B) False'
+  assistant: |-
+    Step 1: Riley is a daxen.
+    Step 2: Since Riley is a daxen and every daxen is a wuglet, Riley is a wuglet.
+    Step 3: Since Riley is a wuglet and every wuglet is a zhorp, Riley is a zhorp.
+    Step 4: Since Riley is a zhorp and every zhorp is a kintus, Riley is a kintus.
+    Step 5: Since Riley is a kintus and every kintus is a merpin, Riley is a merpin.
+    Step 6: Since Riley is a merpin and every merpin is a lorbit, Riley is a lorbit.
+    Step 7: Since Riley is a lorbit and every lorbit is a plicket, Riley is a plicket.
+    Final Answer: A
+- user: 'Context: Taylor is a mip. Every mip is a somp. Every somp is a lirp. Every lirp is a gorp. Every gorp is a tav. Every tav is a norb. Every norb is a zib. Question: Is the following statement true or false? Taylor is not a zib. Options: A) True B) False'
+  assistant: |-
+    Step 1: Taylor is a mip.
+    Step 2: Since Taylor is a mip and every mip is a somp, Taylor is a somp.
+    Step 3: Since Taylor is a somp and every somp is a lirp, Taylor is a lirp.
+    Step 4: Since Taylor is a lirp and every lirp is a gorp, Taylor is a gorp.
+    Step 5: Since Taylor is a gorp and every gorp is a tav, Taylor is a tav.
+    Step 6: Since Taylor is a tav and every tav is a norb, Taylor is a norb.
+    Step 7: Since Taylor is a norb and every norb is a zib, Taylor is a zib.
+    Final Answer: B
+- user: 'Context: Morgan is a flarn. Every flarn is a prindle. Every prindle is a masket. Every masket is a dorfin. Every dorfin is a zelp. Every zelp is a quarn. Every quarn is a brivet. Every brivet is a lasket. Question: Is the following statement true or false? Morgan is a lasket. Options: A) True B) False'
+  assistant: |-
+    Step 1: Morgan is a flarn.
+    Step 2: Since Morgan is a flarn and every flarn is a prindle, Morgan is a prindle.
+    Step 3: Since Morgan is a prindle and every prindle is a masket, Morgan is a masket.
+    Step 4: Since Morgan is a masket and every masket is a dorfin, Morgan is a dorfin.
+    Step 5: Since Morgan is a dorfin and every dorfin is a zelp, Morgan is a zelp.
+    Step 6: Since Morgan is a zelp and every zelp is a quarn, Morgan is a quarn.
+    Step 7: Since Morgan is a quarn and every quarn is a brivet, Morgan is a brivet.
+    Step 8: Since Morgan is a brivet and every brivet is a lasket, Morgan is a lasket.
+    Final Answer: A
+- user: 'Context: Casey is a sprail. Every sprail is a glomper. Every glomper is a trindle. Every trindle is a nasket. Every nasket is a vindle. Every vindle is a farnet. Every farnet is a tasket. Every tasket is a mindle. Question: Is the following statement true or false? Casey is not a mindle. Options: A) True B) False'
+  assistant: |-
+    Step 1: Casey is a sprail.
+    Step 2: Since Casey is a sprail and every sprail is a glomper, Casey is a glomper.
+    Step 3: Since Casey is a glomper and every glomper is a trindle, Casey is a trindle.
+    Step 4: Since Casey is a trindle and every trindle is a nasket, Casey is a nasket.
+    Step 5: Since Casey is a nasket and every nasket is a vindle, Casey is a vindle.
+    Step 6: Since Casey is a vindle and every vindle is a farnet, Casey is a farnet.
+    Step 7: Since Casey is a farnet and every farnet is a tasket, Casey is a tasket.
+    Step 8: Since Casey is a tasket and every tasket is a mindle, Casey is a mindle.
+    Final Answer: B
+- user: 'Context: Jordan is a pimlet. Every pimlet is a zorbus. Every zorbus is a karpet. Every karpet is a flimp. Every flimp is a branet. Every branet is a dorpet. Every dorpet is a glarp. Every glarp is a mornet. Question: Is the following statement true or false? Jordan is a mornet. Options: A) True B) False'
+  assistant: |-
+    Step 1: Jordan is a pimlet.
+    Step 2: Since Jordan is a pimlet and every pimlet is a zorbus, Jordan is a zorbus.
+    Step 3: Since Jordan is a zorbus and every zorbus is a karpet, Jordan is a karpet.
+    Step 4: Since Jordan is a karpet and every karpet is a flimp, Jordan is a flimp.
+    Step 5: Since Jordan is a flimp and every flimp is a branet, Jordan is a branet.
+    Step 6: Since Jordan is a branet and every branet is a dorpet, Jordan is a dorpet.
+    Step 7: Since Jordan is a dorpet and every dorpet is a glarp, Jordan is a glarp.
+    Step 8: Since Jordan is a glarp and every glarp is a mornet, Jordan is a mornet.
+    Final Answer: A
+- user: 'Context: Avery is a bripet. Every bripet is a flamet. Every flamet is a storpus. Every storpus is a yumpus. Every yumpus is a velkit. Every velkit is a narlip. Every narlip is a vextor. Every vextor is a morbin. Question: Is the following statement true or false? Avery is not a morbin. Options: A) True B) False'
+  assistant: |-
+    Step 1: Avery is a bripet.
+    Step 2: Since Avery is a bripet and every bripet is a flamet, Avery is a flamet.
+    Step 3: Since Avery is a flamet and every flamet is a storpus, Avery is a storpus.
+    Step 4: Since Avery is a storpus and every storpus is a yumpus, Avery is a yumpus.
+    Step 5: Since Avery is a yumpus and every yumpus is a velkit, Avery is a velkit.
+    Step 6: Since Avery is a velkit and every velkit is a narlip, Avery is a narlip.
+    Step 7: Since Avery is a narlip and every narlip is a vextor, Avery is a vextor.
+    Step 8: Since Avery is a vextor and every vextor is a morbin, Avery is a morbin.
+    Final Answer: B
+user_template: '{question}'

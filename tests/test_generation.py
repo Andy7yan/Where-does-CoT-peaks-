@@ -107,6 +107,7 @@ def test_generate_traces_for_question_builds_trace_schema() -> None:
     assert len(traces) == 4
     assert traces[0]["trace_id"] == "gsm8k_0001_icl_short_1"
     assert traces[-1]["trace_id"] == "gsm8k_0001_icl_medium_2"
+    assert traces[0]["task_name"] == "gsm8k"
     assert traces[0]["prompt_id"] == "icl_short"
     assert traces[0]["actual_num_steps"] == 2
     assert traces[0]["final_answer_line"] == "#### 4"
@@ -116,6 +117,7 @@ def test_generate_traces_for_question_builds_trace_schema() -> None:
     assert "timestamp" in traces[0]
     assert set(traces[0]) == {
         "trace_id",
+        "task_name",
         "question_id",
         "question_text",
         "gold_answer",

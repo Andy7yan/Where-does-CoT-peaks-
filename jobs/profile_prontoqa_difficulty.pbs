@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -N peak-cot-prontoqa-profile
+#PBS -l select=1:ncpus=4:mem=16gb
+#PBS -l walltime=00:30:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/prontoqa_profile_difficulty.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${RUN_NAME:?RUN_NAME must be set}"
+: "${CONFIG_PATH:=configs/stage1_prontoqa.yaml}"
+
+cd "${PROJECT_HOME}" || exit 1
+if [[ ! -f "${PROJECT_HOME}/.env" ]]; then
+  echo "missing .env at ${PROJECT_HOME}/.env"
+  exit 1
+fi
+
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+LOG_PATH="${RUN_DIR}/logs/profile_difficulty.log"
+
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+echo "project_home=${PROJECT_HOME}"
+echo "run_dir=${RUN_DIR}"
+echo "config_path=${CONFIG_PATH}"
+
+python scripts/profile_difficulty.py \
+  --run-dir "${RUN_DIR}" \
+  --config "${CONFIG_PATH}"

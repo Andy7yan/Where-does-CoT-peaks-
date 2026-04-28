@@ -21,6 +21,8 @@ def aggregate_stage1_outputs(
     run_dir: str,
     *,
     config_path: str = "configs/stage1.yaml",
+    hard_accuracy_threshold: float | None = None,
+    easy_accuracy_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Aggregate Stage C outputs into summary tables and coarse-analysis artifacts."""
 
@@ -29,13 +31,21 @@ def aggregate_stage1_outputs(
         "analysis.min_nldd_length",
         config.analysis.min_nldd_length,
     )
-    hard_accuracy_threshold = require_config_value(
-        "analysis.hard_accuracy_threshold",
-        config.analysis.hard_accuracy_threshold,
+    resolved_hard_accuracy_threshold = (
+        hard_accuracy_threshold
+        if hard_accuracy_threshold is not None
+        else require_config_value(
+            "analysis.hard_accuracy_threshold",
+            config.analysis.hard_accuracy_threshold,
+        )
     )
-    easy_accuracy_threshold = require_config_value(
-        "analysis.easy_accuracy_threshold",
-        config.analysis.easy_accuracy_threshold,
+    resolved_easy_accuracy_threshold = (
+        easy_accuracy_threshold
+        if easy_accuracy_threshold is not None
+        else require_config_value(
+            "analysis.easy_accuracy_threshold",
+            config.analysis.easy_accuracy_threshold,
+        )
     )
     min_cell_size = require_config_value(
         "analysis.min_cell_size",
@@ -49,8 +59,8 @@ def aggregate_stage1_outputs(
 
     question_metadata = build_question_metadata_v4(
         traces=traces,
-        hard_accuracy_threshold=hard_accuracy_threshold,
-        easy_accuracy_threshold=easy_accuracy_threshold,
+        hard_accuracy_threshold=resolved_hard_accuracy_threshold,
+        easy_accuracy_threshold=resolved_easy_accuracy_threshold,
     )
     accuracy_rows = build_accuracy_rows_by_difficulty(
         traces=traces,
@@ -92,6 +102,8 @@ def aggregate_stage1_outputs(
         "num_questions": len(question_metadata),
         "num_traces": len(traces),
         "num_deduped_traces": None,
+        "hard_accuracy_threshold": resolved_hard_accuracy_threshold,
+        "easy_accuracy_threshold": resolved_easy_accuracy_threshold,
     }
 
 
@@ -231,4 +243,3 @@ def _write_question_metadata(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-

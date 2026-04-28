@@ -100,7 +100,11 @@ def test_per_question_data_phase_and_analysis_write_revised_outputs(monkeypatch)
         with (output_dir / "bin_status.csv").open("r", encoding="utf-8", newline="") as handle:
             bin_status_rows = list(csv.DictReader(handle))
         assert any(row["scope"] == "q_ok" and row["pipeline"] == "pq" for row in bin_status_rows)
-        assert any(row["scope"] == "q_short" and row["bin_status"] == "ok" for row in bin_status_rows)
+        assert any(row["scope"] == "q_short" and row["bin_status"] == "strict_ok" for row in bin_status_rows)
+        partial_row = next(row for row in bin_status_rows if row["scope"] == "q_partial")
+        assert partial_row["bin_status"] == "relaxed_ok"
+        assert partial_row["n_valid_k"] == "2"
+        assert partial_row["failed_k_count"] == "1"
 
         with (output_dir / "failure_stats.csv").open("r", encoding="utf-8", newline="") as handle:
             failure_rows = {row["question_id"]: row for row in csv.DictReader(handle)}
@@ -212,6 +216,21 @@ def test_build_kstar_by_bin_uses_argmax_of_mean_curve() -> None:
     }
 
 
+def test_build_kstar_by_bin_keeps_legacy_sparse_k_behavior() -> None:
+    rows = [
+        {"question_id": "q_ok", "length": 5, "k": 2, "nldd_value": 10.0},
+        {"question_id": "q_ok", "length": 5, "k": 2, "nldd_value": 20.0},
+        {"question_id": "q_ok", "length": 5, "k": 4, "nldd_value": 99.0},
+    ]
+
+    assert build_kstar_by_bin(rows) == {
+        ("q_ok", 5): {
+            "k_star": 4,
+            "n_clean": 1,
+        }
+    }
+
+
 def _build_per_question_run(run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     manifest_rows = [
@@ -239,6 +258,14 @@ def _build_per_question_run(run_dir: Path) -> None:
             "target_total_traces": 6,
             "target_samples_per_prompt": 6,
         },
+        {
+            "question_id": "q_partial",
+            "question_text": "Question q_partial",
+            "gold_answer": 1.0,
+            "source_difficulty_bucket": "hard",
+            "target_total_traces": 2,
+            "target_samples_per_prompt": 2,
+        },
     ]
     with (run_dir / "per_question_manifest.jsonl").open("w", encoding="utf-8") as handle:
         for row in manifest_rows:
@@ -253,6 +280,7 @@ def _build_per_question_run(run_dir: Path) -> None:
     traces.extend(_build_question_traces("q_short", 3, correct_count=5, wrong_count=6))
     traces.extend(_build_question_traces("q_short", 4, correct_count=5, wrong_count=6))
     traces.extend(_build_question_traces("q_deg", 3, correct_count=0, wrong_count=6))
+    traces.extend(_build_partial_corruption_traces("q_partial", correct_count=2, wrong_count=1))
 
     with (shard_dir / "traces.jsonl").open("w", encoding="utf-8") as handle:
         for row in traces:
@@ -293,6 +321,42 @@ def _build_question_traces(
                 "is_correct": is_correct,
                 "extraction_failed": False,
                 "token_count": 10 + length,
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            }
+        )
+    return rows
+
+
+def _build_partial_corruption_traces(
+    question_id: str,
+    *,
+    correct_count: int,
+    wrong_count: int,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    steps = [
+        "We start with the given amount.",
+        "2 + 1 = 3.",
+        "This sentence has no arithmetic relation.",
+        "3 + 1 = 4.",
+    ]
+    for index in range(correct_count + wrong_count):
+        is_correct = index < correct_count
+        rows.append(
+            {
+                "trace_id": f"{question_id}_partial_{index}",
+                "question_id": question_id,
+                "question_text": f"Question {question_id}",
+                "gold_answer": 1.0,
+                "prompt_id": "icl_short",
+                "raw_completion": "\n".join(steps + ["#### 1"]),
+                "steps": steps,
+                "actual_num_steps": len(steps),
+                "final_answer_line": "#### 1",
+                "extracted_answer": 1.0 if is_correct else 0.0,
+                "is_correct": is_correct,
+                "extraction_failed": False,
+                "token_count": 20,
                 "timestamp": "2026-01-01T00:00:00+00:00",
             }
         )

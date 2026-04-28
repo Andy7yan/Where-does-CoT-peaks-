@@ -3,10 +3,12 @@ experiment:
   seed: 42
 
 dataset:
+  task: "gsm8k"
   name: "madrylab/gsm8k-platinum"
   hf_config: "main"
   split: "test"
   order_hash_seed: 42
+  prompts_dir: "prompts/GSM8k"
 
 model:
   name: "meta-llama/Llama-3.1-8B-Instruct"
@@ -30,6 +32,7 @@ step_segmentation:
 
 answer_extraction:
   numeric_tolerance: 1e-3
+  mode: "numeric"
 
 nldd:
   corruption_type: "paper_aligned"

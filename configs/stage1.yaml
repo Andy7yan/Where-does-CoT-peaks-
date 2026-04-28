@@ -1,12 +1,14 @@
-﻿experiment:
+experiment:
   run_id: "peak-cot-stage1-gsm8k-platinum-llama31"
   seed: 42
 
 dataset:
+  task: "gsm8k"
   name: "madrylab/gsm8k-platinum"
   hf_config: "main"
   split: "test"
   order_hash_seed: 42
+  prompts_dir: "prompts/GSM8k"
 
 model:
   name: "meta-llama/Llama-3.1-8B-Instruct"
@@ -30,6 +32,7 @@ step_segmentation:
 
 answer_extraction:
   numeric_tolerance: 1e-3
+  mode: "numeric"
 
 nldd:
   corruption_type: "paper_aligned"
@@ -71,7 +74,7 @@ analysis:
   min_cell_size: 30
   num_normalized_bins: 6
   min_bin_coverage_ratio: 0.6
-  num_full_analysis_questions: 25  # Backfill after pilot review.
+  num_full_analysis_questions: 25
   max_extraction_fail_rate: 0.05
   prompt_batch_size: 8
   hidden_state_batch_size: 8

@@ -20,31 +20,31 @@ from src.data_phase1.generation import (
     validate_output_dir_schema,
     write_run_metadata,
 )
-from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test, slice_question_records
 from src.data_phase1.prompting import load_prompt_templates_by_id
+from src.data_phase1.gsm8k import slice_question_records
+from src.data_phase1.tasks import (
+    get_answer_extractor,
+    get_answer_judge,
+    get_answer_markers,
+    get_prompts_dir,
+    get_task_name,
+    load_question_records_for_config,
+)
 from src.common.settings import ExperimentConfig
 
 
 def main() -> None:
-    """Run Stage 1 trace generation over the full ranked GSM8K test split."""
+    """Run Stage 1 trace generation over the configured ranked task corpus."""
 
     args = parse_args()
     if args.debug:
         os.environ["PEAK_COT_DEBUG"] = "1"
     config = ExperimentConfig.from_yaml(args.config)
-    records = load_gsm8k_test(
+    ranked_questions = load_question_records_for_config(
+        config=config,
         source=args.source,
         local_path=args.local_path,
         cache_dir=args.cache_dir,
-        dataset_name=config.dataset.name,
-        dataset_config=config.dataset.hf_config,
-        split=config.dataset.split,
-    )
-    ranked_questions = build_ranked_questions(
-        records,
-        hash_seed=config.dataset.order_hash_seed,
-        dataset_name=config.dataset.name,
-        split=config.dataset.split,
     )
     selected_questions = slice_question_records(
         ranked_questions,
@@ -75,7 +75,7 @@ def main() -> None:
         config.generation.num_icl_groups,
     )
     prompt_templates = discover_prompt_templates(
-        prompts_dir="prompts",
+        prompts_dir=get_prompts_dir(config),
         expected_count=num_icl_groups,
         preferred_prompt_ids=config.generation.icl_group_prompt_ids or None,
     )
@@ -94,6 +94,10 @@ def main() -> None:
         config.generation.max_new_tokens,
     )
     prompt_ids = [template["prompt_id"] for template in prompt_templates]
+    task_name = get_task_name(config)
+    answer_markers = get_answer_markers(config)
+    answer_extractor = get_answer_extractor(config)
+    answer_judge = get_answer_judge(config)
     run_metadata = build_run_metadata(
         config=config,
         prompt_ids=prompt_ids,
@@ -145,12 +149,17 @@ def main() -> None:
             generator=generator,
             question_id=record["question_id"],
             question_text=record["question_text"],
-            gold_answer=float(record["gold_answer"]),
+            gold_answer=record["gold_answer"],
             prompt_templates=prompt_templates,
             samples_per_group=samples_per_group,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             prompt_sample_counts=prompt_sample_counts,
+            answer_markers=answer_markers,
+            answer_extractor=answer_extractor,
+            answer_judge=answer_judge,
+            numeric_tolerance=config.answer_extraction.numeric_tolerance,
+            task_name=task_name,
         )
 
         append_traces_to_jsonl(traces, str(output_path))
@@ -232,7 +241,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--local-path",
         default=None,
-        help="Path to a local GSM8K-compatible JSON or JSONL file when using --source local.",
+        help="Path to a local task-compatible JSON or JSONL file when using --source local.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -297,6 +306,7 @@ def build_run_metadata(
     return {
         "run_id": config.experiment.run_id,
         "model_name": config.model.name,
+        "task_name": getattr(config.dataset, "task", "gsm8k"),
         "dataset": f"{config.dataset.name}:{config.dataset.split}",
         "temperature": temperature,
         "icl_group_sample_counts": icl_group_sample_counts,

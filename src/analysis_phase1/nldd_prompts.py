@@ -42,6 +42,7 @@ def build_canonical_corrupt_prompt(
     corruption_step_index: int,
     corruption_payload: dict[str, Any] | None = None,
     corrupt_step: str | None = None,
+    task_name: str = "gsm8k",
 ) -> str:
     """Build the canonical truncate-after-corruption prompt for one step index."""
 
@@ -58,6 +59,7 @@ def build_canonical_corrupt_prompt(
         clean_steps=[str(step) for step in clean_steps],
         corrupt_step=str(corrupt_step),
         corrupt_index=corruption_step_index - 1,
+        task_name=task_name,
     )
 
 

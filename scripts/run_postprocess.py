@@ -22,6 +22,8 @@ def main() -> None:
         run_dir=args.run_dir,
         config_path=args.config,
         include_analysis=not args.skip_analysis,
+        hard_accuracy_threshold=args.hard_accuracy_threshold,
+        easy_accuracy_threshold=args.easy_accuracy_threshold,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
@@ -44,6 +46,18 @@ def parse_args() -> argparse.Namespace:
         "--skip-analysis",
         action="store_true",
         help="Only rebuild the canonical handoff and validation artifacts.",
+    )
+    parser.add_argument(
+        "--hard-accuracy-threshold",
+        type=float,
+        default=None,
+        help="Override config analysis.hard_accuracy_threshold for final difficulty export.",
+    )
+    parser.add_argument(
+        "--easy-accuracy-threshold",
+        type=float,
+        default=None,
+        help="Override config analysis.easy_accuracy_threshold for final difficulty export.",
     )
     return parser.parse_args()
 

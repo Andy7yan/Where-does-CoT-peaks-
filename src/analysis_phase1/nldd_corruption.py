@@ -15,7 +15,9 @@ from src.common.corruption import (
     DEFAULT_INTEGER_PERTURBATION_RANGE,
     corrupt_step_text_with_fallbacks,
 )
+from src.common.prontoqa_paper_corruption import corrupt_prontoqa_step
 from src.analysis_phase1.nldd_prompts import build_canonical_corrupt_prompt
+from src.data_phase1.prontoqa_paper import PRONTOQA_PAPER_TASK
 from src.data_phase2.pipeline import discover_stage1_shard_paths
 
 from src.analysis_phase1.nldd_shared import _load_jsonl_records, _stable_seed, _write_jsonl
@@ -62,6 +64,7 @@ def build_corruption_records(
     enable_tier3_semantic_flip: bool = False,
     use_tier3: bool | None = None,
     max_perplexity_ratio: float | None = None,
+    task_name: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Build full-analysis corruption records from existing clean traces."""
 
@@ -77,11 +80,15 @@ def build_corruption_records(
 
         for step_index in range(2, len(steps) + 1):
             step_text = str(steps[step_index - 1])
+            effective_task_name = str(
+                task_name or trace.get("task_name") or "gsm8k"
+            )
             rng = random.Random(
                 _stable_seed(f"{selection.seed}:all_steps:{trace.get('trace_id')}:{step_index}")
             )
-            corruption = corrupt_step_text_with_fallbacks(
-                step_text,
+            corruption = corrupt_step_for_task(
+                step_text=step_text,
+                task_name=effective_task_name,
                 rng=rng,
                 integer_perturbation_range=integer_perturbation_range,
                 float_perturbation_range=float_perturbation_range,
@@ -98,6 +105,7 @@ def build_corruption_records(
                 clean_step=step_text,
                 corruption=corruption,
                 selection_mode="all_steps",
+                task_name=effective_task_name,
             )
             records_by_mode["all_steps"].append(record)
 
@@ -112,6 +120,7 @@ def build_corruption_record(
     clean_step: str,
     corruption: CorruptionResult,
     selection_mode: str,
+    task_name: str = "gsm8k",
 ) -> dict[str, Any]:
     """Materialize one corruption record with prompt text and metadata."""
 
@@ -122,11 +131,13 @@ def build_corruption_record(
             clean_steps=[str(step) for step in trace["steps"]],
             corruption_step_index=step_index,
             corrupt_step=corruption.corrupt_text,
+            task_name=task_name,
         )
 
     return {
         "corruption_id": f"{trace['trace_id']}_step{step_index}_{selection_mode}",
         "selection_mode": selection_mode,
+        "task_name": task_name,
         "source_shard_id": shard_id,
         "trace_id": str(trace["trace_id"]),
         "question_id": str(trace["question_id"]),
@@ -146,6 +157,42 @@ def build_corruption_record(
         "perplexity_ratio": corruption.perplexity_ratio,
         "failure_tier": corruption.failure_tier,
     }
+
+
+def corrupt_step_for_task(
+    *,
+    step_text: str,
+    task_name: str,
+    rng: random.Random,
+    token_counter: Callable[[str], int],
+    token_delta_max: int,
+    retry_limit: int,
+    integer_perturbation_range: tuple[int, int],
+    float_perturbation_range: tuple[float, float],
+    enable_tier3_semantic_flip: bool,
+    max_perplexity_ratio: float | None,
+) -> CorruptionResult:
+    if task_name == PRONTOQA_PAPER_TASK:
+        return corrupt_prontoqa_step(
+            step_text,
+            rng=rng,
+            token_counter=token_counter,
+            token_delta_max=token_delta_max,
+            retry_limit=retry_limit,
+            max_perplexity_ratio=max_perplexity_ratio,
+        )
+
+    return corrupt_step_text_with_fallbacks(
+        step_text,
+        rng=rng,
+        integer_perturbation_range=integer_perturbation_range,
+        float_perturbation_range=float_perturbation_range,
+        enable_tier3_semantic_flip=enable_tier3_semantic_flip,
+        token_counter=token_counter,
+        token_delta_max=token_delta_max,
+        retry_limit=retry_limit,
+        max_perplexity_ratio=max_perplexity_ratio,
+    )
 
 
 def summarize_corruption_records(records_by_mode: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:

@@ -1,0 +1,58 @@
+#!/bin/bash
+#PBS -N peak-cot-targeted-rerun-gen
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb:gpu_model=L40S
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -V
+#PBS -o /srv/scratch/${USER}/peak-CoT/targeted_rerun_gen.pbs.log
+
+set -euo pipefail
+
+PROJECT_NAME="peak-CoT"
+: "${PROJECT_HOME:=/home/${USER}/${PROJECT_NAME}}"
+: "${SOURCE_RUN_NAME:=per-question-0419_143551}"
+: "${RUN_NAME:=targeted-rerun-short-long-relaxed-$(date +%m%d_%H%M%S)}"
+: "${CONFIG_PATH:=configs/targeted_rerun_short_long_relaxed.yaml}"
+: "${PROMPTS_DIR:=prompts/GSM8k}"
+: "${SAMPLES_PER_PROMPT:=100}"
+: "${PEAK_COT_FORCE_DEVICE:=cuda}"
+: "${PEAK_COT_ALLOW_CPU_FALLBACK:=0}"
+
+cd "${PROJECT_HOME}" || exit 1
+set +u
+set -a
+source "${PROJECT_HOME}/.env"
+set +a
+set -u
+
+: "${SCRATCH:?SCRATCH must be set by ${PROJECT_HOME}/.env}"
+
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+export PEAK_COT_FORCE_DEVICE
+export PEAK_COT_ALLOW_CPU_FALLBACK
+
+SOURCE_RUN_DIR="${SCRATCH}/runs/${SOURCE_RUN_NAME}"
+RUN_DIR="${SCRATCH}/runs/${RUN_NAME}"
+QUESTION_MANIFEST_PATH="${RUN_DIR}/per_question_manifest.jsonl"
+LOG_PATH="${RUN_DIR}/logs/targeted_generation.log"
+
+mkdir -p "${RUN_DIR}/logs"
+exec > >(tee -a "${LOG_PATH}") 2>&1
+
+python scripts/build_targeted_rerun_manifest.py \
+  --source-run-dir "${SOURCE_RUN_DIR}" \
+  --output-dir "${RUN_DIR}" \
+  --samples-per-prompt "${SAMPLES_PER_PROMPT}"
+
+python scripts/check_runtime_device.py
+python scripts/run_generation_per_question.py \
+  --config "${CONFIG_PATH}" \
+  --output-dir "${RUN_DIR}" \
+  --question-manifest "${QUESTION_MANIFEST_PATH}" \
+  --prompts-dir "${PROMPTS_DIR}" \
+  --shard-id "targeted-short-long" \
+  --start-idx 0 \
+  --end-idx 10 \
+  --preserve-root-selection-inputs

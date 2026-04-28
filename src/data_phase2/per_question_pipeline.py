@@ -28,6 +28,8 @@ from src.data_phase2.pipeline import load_stage1_traces
 QUESTION_METADATA_FILENAME = "question_metadata.jsonl"
 PER_QUESTION_DIRNAME = "per_question"
 PQ_PIPELINE_NAME = "pq"
+RELAXED_MIN_VALID_PER_K = 2
+LEGACY_STRICT_MIN_RETAINED_TRACES = 5
 
 
 def aggregate_per_question_outputs(
@@ -368,7 +370,8 @@ def export_per_question_bins(
             row for row in length_rows
             if bool(row["is_correct"])
         ]
-        complete_bundles: list[dict[str, Any]] = []
+        relaxed_bundles: list[dict[str, Any]] = []
+        corruption_failure_rows: list[dict[str, Any]] = []
         for trace in correct_rows:
             records_by_mode = build_corruption_records(
                 [("root", trace)],
@@ -380,18 +383,25 @@ def export_per_question_bins(
                 float_perturbation_range=float_perturbation_range,
                 enable_tier3_semantic_flip=enable_tier3_semantic_flip,
             )
+            corruption_rows = records_by_mode["all_steps"]
             bundle = build_trace_sample_bundle(
                 trace=trace,
                 difficulty=difficulty,
-                corruption_rows=records_by_mode["all_steps"],
+                corruption_rows=corruption_rows,
+                require_complete_sweep=False,
             )
             if bundle is not None:
-                complete_bundles.append(bundle)
+                relaxed_bundles.append(bundle)
+            for row in corruption_rows:
+                if bool(row.get("corruption_failed")):
+                    corruption_failure_rows.append(_project_corruption_failure(row))
 
         ordered_bundles = sorted(
-            complete_bundles,
+            relaxed_bundles,
             key=lambda bundle: (
+                not bool(bundle["meta_payload"]["complete_corruption_sweep"]),
                 int(bundle["meta_payload"]["trace_tier"]),
+                -len(bundle["meta_payload"]["k_values"]),
                 _stable_seed(
                     f"{question_id}:{length}:{bundle['meta_payload']['source_trace_id']}"
                 ),
@@ -399,7 +409,7 @@ def export_per_question_bins(
         )
         retained_bundles = (
             ordered_bundles[:max_retained_traces]
-            if len(ordered_bundles) >= min_retained_traces
+            if ordered_bundles
             else []
         )
         _assign_local_sample_ids(retained_bundles)
@@ -408,6 +418,7 @@ def export_per_question_bins(
         bin_dir.mkdir(parents=True, exist_ok=True)
         selection_rows = [bundle["selection_row"] for bundle in retained_bundles]
         _write_jsonl(bin_dir / "selection.jsonl", selection_rows)
+        _write_jsonl(bin_dir / "corruption_failures.jsonl", corruption_failure_rows)
 
         if retained_bundles:
             samples_dir = bin_dir / "samples"
@@ -422,6 +433,28 @@ def export_per_question_bins(
                 for k, payload in bundle["corrupt_full_payloads"].items():
                     _write_json(sample_dir / f"corrupt_k{k}_full.json", payload)
 
+        k_counts = _count_successful_k_values(retained_bundles)
+        n_valid_k = sum(
+            1 for value in k_counts.values()
+            if value >= RELAXED_MIN_VALID_PER_K
+        )
+        complete_bundle_count = sum(
+            1 for bundle in relaxed_bundles
+            if bool(bundle["meta_payload"]["complete_corruption_sweep"])
+        )
+        retained_complete_count = sum(
+            1 for bundle in retained_bundles
+            if bool(bundle["meta_payload"]["complete_corruption_sweep"])
+        )
+        expected_k_count = max(length - 1, 0)
+        successful_k_count = sum(1 for value in k_counts.values() if value > 0)
+        bin_status = _classify_relaxed_bin_status(
+            n_correct=len(correct_rows),
+            n_clean_retained=len(retained_bundles),
+            n_valid_k=n_valid_k,
+            n_strict_complete=retained_complete_count,
+            min_retained_traces=min_retained_traces,
+        )
         summary = {
             "scope": question_id,
             "pipeline": PQ_PIPELINE_NAME,
@@ -430,21 +463,71 @@ def export_per_question_bins(
             "n_total_traces": len(length_rows),
             "n_correct": len(correct_rows),
             "n_tier1": sum(
-                1 for bundle in complete_bundles
+                1 for bundle in relaxed_bundles
                 if int(bundle["meta_payload"]["trace_tier"]) == 1
             ),
             "n_tier2": sum(
-                1 for bundle in complete_bundles
+                1 for bundle in relaxed_bundles
                 if int(bundle["meta_payload"]["trace_tier"]) == 2
             ),
-            "n_failed": len(correct_rows) - len(complete_bundles),
+            "n_failed": len(corruption_failure_rows),
+            "n_strict_complete": complete_bundle_count,
+            "n_strict_retained": retained_complete_count,
             "n_retained": len(retained_bundles),
-            "bin_status": "ok" if retained_bundles else "insufficient",
+            "n_clean_retained": len(retained_bundles),
+            "n_valid_k": n_valid_k,
+            "min_n_per_k": min(k_counts.values()) if k_counts else None,
+            "max_n_per_k": max(k_counts.values()) if k_counts else None,
+            "failed_k_count": expected_k_count - successful_k_count,
+            "bin_status": bin_status,
+            "strict_legacy_ok": complete_bundle_count >= LEGACY_STRICT_MIN_RETAINED_TRACES,
         }
         _write_json(bin_dir / "bin_summary.json", summary)
         summaries.append(summary)
 
     return summaries
+
+
+def _project_corruption_failure(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trace_id": str(row.get("trace_id", "")),
+        "question_id": str(row.get("question_id", "")),
+        "step_index": int(row.get("step_index", 0)),
+        "actual_num_steps": int(row.get("actual_num_steps", 0)),
+        "corruption_id": str(row.get("corruption_id", "")),
+        "corruption_type": row.get("corruption_type"),
+        "failure_tier": row.get("failure_tier"),
+        "token_delta": row.get("token_delta"),
+    }
+
+
+def _count_successful_k_values(bundles: list[dict[str, Any]]) -> dict[int, int]:
+    counts: dict[int, int] = defaultdict(int)
+    for bundle in bundles:
+        for k in bundle["meta_payload"].get("k_values", []):
+            counts[int(k)] += 1
+    return dict(counts)
+
+
+def _classify_relaxed_bin_status(
+    *,
+    n_correct: int,
+    n_clean_retained: int,
+    n_valid_k: int,
+    n_strict_complete: int,
+    min_retained_traces: int,
+) -> str:
+    if n_correct <= 0:
+        return "no_correct"
+    if n_clean_retained <= 0:
+        return "empty"
+    if n_clean_retained == 1:
+        return "case_study"
+    if n_strict_complete >= min_retained_traces:
+        return "strict_ok"
+    if n_valid_k >= 2:
+        return "relaxed_ok"
+    return "tas_only"
 
 
 def _assign_local_sample_ids(bundles: list[dict[str, Any]]) -> None:

@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, Callable
 
 from src.data_phase1.prompting import build_generation_messages
 from src.common.reasoning import extract_answer, judge, segment_steps
@@ -123,8 +123,8 @@ class LLMGenerator:
             cache_dir=self.cache_dir,
             local_files_only=True,
             low_cpu_mem_usage=True,
+            device_map={"": str(self.device)},
         )
-        self.model.to(self.device)
         self.model.eval()
 
         load_elapsed = time.perf_counter() - load_start
@@ -359,13 +359,18 @@ def generate_traces_for_question(
     generator: LLMGenerator,
     question_id: str,
     question_text: str,
-    gold_answer: float,
+    gold_answer: float | int | str,
     prompt_templates: list[dict[str, Any]],
     samples_per_group: int | None,
     max_new_tokens: int,
     temperature: float | None = None,
     prompt_sample_counts: Mapping[str, int] | None = None,
     batch_size: int = DEFAULT_GENERATION_BATCH_SIZE,
+    answer_markers: list[str] | None = None,
+    answer_extractor: Callable[[str], Any] = extract_answer,
+    answer_judge: Callable[[float | str | None, float | str, float], bool] = judge,
+    numeric_tolerance: float = 1e-3,
+    task_name: str = "gsm8k",
 ) -> list[dict]:
     """Generate all Stage 1 traces for a single question across ICL prompt groups."""
 
@@ -424,11 +429,15 @@ def generate_traces_for_question(
                 f"tokens={[generation.token_count for generation in generations]}"
             )
             for current_sample_idx, generation in zip(batch_sample_indices, generations):
-                segmentation = segment_steps(generation.raw_completion)
-                extraction = extract_answer(generation.raw_completion)
+                segmentation = segment_steps(
+                    generation.raw_completion,
+                    answer_markers=answer_markers,
+                )
+                extraction = answer_extractor(generation.raw_completion)
                 traces.append(
                     {
                         "trace_id": f"{question_id}_{prompt_id}_{current_sample_idx}",
+                        "task_name": task_name,
                         "question_id": question_id,
                         "question_text": question_text,
                         "gold_answer": gold_answer,
@@ -438,7 +447,11 @@ def generate_traces_for_question(
                         "actual_num_steps": segmentation.num_steps,
                         "final_answer_line": segmentation.final_answer_line,
                         "extracted_answer": extraction.value,
-                        "is_correct": judge(extraction.value, gold_answer),
+                        "is_correct": answer_judge(
+                            extraction.value,
+                            gold_answer,
+                            numeric_tolerance,
+                        ),
                         "extraction_failed": extraction.extraction_failed,
                         "token_count": generation.token_count,
                         "timestamp": datetime.now(timezone.utc).isoformat(),

@@ -11,8 +11,8 @@ import shutil
 from typing import Any, Callable
 
 from src.common.settings import ExperimentConfig, require_config_value
-from src.data_phase1.gsm8k import build_ranked_questions, load_gsm8k_test
 from src.data_phase1.pilot import build_token_counter
+from src.data_phase1.tasks import load_question_records_for_config
 from src.data_phase2.coarse_analysis import DIFFICULTY_ORDER
 
 
@@ -285,8 +285,9 @@ def build_trace_sample_bundle(
     trace: dict[str, Any],
     difficulty: str,
     corruption_rows: list[dict[str, Any]],
+    require_complete_sweep: bool = True,
 ) -> dict[str, Any] | None:
-    """Build one sample directory payload, discarding partial corruption sweeps."""
+    """Build one sample directory payload from successful per-k corruptions."""
 
     actual_num_steps = int(trace["actual_num_steps"])
     expected_k_values = list(range(2, actual_num_steps + 1))
@@ -295,15 +296,23 @@ def build_trace_sample_bundle(
         for row in corruption_rows
         if str(row.get("trace_id")) == str(trace["trace_id"]) and int(row["step_index"]) >= 2
     }
-    if expected_k_values != sorted(rows_by_k):
+    if require_complete_sweep and expected_k_values != sorted(rows_by_k):
         return None
 
-    selected_rows = [rows_by_k[k] for k in expected_k_values]
-    if any(bool(row["corruption_failed"]) for row in selected_rows):
+    ordered_rows = [rows_by_k[k] for k in expected_k_values if k in rows_by_k]
+    successful_rows = [
+        row for row in ordered_rows
+        if not bool(row["corruption_failed"])
+    ]
+    if require_complete_sweep and len(successful_rows) != len(expected_k_values):
         return None
 
     steps = [str(step) for step in trace.get("steps", [])]
-    trace_tier = max(int(row["corruption_tier"]) for row in selected_rows)
+    trace_tier = (
+        max(int(row["corruption_tier"]) for row in successful_rows)
+        if successful_rows
+        else 4
+    )
 
     clean_payload = {
         "steps": steps,
@@ -313,7 +322,7 @@ def build_trace_sample_bundle(
 
     corrupt_payloads: dict[int, dict[str, Any]] = {}
     corrupt_full_payloads: dict[int, dict[str, Any]] = {}
-    for row in selected_rows:
+    for row in successful_rows:
         k = int(row["step_index"])
         corrupt_step = str(row["corrupt_step"])
         corrupt_payloads[k] = _build_truncated_corruption_payload(
@@ -335,7 +344,9 @@ def build_trace_sample_bundle(
         "question_id": str(trace["question_id"]),
         "actual_num_steps": actual_num_steps,
         "trace_tier": trace_tier,
-        "k_values": expected_k_values,
+        "k_values": [int(row["step_index"]) for row in successful_rows],
+        "expected_k_values": expected_k_values,
+        "complete_corruption_sweep": len(successful_rows) == len(expected_k_values),
         "per_k": [
             {
                 "k": int(row["step_index"]),
@@ -344,7 +355,17 @@ def build_trace_sample_bundle(
                 "token_delta": row.get("token_delta"),
                 "full_payload_filename": f"corrupt_k{int(row['step_index'])}_full.json",
             }
-            for row in selected_rows
+            for row in successful_rows
+        ],
+        "failed_per_k": [
+            {
+                "k": int(row["step_index"]),
+                "corruption_id": str(row["corruption_id"]),
+                "failure_tier": row.get("failure_tier"),
+                "corruption_type": row.get("corruption_type"),
+            }
+            for row in ordered_rows
+            if bool(row["corruption_failed"])
         ],
     }
     selection_row = {
@@ -353,7 +374,9 @@ def build_trace_sample_bundle(
         "source_trace_id": str(trace["trace_id"]),
         "actual_num_steps": actual_num_steps,
         "trace_tier": trace_tier,
-        "k_values": expected_k_values,
+        "k_values": [int(row["step_index"]) for row in successful_rows],
+        "expected_k_values": expected_k_values,
+        "complete_corruption_sweep": len(successful_rows) == len(expected_k_values),
         "sample_path": None,
     }
     return {
@@ -428,6 +451,7 @@ def _build_question_rows(
                 "question_id": question_id,
                 "question_text": str(question_row["question_text"]),
                 "gold_answer": question_row["gold_answer"],
+                "task_name": str(question_row.get("task_name", trace.get("task_name", "gsm8k"))),
             }
         )
     return sorted(question_rows, key=lambda row: row["question_id"])
@@ -448,6 +472,7 @@ def _build_question_lookup(
             lookup[question_id] = {
                 "question_text": question_text,
                 "gold_answer": gold_answer,
+                "task_name": str(trace.get("task_name", config.dataset.task)),
             }
         else:
             missing_question_ids.add(question_id)
@@ -455,16 +480,9 @@ def _build_question_lookup(
     if not missing_question_ids:
         return lookup
 
-    ranked_questions = build_ranked_questions(
-        load_gsm8k_test(
-            cache_dir=config.model.hf_cache,
-            dataset_name=config.dataset.name,
-            dataset_config=config.dataset.hf_config,
-            split=config.dataset.split,
-        ),
-        hash_seed=config.dataset.order_hash_seed,
-        dataset_name=config.dataset.name,
-        split=config.dataset.split,
+    ranked_questions = load_question_records_for_config(
+        config=config,
+        cache_dir=config.model.hf_cache,
     )
     ranked_by_index = {
         _question_index_key(str(row["question_id"])): row
@@ -480,6 +498,7 @@ def _build_question_lookup(
         lookup[question_id] = {
             "question_text": str(recovered["question_text"]),
             "gold_answer": recovered["gold_answer"],
+            "task_name": str(recovered.get("task_name", config.dataset.task)),
         }
     return lookup
 
@@ -528,6 +547,7 @@ def _project_group_trace_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "trace_id": str(row["trace_id"]),
         "question_id": str(row["question_id"]),
+        "task_name": str(row.get("task_name", "gsm8k")),
         "actual_num_steps": int(row["actual_num_steps"]),
         "steps": [str(step) for step in row.get("steps", [])],
         "raw_completion": str(row.get("raw_completion", "")),

@@ -1,0 +1,32 @@
+% Shared preamble for peak-CoT pgfplots figures.
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{fillbetween,groupplots,statistics}
+\usetikzlibrary{calc,positioning}
+
+\definecolor{medium-teal}{HTML}{2B8C8C}
+\definecolor{hard-orange}{HTML}{E07B39}
+\definecolor{accent-red}{HTML}{C0392B}
+\definecolor{fit-red}{HTML}{E74C3C}
+\definecolor{band-blue}{HTML}{3498DB}
+\definecolor{tas-green}{HTML}{2E8B57}
+\definecolor{axis-gray}{HTML}{666666}
+
+\pgfplotsset{
+  peakcot base/.style={
+    tick label style={font=\footnotesize},
+    label style={font=\small},
+    title style={font=\small},
+    legend style={font=\footnotesize, draw=none, fill=none},
+    axis line style={axis-gray},
+    tick style={axis-gray},
+    ymajorgrids=true,
+    xmajorgrids=false,
+    grid style={gray!20, line width=0.25pt},
+    clip=false,
+  }
+}

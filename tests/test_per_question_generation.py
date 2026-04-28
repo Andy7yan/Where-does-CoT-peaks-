@@ -7,6 +7,8 @@ import uuid
 
 from scripts.run_generation import discover_prompt_templates
 from scripts.run_generation_per_question import run_per_question_generation
+from scripts.build_targeted_rerun_manifest import build_targeted_manifest
+from scripts.merge_targeted_rerun import merge_without_duplicate_trace_ids
 from src.data_phase1.generation import GenerationOutput
 from src.data_phase1.gsm8k import build_ranked_questions
 from src.data_phase1.per_question_selection import (
@@ -389,3 +391,39 @@ def test_plan_per_question_shards_avoids_tiny_remainder_shard() -> None:
     ]
     assert [row["question_count"] for row in shard_plan] == [3, 4, 3]
     assert [row["target_total_traces"] for row in shard_plan] == [360, 480, 360]
+
+
+def test_build_targeted_manifest_normalizes_trace_budget() -> None:
+    manifest = [
+        {
+            "question_id": "gsm8k_platinum_0967",
+            "question_text": "Q",
+            "gold_answer": 1.0,
+            "source_difficulty_bucket": "hard",
+            "target_total_traces": 300,
+            "target_samples_per_prompt": 75,
+        }
+    ]
+
+    targeted = build_targeted_manifest(
+        manifest_rows=manifest,
+        target_ids=["gsm8k_platinum_0967"],
+        samples_per_prompt=100,
+    )
+
+    assert targeted[0]["target_samples_per_prompt"] == 100
+    assert targeted[0]["target_total_traces"] == 400
+
+
+def test_merge_targeted_rerun_rejects_duplicate_trace_ids() -> None:
+    rows = [
+        {"trace_id": "dup", "question_id": "q"},
+        {"trace_id": "dup", "question_id": "q"},
+    ]
+
+    try:
+        merge_without_duplicate_trace_ids(rows)
+    except ValueError as exc:
+        assert "Duplicate trace ids" in str(exc)
+    else:
+        raise AssertionError("Expected duplicate trace ids to fail targeted merge")

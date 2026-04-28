@@ -1,0 +1,111 @@
+prompt_id: icl_medium
+version: 1
+system: |-
+  You are a careful logic tutor.
+  Solve the user's true-or-false reasoning problem clearly and finish with a new line in the form "Final Answer: <A or B>".
+few_shot:
+- user: 'Context: Blair is a wumpus. Every wumpus is a zumpus. Every zumpus is a rompus. Every rompus is a tumpus. Every tumpus is a gorpus. Every gorpus is a nimpus. Every nimpus is a jorpet. Every jorpet is a felbit. Every felbit is a vornet. Question: Is the following statement true or false? Blair is a vornet. Options: A) True B) False'
+  assistant: |-
+    Step 1: Blair is a wumpus.
+    Step 2: Since Blair is a wumpus and every wumpus is a zumpus, Blair is a zumpus.
+    Step 3: Since Blair is a zumpus and every zumpus is a rompus, Blair is a rompus.
+    Step 4: Since Blair is a rompus and every rompus is a tumpus, Blair is a tumpus.
+    Step 5: Since Blair is a tumpus and every tumpus is a gorpus, Blair is a gorpus.
+    Step 6: Since Blair is a gorpus and every gorpus is a nimpus, Blair is a nimpus.
+    Step 7: Since Blair is a nimpus and every nimpus is a jorpet, Blair is a jorpet.
+    Step 8: Since Blair is a jorpet and every jorpet is a felbit, Blair is a felbit.
+    Step 9: Since Blair is a felbit and every felbit is a vornet, Blair is a vornet.
+    Final Answer: A
+- user: 'Context: Dakota is a dax. Every dax is a blicket. Every blicket is a lorpet. Every lorpet is a crivet. Every crivet is a flamet. Every flamet is a storpus. Every storpus is a yumpus. Every yumpus is a velkit. Every velkit is a brindle. Question: Is the following statement true or false? Dakota is not a brindle. Options: A) True B) False'
+  assistant: |-
+    Step 1: Dakota is a dax.
+    Step 2: Since Dakota is a dax and every dax is a blicket, Dakota is a blicket.
+    Step 3: Since Dakota is a blicket and every blicket is a lorpet, Dakota is a lorpet.
+    Step 4: Since Dakota is a lorpet and every lorpet is a crivet, Dakota is a crivet.
+    Step 5: Since Dakota is a crivet and every crivet is a flamet, Dakota is a flamet.
+    Step 6: Since Dakota is a flamet and every flamet is a storpus, Dakota is a storpus.
+    Step 7: Since Dakota is a storpus and every storpus is a yumpus, Dakota is a yumpus.
+    Step 8: Since Dakota is a yumpus and every yumpus is a velkit, Dakota is a velkit.
+    Step 9: Since Dakota is a velkit and every velkit is a brindle, Dakota is a brindle.
+    Final Answer: B
+- user: 'Context: Emerson is a daxen. Every daxen is a wuglet. Every wuglet is a zhorp. Every zhorp is a kintus. Every kintus is a merpin. Every merpin is a lorbit. Every lorbit is a plicket. Every plicket is a dorbus. Every dorbus is a shumpus. Every shumpus is a narlip. Question: Is the following statement true or false? Emerson is a narlip. Options: A) True B) False'
+  assistant: |-
+    Step 1: Emerson is a daxen.
+    Step 2: Since Emerson is a daxen and every daxen is a wuglet, Emerson is a wuglet.
+    Step 3: Since Emerson is a wuglet and every wuglet is a zhorp, Emerson is a zhorp.
+    Step 4: Since Emerson is a zhorp and every zhorp is a kintus, Emerson is a kintus.
+    Step 5: Since Emerson is a kintus and every kintus is a merpin, Emerson is a merpin.
+    Step 6: Since Emerson is a merpin and every merpin is a lorbit, Emerson is a lorbit.
+    Step 7: Since Emerson is a lorbit and every lorbit is a plicket, Emerson is a plicket.
+    Step 8: Since Emerson is a plicket and every plicket is a dorbus, Emerson is a dorbus.
+    Step 9: Since Emerson is a dorbus and every dorbus is a shumpus, Emerson is a shumpus.
+    Step 10: Since Emerson is a shumpus and every shumpus is a narlip, Emerson is a narlip.
+    Final Answer: A
+- user: 'Context: Finley is a mip. Every mip is a somp. Every somp is a lirp. Every lirp is a gorp. Every gorp is a tav. Every tav is a norb. Every norb is a zib. Every zib is a wex. Every wex is a plim. Every plim is a drim. Question: Is the following statement true or false? Finley is not a drim. Options: A) True B) False'
+  assistant: |-
+    Step 1: Finley is a mip.
+    Step 2: Since Finley is a mip and every mip is a somp, Finley is a somp.
+    Step 3: Since Finley is a somp and every somp is a lirp, Finley is a lirp.
+    Step 4: Since Finley is a lirp and every lirp is a gorp, Finley is a gorp.
+    Step 5: Since Finley is a gorp and every gorp is a tav, Finley is a tav.
+    Step 6: Since Finley is a tav and every tav is a norb, Finley is a norb.
+    Step 7: Since Finley is a norb and every norb is a zib, Finley is a zib.
+    Step 8: Since Finley is a zib and every zib is a wex, Finley is a wex.
+    Step 9: Since Finley is a wex and every wex is a plim, Finley is a plim.
+    Step 10: Since Finley is a plim and every plim is a drim, Finley is a drim.
+    Final Answer: B
+- user: 'Context: Harper is a flarn. Every flarn is a prindle. Every prindle is a masket. Every masket is a dorfin. Every dorfin is a zelp. Every zelp is a quarn. Every quarn is a brivet. Every brivet is a lasket. Every lasket is a gindle. Every gindle is a rorp. Question: Is the following statement true or false? Harper is a rorp. Options: A) True B) False'
+  assistant: |-
+    Step 1: Harper is a flarn.
+    Step 2: Since Harper is a flarn and every flarn is a prindle, Harper is a prindle.
+    Step 3: Since Harper is a prindle and every prindle is a masket, Harper is a masket.
+    Step 4: Since Harper is a masket and every masket is a dorfin, Harper is a dorfin.
+    Step 5: Since Harper is a dorfin and every dorfin is a zelp, Harper is a zelp.
+    Step 6: Since Harper is a zelp and every zelp is a quarn, Harper is a quarn.
+    Step 7: Since Harper is a quarn and every quarn is a brivet, Harper is a brivet.
+    Step 8: Since Harper is a brivet and every brivet is a lasket, Harper is a lasket.
+    Step 9: Since Harper is a lasket and every lasket is a gindle, Harper is a gindle.
+    Step 10: Since Harper is a gindle and every gindle is a rorp, Harper is a rorp.
+    Final Answer: A
+- user: 'Context: Jamie is a sprail. Every sprail is a glomper. Every glomper is a trindle. Every trindle is a nasket. Every nasket is a vindle. Every vindle is a farnet. Every farnet is a tasket. Every tasket is a mindle. Every mindle is a zorlet. Every zorlet is a plasket. Question: Is the following statement true or false? Jamie is not a plasket. Options: A) True B) False'
+  assistant: |-
+    Step 1: Jamie is a sprail.
+    Step 2: Since Jamie is a sprail and every sprail is a glomper, Jamie is a glomper.
+    Step 3: Since Jamie is a glomper and every glomper is a trindle, Jamie is a trindle.
+    Step 4: Since Jamie is a trindle and every trindle is a nasket, Jamie is a nasket.
+    Step 5: Since Jamie is a nasket and every nasket is a vindle, Jamie is a vindle.
+    Step 6: Since Jamie is a vindle and every vindle is a farnet, Jamie is a farnet.
+    Step 7: Since Jamie is a farnet and every farnet is a tasket, Jamie is a tasket.
+    Step 8: Since Jamie is a tasket and every tasket is a mindle, Jamie is a mindle.
+    Step 9: Since Jamie is a mindle and every mindle is a zorlet, Jamie is a zorlet.
+    Step 10: Since Jamie is a zorlet and every zorlet is a plasket, Jamie is a plasket.
+    Final Answer: B
+- user: 'Context: Kendall is a pimlet. Every pimlet is a zorbus. Every zorbus is a karpet. Every karpet is a flimp. Every flimp is a branet. Every branet is a dorpet. Every dorpet is a glarp. Every glarp is a mornet. Every mornet is a tisp. Every tisp is a wembit. Every wembit is a zarn. Question: Is the following statement true or false? Kendall is a zarn. Options: A) True B) False'
+  assistant: |-
+    Step 1: Kendall is a pimlet.
+    Step 2: Since Kendall is a pimlet and every pimlet is a zorbus, Kendall is a zorbus.
+    Step 3: Since Kendall is a zorbus and every zorbus is a karpet, Kendall is a karpet.
+    Step 4: Since Kendall is a karpet and every karpet is a flimp, Kendall is a flimp.
+    Step 5: Since Kendall is a flimp and every flimp is a branet, Kendall is a branet.
+    Step 6: Since Kendall is a branet and every branet is a dorpet, Kendall is a dorpet.
+    Step 7: Since Kendall is a dorpet and every dorpet is a glarp, Kendall is a glarp.
+    Step 8: Since Kendall is a glarp and every glarp is a mornet, Kendall is a mornet.
+    Step 9: Since Kendall is a mornet and every mornet is a tisp, Kendall is a tisp.
+    Step 10: Since Kendall is a tisp and every tisp is a wembit, Kendall is a wembit.
+    Step 11: Since Kendall is a wembit and every wembit is a zarn, Kendall is a zarn.
+    Final Answer: A
+- user: 'Context: Logan is a bripet. Every bripet is a flamet. Every flamet is a storpus. Every storpus is a yumpus. Every yumpus is a velkit. Every velkit is a narlip. Every narlip is a vextor. Every vextor is a morbin. Every morbin is a glanet. Every glanet is a tarlip. Every tarlip is a franet. Question: Is the following statement true or false? Logan is not a franet. Options: A) True B) False'
+  assistant: |-
+    Step 1: Logan is a bripet.
+    Step 2: Since Logan is a bripet and every bripet is a flamet, Logan is a flamet.
+    Step 3: Since Logan is a flamet and every flamet is a storpus, Logan is a storpus.
+    Step 4: Since Logan is a storpus and every storpus is a yumpus, Logan is a yumpus.
+    Step 5: Since Logan is a yumpus and every yumpus is a velkit, Logan is a velkit.
+    Step 6: Since Logan is a velkit and every velkit is a narlip, Logan is a narlip.
+    Step 7: Since Logan is a narlip and every narlip is a vextor, Logan is a vextor.
+    Step 8: Since Logan is a vextor and every vextor is a morbin, Logan is a morbin.
+    Step 9: Since Logan is a morbin and every morbin is a glanet, Logan is a glanet.
+    Step 10: Since Logan is a glanet and every glanet is a tarlip, Logan is a tarlip.
+    Step 11: Since Logan is a tarlip and every tarlip is a franet, Logan is a franet.
+    Final Answer: B
+user_template: '{question}'

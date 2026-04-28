@@ -13,12 +13,15 @@ from typing import Any, Callable, Sequence
 from src.common.corruption import (
     DEFAULT_FLOAT_PERTURBATION_RANGE,
     DEFAULT_INTEGER_PERTURBATION_RANGE,
-    corrupt_step_text_with_fallbacks,
 )
 from src.data_phase1.prompting import build_nldd_clean_prompt
 from src.data_phase2.pipeline import load_stage1_traces
 
-from src.analysis_phase1.nldd_corruption import build_corruption_record, summarize_corruption_records
+from src.analysis_phase1.nldd_corruption import (
+    build_corruption_record,
+    corrupt_step_for_task,
+    summarize_corruption_records,
+)
 from src.analysis_phase1.nldd_shared import (
     _compute_vector_std,
     _flatten_numeric_values,
@@ -184,6 +187,7 @@ def calibrate_s(
         prompt = build_nldd_clean_prompt(
             question=str(trace["question_text"]),
             steps=steps,
+            task_name=str(trace.get("task_name", "gsm8k")),
         )
         logits = prompt_logits_fn(prompt)
         std_values.append(_compute_vector_std(logits))
@@ -286,6 +290,7 @@ def measure_trace_profile(
     clean_prompt = build_nldd_clean_prompt(
         question=str(trace["question_text"]),
         steps=steps,
+        task_name=str(trace.get("task_name", "gsm8k")),
     )
     clean_measurement = (
         prompt_measurement_fn(clean_prompt)
@@ -300,9 +305,11 @@ def measure_trace_profile(
     rows: list[dict[str, Any]] = []
     for step_index in range(2, actual_clean_length + 1):
         step_text = steps[step_index - 1]
+        task_name = str(trace.get("task_name", "gsm8k"))
         rng = random.Random(_stable_seed(f"{seed}:full:{trace['trace_id']}:{step_index}"))
-        corruption = corrupt_step_text_with_fallbacks(
-            step_text,
+        corruption = corrupt_step_for_task(
+            step_text=step_text,
+            task_name=task_name,
             rng=rng,
             integer_perturbation_range=integer_perturbation_range,
             float_perturbation_range=float_perturbation_range,
@@ -319,6 +326,7 @@ def measure_trace_profile(
             clean_step=step_text,
             corruption=corruption,
             selection_mode="full",
+            task_name=task_name,
         )
 
         ld_corrupt: float | None = None

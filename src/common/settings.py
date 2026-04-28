@@ -23,10 +23,15 @@ class ExperimentMetadataConfig:
 class DatasetConfig:
     """Dataset selection and ranking controls."""
 
+    task: str
     name: str
     hf_config: str | None
     split: str
     order_hash_seed: int
+    synthetic_question_count: int | None
+    pronto_min_hops: int | None
+    pronto_max_hops: int | None
+    prompts_dir: str | None
 
 
 @dataclass
@@ -63,6 +68,7 @@ class AnswerExtractionConfig:
     """Rules for extracting numeric answers from completions."""
 
     numeric_tolerance: float
+    mode: str
 
 
 @dataclass
@@ -176,10 +182,15 @@ class ExperimentConfig:
                 seed=_require_int(experiment, "seed"),
             ),
             dataset=DatasetConfig(
+                task=_optional_string(dataset, "task") or "gsm8k",
                 name=_require_string(dataset, "name"),
                 hf_config=_optional_string(dataset, "hf_config"),
                 split=_require_string(dataset, "split"),
                 order_hash_seed=_require_int(dataset, "order_hash_seed"),
+                synthetic_question_count=_optional_int(dataset, "synthetic_question_count"),
+                pronto_min_hops=_optional_int(dataset, "pronto_min_hops"),
+                pronto_max_hops=_optional_int(dataset, "pronto_max_hops"),
+                prompts_dir=_optional_string(dataset, "prompts_dir"),
             ),
             model=ModelConfig(
                 name=_require_string(model, "name"),
@@ -200,6 +211,7 @@ class ExperimentConfig:
             ),
             answer_extraction=AnswerExtractionConfig(
                 numeric_tolerance=_require_float(answer_extraction, "numeric_tolerance"),
+                mode=_optional_string(answer_extraction, "mode") or "numeric",
             ),
             nldd=NLDDConfig(
                 corruption_type=_require_string(nldd, "corruption_type"),

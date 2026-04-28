@@ -16,13 +16,72 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.lines import Line2D
 from matplotlib.colors import Normalize
 
 
-PNG_DPI = 150
+PNG_DPI = 300
 EPSILON = 1e-6
+PAPER_PALETTE = {
+    "blue": "#4C78A8",
+    "orange": "#F58518",
+    "green": "#54A24B",
+    "red": "#E45756",
+    "purple": "#B279A2",
+    "gray": "#6B7280",
+    "dark": "#111827",
+}
 SEARCH_DIR_PRIORITY = ("pq_analysis", "analysis", "analysis_phase1")
 FILE_PRIORITY = ("t1b_step_surface.csv", "t1c_kstar_ratio.csv", "t2b_lstar_difficulty.csv")
+
+
+def _apply_paper_style() -> None:
+    sns.set_theme(context="paper", style="whitegrid", font_scale=1.25)
+    plt.rcParams.update(
+        {
+            "figure.dpi": PNG_DPI,
+            "savefig.dpi": PNG_DPI,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.06,
+            "font.family": "DejaVu Sans",
+            "axes.edgecolor": "#222222",
+            "axes.linewidth": 0.8,
+            "axes.titleweight": "semibold",
+            "axes.labelsize": 13,
+            "axes.titlesize": 13,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "legend.fontsize": 11,
+            "legend.title_fontsize": 11,
+            "legend.frameon": True,
+            "legend.framealpha": 0.94,
+            "legend.edgecolor": "#D1D5DB",
+            "grid.color": "#E5E7EB",
+            "grid.linewidth": 0.6,
+            "grid.alpha": 0.8,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def _polish_axes(ax: plt.Axes) -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis="y")
+    ax.grid(False, axis="x")
+
+
+def _difficulty_norm(values: pd.Series) -> Normalize:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return Normalize(vmin=0.0, vmax=1.0)
+    vmin = float(finite.min())
+    vmax = float(finite.max())
+    if math.isclose(vmin, vmax):
+        vmin -= 0.5
+        vmax += 0.5
+    return Normalize(vmin=vmin, vmax=vmax)
 
 
 def _warn(message: str) -> None:
@@ -513,6 +572,7 @@ def plot_fig_f(frame: pd.DataFrame, path: Path) -> bool:
 
 
 def plot_fig_g(summary: pd.DataFrame, path: Path) -> bool:
+    _apply_paper_style()
     if summary.empty:
         _warn("Skipping Figure G because 2x2 summary is empty.")
         return False
@@ -522,11 +582,27 @@ def plot_fig_g(summary: pd.DataFrame, path: Path) -> bool:
     pivot_pct = summary.pivot(index="nldd_class", columns="tas_class", values="percentage").reindex(index=row_order, columns=col_order, fill_value=0.0)
     pct_text = pivot_pct.map(lambda x: f"{x:.1f}%")
     annotations = pivot_counts.astype(int).astype(str) + "\n" + pct_text
-    fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(pivot_counts, annot=annotations, fmt="", cmap="Blues", cbar=False, ax=ax)
-    ax.set_xlabel("TAS class")
-    ax.set_ylabel("NLDD class")
-    ax.set_title("Figure G. Post-horizon 2x2 heatmap")
+    labeled_counts = pivot_counts.copy()
+    labeled_counts.index = [r"$\bar{D}_{\mathrm{post}}\geq 0$", r"$\bar{D}_{\mathrm{post}}<0$"]
+    labeled_counts.columns = [r"$|\Delta T_{\mathrm{post}}|<\epsilon$", r"$|\Delta T_{\mathrm{post}}|\geq\epsilon$"]
+    annotations.index = labeled_counts.index
+    annotations.columns = labeled_counts.columns
+    fig, ax = plt.subplots(figsize=(6.2, 5.0))
+    sns.heatmap(
+        labeled_counts,
+        annot=annotations,
+        fmt="",
+        cmap="Blues",
+        cbar=False,
+        linewidths=1.2,
+        linecolor="white",
+        annot_kws={"fontsize": 15, "fontweight": "semibold"},
+        ax=ax,
+    )
+    ax.set_xlabel(r"$\Delta T_{\mathrm{post}}$")
+    ax.set_ylabel(r"$\bar{D}_{\mathrm{post}}$")
+    ax.tick_params(axis="x", labelrotation=0, labelsize=14)
+    ax.tick_params(axis="y", labelrotation=0, labelsize=14)
     fig.tight_layout()
     fig.savefig(path, dpi=PNG_DPI)
     plt.close(fig)
@@ -555,27 +631,70 @@ def plot_fig_h(frame: pd.DataFrame, summary: dict[str, Any], path: Path) -> bool
 
 
 def plot_fig_i(frame: pd.DataFrame, path: Path) -> bool:
+    _apply_paper_style()
     working = frame.dropna(subset=["L", "nldd_drop_ratio", "difficulty_score"]).copy()
     if working.empty:
         _warn("Skipping Figure I because NLDD drop ratio data is empty.")
         return False
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
+    cmap = plt.get_cmap("viridis")
+    norm = _difficulty_norm(working["difficulty_score"])
+    rng = np.random.default_rng(42)
+    jitter = rng.uniform(-0.08, 0.08, size=len(working))
     scatter = ax.scatter(
-        working["L"],
+        working["L"].to_numpy(dtype=float) + jitter,
         working["nldd_drop_ratio"],
         c=working["difficulty_score"],
-        cmap="viridis",
-        norm=Normalize(vmin=float(working["difficulty_score"].min()), vmax=float(working["difficulty_score"].max())),
-        alpha=0.7,
-        s=24,
+        cmap=cmap,
+        norm=norm,
+        alpha=0.30,
+        s=16,
         linewidths=0,
+        rasterized=True,
     )
-    ax.axhline(0.0, color="firebrick", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("L")
-    ax.set_ylabel("nldd_drop_ratio")
-    ax.set_title("Figure I. NLDD drop ratio vs L")
-    cbar = fig.colorbar(scatter, ax=ax)
-    cbar.set_label("difficulty_score")
+    by_l = (
+        working.groupby("L", as_index=False)["nldd_drop_ratio"]
+        .agg(median="median", q25=lambda s: s.quantile(0.25), q75=lambda s: s.quantile(0.75), count="count")
+        .sort_values("L")
+    )
+    x_l = by_l["L"].to_numpy(dtype=float)
+    median = by_l["median"].to_numpy(dtype=float)
+    q25 = by_l["q25"].to_numpy(dtype=float)
+    q75 = by_l["q75"].to_numpy(dtype=float)
+    ax.fill_between(
+        x_l,
+        q25,
+        q75,
+        color=PAPER_PALETTE["blue"],
+        alpha=0.16,
+        linewidth=0,
+        label=r"$Q_{25-75}(r_L)$",
+    )
+    ax.plot(x_l, median, color=PAPER_PALETTE["blue"], linewidth=2.0, marker="o", markersize=3.8, label=r"$\mathrm{median}(r_L \mid L)$")
+    ax.axhline(1.0, color=PAPER_PALETTE["gray"], linestyle=":", linewidth=1.1, label=r"$r_L=1$")
+    ax.axhline(0.0, color=PAPER_PALETTE["red"], linestyle="--", linewidth=1.2, label=r"$r_L=0$")
+    ax.set_xlabel(r"Trace length $L$")
+    ax.set_ylabel(r"Post/pre NLDD ratio")
+    y_min = float(np.nanquantile(working["nldd_drop_ratio"], 0.01))
+    y_max = float(np.nanquantile(working["nldd_drop_ratio"], 0.99))
+    pad = max(0.08, 0.08 * (y_max - y_min))
+    ax.set_ylim(y_min - pad, y_max + pad)
+    _polish_axes(ax)
+    point_handle = Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="none",
+        markerfacecolor="#6B7280",
+        markeredgewidth=0,
+        alpha=0.45,
+        markersize=5,
+        label=r"$(q,L)$ bins",
+    )
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend([point_handle] + handles, [r"$(q,L)$ bins"] + labels, loc="lower right", borderpad=0.6)
+    cbar = fig.colorbar(scatter, ax=ax, pad=0.015, fraction=0.04)
+    cbar.set_label(r"$d(q)$")
     fig.tight_layout()
     fig.savefig(path, dpi=PNG_DPI)
     plt.close(fig)
@@ -584,20 +703,24 @@ def plot_fig_i(frame: pd.DataFrame, path: Path) -> bool:
 
 
 def plot_fig_j(frame: pd.DataFrame, path: Path) -> bool:
+    _apply_paper_style()
     working = frame.dropna(subset=["pre_kstar_tas_slope", "post_kstar_tas_slope", "difficulty_score"]).copy()
     if working.empty:
         _warn("Skipping Figure J because TAS slope source data is empty.")
         return False
-    fig, ax = plt.subplots(figsize=(7, 6))
+    fig, ax = plt.subplots(figsize=(5.8, 5.2))
+    cmap = plt.get_cmap("viridis")
+    norm = _difficulty_norm(working["difficulty_score"])
     scatter = ax.scatter(
         working["pre_kstar_tas_slope"],
         working["post_kstar_tas_slope"],
         c=working["difficulty_score"],
-        cmap="viridis",
-        norm=Normalize(vmin=float(working["difficulty_score"].min()), vmax=float(working["difficulty_score"].max())),
-        alpha=0.7,
-        s=24,
+        cmap=cmap,
+        norm=norm,
+        alpha=0.38,
+        s=18,
         linewidths=0,
+        rasterized=True,
     )
     combined = np.concatenate(
         [
@@ -607,13 +730,42 @@ def plot_fig_j(frame: pd.DataFrame, path: Path) -> bool:
     )
     lower = float(np.nanmin(combined))
     upper = float(np.nanmax(combined))
-    ax.plot([lower, upper], [lower, upper], color="black", linestyle="--", linewidth=1.0)
-    ax.axhline(0.0, color="firebrick", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("pre_kstar_tas_slope")
-    ax.set_ylabel("post_kstar_tas_slope")
-    ax.set_title("Figure J. TAS slope pre vs post k*")
-    cbar = fig.colorbar(scatter, ax=ax)
-    cbar.set_label("difficulty_score")
+    pad = max(0.02, 0.08 * (upper - lower))
+    lower -= pad
+    upper = max(upper + pad, 0.02)
+    ax.fill_between(
+        [lower, upper],
+        [lower, upper],
+        [upper, upper],
+        color=PAPER_PALETTE["green"],
+        alpha=0.10,
+        linewidth=0,
+        label=r"$\Delta T_{\mathrm{post}}>\Delta T_{\mathrm{pre}}$",
+    )
+    ax.plot([lower, upper], [lower, upper], color=PAPER_PALETTE["dark"], linestyle="--", linewidth=1.2, label=r"$y=x$")
+    ax.axhline(0.0, color=PAPER_PALETTE["red"], linestyle=":", linewidth=1.0)
+    ax.axvline(0.0, color=PAPER_PALETTE["red"], linestyle=":", linewidth=1.0, label=r"$0$")
+    ax.set_xlim(lower, upper)
+    ax.set_ylim(lower, upper)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlabel(r"Pre-$k^\star$ TAS slope")
+    ax.set_ylabel(r"Post-$k^\star$ TAS slope")
+    _polish_axes(ax)
+    point_handle = Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="none",
+        markerfacecolor="#6B7280",
+        markeredgewidth=0,
+        alpha=0.45,
+        markersize=5,
+        label=r"$(q,L)$ bins",
+    )
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend([point_handle] + handles, [r"$(q,L)$ bins"] + labels, loc="lower right", borderpad=0.6)
+    cbar = fig.colorbar(scatter, ax=ax, pad=0.02, fraction=0.045)
+    cbar.set_label(r"$d(q)$")
     fig.tight_layout()
     fig.savefig(path, dpi=PNG_DPI)
     plt.close(fig)

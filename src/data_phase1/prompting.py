@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from src.data_phase1.tasks import GSM8K_TASK, get_answer_suffix, get_nldd_system_prompt
+
 
 def resolve_prompt_templates_dir(prompts_dir: str = "prompts/") -> Path:
     """Resolve the effective prompt directory, preserving the legacy root default."""
@@ -13,12 +15,16 @@ def resolve_prompt_templates_dir(prompts_dir: str = "prompts/") -> Path:
     if any(prompt_dir.glob("*.yaml")):
         return prompt_dir
 
-    # The legacy Stage 1 entrypoints historically defaulted to `prompts/`.
-    # In the current repo layout, those canonical prompts live under `prompts/first_run/`.
     if prompt_dir.name == "prompts":
-        first_run_dir = prompt_dir / "first_run"
-        if any(first_run_dir.glob("*.yaml")):
-            return first_run_dir
+        for candidate in ("GSM8k", "PrOntoQA", "first_run"):
+            candidate_dir = prompt_dir / candidate
+            if any(candidate_dir.glob("*.yaml")):
+                return candidate_dir
+
+    if prompt_dir.name == "per_question" and not any(prompt_dir.glob("*.yaml")):
+        candidate_dir = prompt_dir.parent / "GSM8k"
+        if any(candidate_dir.glob("*.yaml")):
+            return candidate_dir
 
     return prompt_dir
 
@@ -29,7 +35,7 @@ def load_prompt_template(prompt_id: str, prompts_dir: str = "prompts/") -> dict:
     prompt_dir = resolve_prompt_templates_dir(prompts_dir)
     template_path = prompt_dir / f"{prompt_id}.yaml"
     if not template_path.exists():
-        for candidate_path in sorted(prompt_dir.glob("*.yaml")):
+        for candidate_path in sorted(prompt_dir.rglob("*.yaml")):
             data = _load_prompt_template_file(candidate_path)
             if data["prompt_id"] == prompt_id:
                 return data
@@ -109,17 +115,16 @@ def build_generation_messages(
 def build_nldd_clean_prompt(
     question: str,
     steps: list[str],
-    answer_suffix: str = "\nFinal Answer:",
+    answer_suffix: str | None = None,
+    task_name: str = GSM8K_TASK,
 ) -> str:
     """Build the paper-aligned NLDD clean-condition prompt text."""
 
-    prompt = (
-        "Solve the math problem step by step. Provide your final numerical answer."
-        f"\n\nQuestion: {question}\n"
-    )
+    effective_answer_suffix = get_answer_suffix(task_name) if answer_suffix is None else answer_suffix
+    prompt = get_nldd_system_prompt(task_name) + f"\n\nQuestion: {question}\n"
     if steps:
         prompt += _format_steps_block(steps) + "\n"
-    return prompt.rstrip() + answer_suffix + " "
+    return prompt.rstrip() + effective_answer_suffix + " "
 
 
 def build_nldd_corrupt_prompt(
@@ -127,7 +132,8 @@ def build_nldd_corrupt_prompt(
     clean_steps: list[str],
     corrupt_step: str,
     corrupt_index: int,
-    answer_suffix: str = "\nFinal Answer:",
+    answer_suffix: str | None = None,
+    task_name: str = GSM8K_TASK,
 ) -> str:
     """Build the paper-aligned NLDD corrupt-condition prompt text."""
 
@@ -139,6 +145,7 @@ def build_nldd_corrupt_prompt(
         question=question,
         steps=prompt_steps,
         answer_suffix=answer_suffix,
+        task_name=task_name,
     )
 
 

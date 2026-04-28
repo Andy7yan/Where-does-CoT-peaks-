@@ -17,11 +17,18 @@ def run_postprocess_pipeline(
     run_dir: str | Path,
     config_path: str = "configs/stage1.yaml",
     include_analysis: bool = True,
+    hard_accuracy_threshold: float | None = None,
+    easy_accuracy_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Convert one existing run into the canonical handoff and optionally run analysis."""
 
     run_path = Path(run_dir)
-    aggregation = aggregate_stage1_outputs(str(run_path), config_path=config_path)
+    aggregation = aggregate_stage1_outputs(
+        str(run_path),
+        config_path=config_path,
+        hard_accuracy_threshold=hard_accuracy_threshold,
+        easy_accuracy_threshold=easy_accuracy_threshold,
+    )
     validation = validate_canonical_data_phase(run_path, config_path=config_path)
 
     result: dict[str, Any] = {

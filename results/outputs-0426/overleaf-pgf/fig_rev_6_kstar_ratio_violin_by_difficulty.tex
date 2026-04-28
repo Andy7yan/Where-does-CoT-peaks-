@@ -1,0 +1,48 @@
+\ifdefined\PeakCoTMainDocument
+\else
+\documentclass[border=3pt]{standalone}
+\input{peakcot_figure_preamble.tex}
+\begin{document}
+\fi
+\newcommand{\DataDir}{source-0426}
+\begin{tikzpicture}
+\begin{axis}[
+  peakcot base,
+  width=0.66\textwidth,
+  height=0.48\textwidth,
+  xmin=0.45,
+  xmax=2.55,
+  ymin=0.25,
+  ymax=1.02,
+  xtick={1,2},
+  xticklabels={Medium,Hard},
+  ylabel={Relative horizon $k^*/L$},
+  title={Median: medium=0.636, hard=0.667; Mann--Whitney $p=0.735$},
+  legend columns=3,
+  legend style={at={(0.5,-0.20)}, anchor=north, column sep=8pt},
+]
+  \addplot[draw=medium-teal!70!black, fill=medium-teal, fill opacity=0.16, line width=0.45pt]
+    table[x=x, y=y, col sep=comma] {\DataDir/fig_rev_6_kstar_ratio_violin_by_difficulty_violin_medium.csv} \closedcycle;
+  \addlegendentry{Medium}
+  \addplot[draw=hard-orange!75!black, fill=hard-orange, fill opacity=0.18, line width=0.45pt]
+    table[x=x, y=y, col sep=comma] {\DataDir/fig_rev_6_kstar_ratio_violin_by_difficulty_violin_hard.csv} \closedcycle;
+  \addlegendentry{Hard}
+  \addplot+[only marks, mark=*, mark size=0.72pt, draw=none, fill=gray!45, opacity=0.42]
+    table[x=x_jitter, y=k_star_ratio, col sep=comma] {\DataDir/fig_rev_6_kstar_ratio_violin_by_difficulty_strip.csv};
+  \addplot[gray!65, dashed, line width=0.8pt, forget plot] coordinates {(0.50,0.643) (2.50,0.643)};
+  \addlegendimage{gray!65, dashed, line width=0.8pt}
+  \addlegendentry{Global median = 0.643}
+  \draw[black, line width=0.35pt] (axis cs:1.000,0.303571) -- (axis cs:1.000,0.571429);
+  \draw[black, line width=0.35pt] (axis cs:1.000,0.750000) -- (axis cs:1.000,1.000000);
+  \draw[black, fill=white, fill opacity=0.85, line width=0.45pt] (axis cs:0.910,0.571429) rectangle (axis cs:1.090,0.750000);
+  \draw[accent-red, line width=0.9pt] (axis cs:0.880,0.636364) -- (axis cs:1.120,0.636364);
+  \draw[black, line width=0.35pt] (axis cs:2.000,0.303571) -- (axis cs:2.000,0.571429);
+  \draw[black, line width=0.35pt] (axis cs:2.000,0.750000) -- (axis cs:2.000,1.000000);
+  \draw[black, fill=white, fill opacity=0.85, line width=0.45pt] (axis cs:1.910,0.571429) rectangle (axis cs:2.090,0.750000);
+  \draw[accent-red, line width=0.9pt] (axis cs:1.880,0.666667) -- (axis cs:2.120,0.666667);
+\end{axis}
+\end{tikzpicture}
+\ifdefined\PeakCoTMainDocument
+\else
+\end{document}
+\fi

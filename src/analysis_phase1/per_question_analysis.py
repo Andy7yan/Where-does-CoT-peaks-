@@ -29,6 +29,7 @@ from src.analysis_phase1.pq_io import (
 
 
 PQ_PIPELINE_NAME = "pq"
+PQ_STRICT_STATUSES = {"strict_ok", "ok"}
 
 
 def run_per_question_analysis(
@@ -52,14 +53,22 @@ def run_per_question_analysis(
     output_dir = run_path / PQ_ANALYSIS_DIRNAME
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    samples = load_per_question_samples(run_path)
-    if not samples:
+    raw_samples = load_per_question_samples(run_path)
+    if not raw_samples:
         raise ValueError(
             "Per-question analysis requires at least one retained sample under per_question/*/bins/*/samples."
         )
     question_metadata_rows = load_per_question_metadata(run_path)
     lstar_payloads = load_per_question_lstar_payloads(run_path)
     bin_summaries = load_per_question_bin_summaries(run_path)
+    samples = filter_strict_analysis_samples(
+        raw_samples,
+        bin_summaries=bin_summaries,
+    )
+    if not samples:
+        raise ValueError(
+            "Per-question analysis found retained raw samples, but no strict complete-sweep samples."
+        )
 
     question_metadata_by_id = {
         str(row["question_id"]): row
@@ -180,8 +189,16 @@ def run_per_question_analysis(
             "n_tier1",
             "n_tier2",
             "n_failed",
+            "n_strict_complete",
+            "n_strict_retained",
             "n_retained",
+            "n_clean_retained",
+            "n_valid_k",
+            "min_n_per_k",
+            "max_n_per_k",
+            "failed_k_count",
             "bin_status",
+            "strict_legacy_ok",
         ],
     )
     _write_csv(
@@ -211,6 +228,7 @@ def run_per_question_analysis(
         "pipeline": PQ_PIPELINE_NAME,
         "analysis_dir": str(output_dir),
         "sample_count": len(samples),
+        "raw_sample_count": len(raw_samples),
         "s_value": s_value,
         "nldd_per_trace_path": str(nldd_per_trace_path),
         "tas_curve_per_trace_path": str(tas_curve_per_trace_path),
@@ -271,11 +289,31 @@ def build_step_surface_rows(
                     "nldd_se": _standard_error(nldd_values) if nldd_values else None,
                     "mean_tas_t": mean(tas_values) if tas_values else None,
                     "tas_t_se": _standard_error(tas_values) if tas_values else None,
-                    "n_clean": int(summary["n_retained"]),
+                    "n_clean": int(summary.get("n_strict_retained", summary["n_retained"])),
                     "bin_status": str(summary["bin_status"]),
                 }
             )
     return surface_rows
+
+
+def filter_strict_analysis_samples(
+    samples: Sequence[SampleRecord],
+    *,
+    bin_summaries: Sequence[dict[str, Any]],
+) -> list[SampleRecord]:
+    """Keep only legacy-equivalent complete-sweep samples for phase-1 analysis."""
+
+    strict_bins = {
+        (str(row["scope"]), int(row["L"]))
+        for row in bin_summaries
+        if str(row["bin_status"]) in PQ_STRICT_STATUSES
+    }
+    return [
+        sample
+        for sample in samples
+        if (sample.question_id, sample.length) in strict_bins
+        and len(sample.k_values) == max(sample.length - 1, 0)
+    ]
 
 
 def build_kstar_by_bin(
@@ -328,7 +366,7 @@ def build_kstar_ratio_rows(
         bin_summaries,
         key=lambda row: (str(row["scope"]), int(row["L"])),
     ):
-        if str(summary["bin_status"]) != "ok":
+        if str(summary["bin_status"]) not in PQ_STRICT_STATUSES:
             continue
         question_id = str(summary["scope"])
         length = int(summary["L"])
@@ -343,7 +381,7 @@ def build_kstar_ratio_rows(
                 "L": length,
                 "k_star": int(kstar["k_star"]),
                 "k_star_ratio": int(kstar["k_star"]) / length,
-                "n_clean": int(summary["n_retained"]),
+                    "n_clean": int(summary.get("n_strict_retained", summary["n_retained"])),
             }
         )
     return rows
@@ -490,7 +528,7 @@ def build_failure_rows(
         question_summaries = summaries_by_question.get(question_id, [])
         n_valid_bins = sum(
             1 for row in question_summaries
-            if str(row["bin_status"]) == "ok"
+            if str(row["bin_status"]) in PQ_STRICT_STATUSES
         )
         resolved_kstar_bins = sum(
             1 for row in question_summaries
@@ -541,6 +579,7 @@ def _write_csv(path: Path, *, rows: Sequence[dict[str, Any]], fieldnames: Sequen
 __all__ = [
     "PQ_PIPELINE_NAME",
     "build_failure_rows",
+    "filter_strict_analysis_samples",
     "build_kstar_by_bin",
     "build_kstar_ratio_rows",
     "build_lstar_difficulty_rows",

@@ -15,18 +15,77 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.lines import Line2D
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from scipy import stats
 
 
-PNG_DPI = 150
+PNG_DPI = 300
+PAPER_PALETTE = {
+    "blue": "#4C78A8",
+    "orange": "#F58518",
+    "green": "#54A24B",
+    "red": "#E45756",
+    "gray": "#6B7280",
+    "light_gray": "#E5E7EB",
+    "dark": "#111827",
+}
 FILE_PRIORITY = (
     "t1c_kstar_ratio.csv",
     "t2b_lstar_difficulty.csv",
     "t1b_step_surface.csv",
 )
 SEARCH_DIR_PRIORITY = ("pq_analysis", "analysis", "analysis_phase1")
+
+
+def _apply_paper_style() -> None:
+    sns.set_theme(context="paper", style="whitegrid", font_scale=1.25)
+    plt.rcParams.update(
+        {
+            "figure.dpi": PNG_DPI,
+            "savefig.dpi": PNG_DPI,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.06,
+            "font.family": "DejaVu Sans",
+            "axes.edgecolor": "#222222",
+            "axes.linewidth": 0.8,
+            "axes.titleweight": "semibold",
+            "axes.labelsize": 13,
+            "axes.titlesize": 13,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "legend.fontsize": 11,
+            "legend.title_fontsize": 11,
+            "legend.frameon": True,
+            "legend.framealpha": 0.94,
+            "legend.edgecolor": "#D1D5DB",
+            "grid.color": "#E5E7EB",
+            "grid.linewidth": 0.6,
+            "grid.alpha": 0.8,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def _polish_axes(ax: plt.Axes) -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis="y")
+    ax.grid(False, axis="x")
+
+
+def _difficulty_norm(values: pd.Series) -> Normalize:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return Normalize(vmin=0.0, vmax=1.0)
+    vmin = float(finite.min())
+    vmax = float(finite.max())
+    if math.isclose(vmin, vmax):
+        vmin -= 0.5
+        vmax += 0.5
+    return Normalize(vmin=vmin, vmax=vmax)
 
 
 def _warn(message: str) -> None:
@@ -180,39 +239,83 @@ def _box_strip_plot(frame: pd.DataFrame, output_path: Path) -> None:
 
 
 def _tas_vs_l(frame: pd.DataFrame, output_path: Path) -> None:
+    _apply_paper_style()
     working = frame.copy()
     working["question_id"] = working["question_id"].astype(str)
     final_rows = working[(working["bin_status"] == "ok") & (working["step"] == working["L"]) & working["mean_tas_t"].notna()].copy()
     if final_rows.empty:
         _warn("No valid rows available for Figure B.")
         return
-    fig, ax = plt.subplots(figsize=(9, 6))
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
     cmap = plt.get_cmap("viridis")
-    norm = Normalize(vmin=float(final_rows["difficulty_score"].min()), vmax=float(final_rows["difficulty_score"].max()))
+    norm = _difficulty_norm(final_rows["difficulty_score"])
+    rng = np.random.default_rng(42)
+    jitter = rng.uniform(-0.08, 0.08, size=len(final_rows))
     sc = ax.scatter(
-        final_rows["L"],
+        final_rows["L"].to_numpy(dtype=float) + jitter,
         final_rows["mean_tas_t"],
         c=final_rows["difficulty_score"],
         cmap=cmap,
         norm=norm,
-        alpha=0.7,
-        s=24,
+        alpha=0.28,
+        s=16,
         linewidths=0,
+        rasterized=True,
     )
+    by_l = (
+        final_rows.groupby("L", as_index=False)["mean_tas_t"]
+        .agg(mean="mean", median="median", sem="sem", count="count")
+        .sort_values("L")
+    )
+    by_l["sem"] = by_l["sem"].fillna(0.0)
+    ci = 1.96 * by_l["sem"].to_numpy(dtype=float)
+    x_l = by_l["L"].to_numpy(dtype=float)
+    mean = by_l["mean"].to_numpy(dtype=float)
+    median = by_l["median"].to_numpy(dtype=float)
+    ax.fill_between(
+        x_l,
+        mean - ci,
+        mean + ci,
+        color=PAPER_PALETTE["blue"],
+        alpha=0.16,
+        linewidth=0,
+        label=r"$\bar{T}_L \pm 1.96\,\mathrm{SE}$",
+    )
+    ax.plot(x_l, mean, color=PAPER_PALETTE["blue"], linewidth=2.0, marker="o", markersize=3.8, label=r"$\mathbb{E}[T_L \mid L]$")
+    ax.plot(x_l, median, color=PAPER_PALETTE["dark"], linewidth=1.4, linestyle="--", label=r"$\mathrm{median}(T_L \mid L)$")
     if final_rows["L"].nunique() >= 3:
         x = final_rows["L"].to_numpy(dtype=float)
         y = final_rows["mean_tas_t"].to_numpy(dtype=float)
-        order = np.argsort(x)
-        coefficients = np.polyfit(x, y, deg=2)
-        x_grid = np.linspace(float(x.min()), float(x.max()), 200)
-        y_grid = np.polyval(coefficients, x_grid)
-        ax.plot(x_grid, y_grid, color="black", linewidth=1.5, label="Quadratic trend")
-        ax.legend(loc="best")
-    ax.set_xlabel("L")
-    ax.set_ylabel("tas_final")
-    ax.set_title("Figure B. TAS decay vs L")
-    cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("difficulty_score")
+        coefficients = np.polyfit(np.log10(x), y, deg=1)
+        x_grid = np.linspace(float(x.min()), float(x.max()), 240)
+        y_grid = np.polyval(coefficients, np.log10(x_grid))
+        ax.plot(x_grid, y_grid, color=PAPER_PALETTE["red"], linewidth=1.6, label=r"$a + b\log L$")
+    ax.set_xlabel(r"Trace length $L$")
+    ax.set_ylabel(r"Final TAS, $\mathrm{TAS}(L)$")
+    ax.set_ylim(0.0, min(1.02, max(1.0, float(final_rows["mean_tas_t"].max()) + 0.04)))
+    _polish_axes(ax)
+    handles, labels = ax.get_legend_handles_labels()
+    point_handle = Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="none",
+        markerfacecolor="#6B7280",
+        markeredgewidth=0,
+        alpha=0.45,
+        markersize=5,
+        label=r"$(q,L)$ bins",
+    )
+    ax.legend(
+        [point_handle] + handles,
+        [r"$(q,L)$ bins"] + labels,
+        loc="upper right",
+        bbox_to_anchor=(0.99, 0.99),
+        borderpad=0.6,
+        handlelength=2.0,
+    )
+    cbar = fig.colorbar(sc, ax=ax, pad=0.015, fraction=0.04)
+    cbar.set_label(r"$d(q)$")
     fig.tight_layout()
     fig.savefig(output_path, dpi=PNG_DPI)
     plt.close(fig)
@@ -281,19 +384,21 @@ def _pairplot(frame: pd.DataFrame, output_path: Path) -> None:
 
 
 def _violin_plot(frame: pd.DataFrame, output_path: Path) -> None:
+    _apply_paper_style()
     working = frame.copy()
     working["delta"] = working["L"] - working["l_star_A"]
     working["group"] = np.select(
         [working["delta"] < 0, working["delta"] == 0, working["delta"] > 0],
-        ["L < L*", "L ≈ L*", "L > L*"],
+        [r"$L < L^\star$", r"$L = L^\star$", r"$L > L^\star$"],
         default="Unknown",
     )
     working = working[working["group"] != "Unknown"].copy()
     if working.empty:
         _warn("No valid rows available for Figure D.")
         return
-    order = ["L < L*", "L ≈ L*", "L > L*"]
-    fig, ax = plt.subplots(figsize=(8, 6))
+    order = [r"$L < L^\star$", r"$L = L^\star$", r"$L > L^\star$"]
+    fig, ax = plt.subplots(figsize=(6.8, 4.8))
+    palette = [PAPER_PALETTE["blue"], PAPER_PALETTE["orange"], PAPER_PALETTE["green"]]
     sns.violinplot(
         data=working,
         x="group",
@@ -303,23 +408,62 @@ def _violin_plot(frame: pd.DataFrame, output_path: Path) -> None:
         hue_order=order,
         inner=None,
         cut=0,
-        palette="Set2",
+        linewidth=1.0,
+        palette=palette,
+        saturation=0.78,
         legend=False,
         ax=ax,
     )
-    sns.stripplot(data=working, x="group", y="k_star_ratio", order=order, jitter=0.18, size=3, alpha=0.45, color="black", ax=ax)
+    sns.boxplot(
+        data=working,
+        x="group",
+        y="k_star_ratio",
+        order=order,
+        width=0.22,
+        showcaps=False,
+        boxprops={"facecolor": "white", "edgecolor": PAPER_PALETTE["dark"], "linewidth": 1.0, "alpha": 0.9},
+        whiskerprops={"color": PAPER_PALETTE["dark"], "linewidth": 1.0},
+        medianprops={"color": PAPER_PALETTE["red"], "linewidth": 1.6},
+        showfliers=False,
+        ax=ax,
+    )
+    sns.stripplot(
+        data=working,
+        x="group",
+        y="k_star_ratio",
+        order=order,
+        jitter=0.18,
+        size=2.4,
+        alpha=0.32,
+        color=PAPER_PALETTE["dark"],
+        linewidth=0,
+        rasterized=True,
+        ax=ax,
+    )
     stats_by_group = working.groupby("group")["k_star_ratio"].agg(["median", "count"]).reindex(order)
-    y_max = float(working["k_star_ratio"].max())
+    global_median = float(working["k_star_ratio"].median())
+    ax.axhline(
+        global_median,
+        color=PAPER_PALETTE["gray"],
+        linestyle="--",
+        linewidth=1.2,
+        label=rf"$\mathrm{{median}}(k^\star/L)={global_median:.3f}$",
+    )
+    tick_labels: list[str] = []
     for idx, group in enumerate(order):
-        if pd.isna(stats_by_group.loc[group, "median"]):
+        median = stats_by_group.loc[group, "median"]
+        count = stats_by_group.loc[group, "count"]
+        if pd.isna(median):
+            tick_labels.append(group)
             continue
-        median = float(stats_by_group.loc[group, "median"])
-        count = int(stats_by_group.loc[group, "count"])
-        ax.text(idx, y_max + 0.03, f"median={median:.3f}\nn={count}", ha="center", va="bottom", fontsize=9)
-    ax.set_xlabel("Distance from L*")
-    ax.set_ylabel("k*/L")
-    ax.set_title("Figure D. k*/L by distance to L*")
-    ax.set_ylim(top=min(1.12, y_max + 0.14))
+        tick_labels.append(group)
+    ax.set_xticks(range(len(order)))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel(r"Distance from behavioral optimum $L^\star$")
+    ax.set_ylabel(r"Relative horizon $k^\star/L$")
+    ax.set_ylim(0.24, 1.04)
+    _polish_axes(ax)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.13), ncol=1, frameon=False)
     fig.tight_layout()
     fig.savefig(output_path, dpi=PNG_DPI)
     plt.close(fig)

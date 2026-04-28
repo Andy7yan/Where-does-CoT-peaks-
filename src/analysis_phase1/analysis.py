@@ -115,7 +115,10 @@ def build_trace_trajectory_fn(
     def encode_trace(question: str, steps: Sequence[str]) -> list[Any]:
         prompts = [build_nldd_clean_prompt(question=question, steps=[])]
         prompts.extend(
-            build_nldd_clean_prompt(question=question, steps=list(steps[:prefix_length]))
+            build_nldd_clean_prompt(
+                question=question,
+                steps=list(steps[:prefix_length]),
+            )
             for prefix_length in range(1, len(steps) + 1)
         )
         return prompt_hidden_state_batch_fn(prompts)
@@ -140,6 +143,7 @@ def calibrate_s_on_samples(
             build_nldd_clean_prompt(
                 question=sample.question_text,
                 steps=list(sample.clean_steps),
+                task_name=sample.task_name,
             )
         )
     if prompt_logits_batch_fn is not None:
@@ -166,14 +170,15 @@ def measure_sample_nldd(
     perplexity_filter_enabled: bool = False,
     perplexity_ratio_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Measure all NLDD rows for one complete sample."""
+    """Measure all available NLDD rows for one sample."""
 
-    if not sample.clean_steps:
+    if not sample.clean_steps or not sample.k_values:
         return []
 
     clean_prompt = build_nldd_clean_prompt(
         question=sample.question_text,
         steps=list(sample.clean_steps),
+        task_name=sample.task_name,
     )
     correct_token_ids = build_correct_token_ids(sample.gold_answer, tokenizer)
     corrupt_prompt_by_k = {
@@ -182,6 +187,7 @@ def measure_sample_nldd(
             clean_steps=sample.clean_steps,
             corruption_step_index=k,
             corruption_payload=sample.corruptions_by_k[k],
+            task_name=sample.task_name,
         )
         for k in sample.k_values
     }

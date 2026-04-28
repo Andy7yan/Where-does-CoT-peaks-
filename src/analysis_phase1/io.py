@@ -20,6 +20,7 @@ class SampleRecord:
     sample_dir: Path
     source_trace_id: str
     question_id: str
+    task_name: str
     question_text: str
     gold_answer: float | int | str
     actual_num_steps: int
@@ -93,6 +94,7 @@ def load_analysis_samples(run_dir: str | Path) -> list[SampleRecord]:
                         sample_dir=sample_dir,
                         source_trace_id=str(meta["source_trace_id"]),
                         question_id=question_id,
+                        task_name=str(question_row.get("task_name", "gsm8k")),
                         question_text=str(question_row["question_text"]),
                         gold_answer=question_row["gold_answer"],
                         actual_num_steps=int(meta["actual_num_steps"]),

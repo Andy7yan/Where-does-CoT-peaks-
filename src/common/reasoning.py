@@ -24,7 +24,7 @@ class SegmentationResult:
 class ExtractionResult:
     """Structured output for numeric answer extraction."""
 
-    value: float | None
+    value: float | str | None
     raw_match: str | None
     extraction_failed: bool
 
@@ -94,12 +94,47 @@ def normalize_numeric(raw: str) -> float | None:
         return None
 
 
-def judge(extracted: float | None, gold: float, tolerance: float = 1e-3) -> bool:
-    """Check whether an extracted numeric answer matches the gold value."""
+def judge(extracted: float | str | None, gold: float | str, tolerance: float = 1e-3) -> bool:
+    """Check whether an extracted answer matches the gold value."""
 
+    if isinstance(gold, str):
+        if extracted is None:
+            return False
+        return str(extracted).strip().upper() == gold.strip().upper()
     if extracted is None:
         return False
+    if isinstance(extracted, str):
+        return False
     return abs(extracted - gold) < tolerance
+
+
+def extract_choice_answer(completion: str) -> ExtractionResult:
+    """Extract an A/B answer, accepting True/False as a compatibility fallback."""
+
+    marker = "Final Answer:"
+    marker_index = completion.find(marker)
+    if marker_index == -1:
+        return ExtractionResult(value=None, raw_match=None, extraction_failed=True)
+
+    tail = completion[marker_index + len(marker):].strip()
+    if not tail:
+        return ExtractionResult(value=None, raw_match=None, extraction_failed=True)
+
+    upper_tail = tail.upper()
+    for prefix, normalized in (
+        ("A", "A"),
+        ("B", "B"),
+        ("TRUE", "A"),
+        ("FALSE", "B"),
+    ):
+        if upper_tail.startswith(prefix):
+            return ExtractionResult(
+                value=normalized,
+                raw_match=tail[: len(prefix)],
+                extraction_failed=False,
+            )
+
+    return ExtractionResult(value=None, raw_match=None, extraction_failed=True)
 
 
 def _extract_after_marker(completion: str, marker: str) -> str | None:
@@ -151,6 +186,7 @@ __all__ = [
     "corrupt_arithmetic",
     "corrupt_step_text",
     "corrupt_step_text_with_fallbacks",
+    "extract_choice_answer",
     "extract_answer",
     "judge",
     "normalize_numeric",

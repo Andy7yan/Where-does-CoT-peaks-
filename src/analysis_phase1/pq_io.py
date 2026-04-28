@@ -88,6 +88,7 @@ def load_per_question_samples(run_dir: str | Path) -> list[SampleRecord]:
                         sample_dir=sample_dir,
                         source_trace_id=str(meta["source_trace_id"]),
                         question_id=question_id,
+                        task_name=str(manifest_row.get("task_name", "gsm8k")),
                         question_text=str(manifest_row["question_text"]),
                         gold_answer=manifest_row["gold_answer"],
                         actual_num_steps=int(meta["actual_num_steps"]),

@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from scripts.run_generation import discover_prompt_templates
 from src.common.settings import ExperimentConfig
 from src.data_phase1.prompting import inspect_prompt_templates
+from src.data_phase1.tasks import get_prompts_dir
 
 
 def main() -> None:
@@ -26,14 +27,15 @@ def main() -> None:
         config.generation.num_icl_groups,
     )
     prompt_ids = config.generation.icl_group_prompt_ids
+    prompts_dir = args.prompts_dir or get_prompts_dir(config)
     try:
         templates = discover_prompt_templates(
-            prompts_dir=args.prompts_dir,
+            prompts_dir=prompts_dir,
             expected_count=num_icl_groups,
             preferred_prompt_ids=prompt_ids or None,
         )
     except Exception:
-        prompt_dir, inventory = inspect_prompt_templates(args.prompts_dir)
+        prompt_dir, inventory = inspect_prompt_templates(prompts_dir)
         print(f"prompt_preflight_expected: {','.join(prompt_ids)}")
         if inventory:
             discovered_rows = [
@@ -54,8 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to the experiment config YAML.")
     parser.add_argument(
         "--prompts-dir",
-        default="prompts",
-        help="Directory containing the ICL prompt YAML files.",
+        default=None,
+        help="Directory containing the ICL prompt YAML files. Defaults to dataset.prompts_dir.",
     )
     return parser.parse_args()
 
